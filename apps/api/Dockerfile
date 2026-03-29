@@ -26,18 +26,8 @@ COPY apps/api/ ./apps/api/
 COPY tsconfig.base.json ./
 RUN cd apps/api && pnpm build
 
-# Production
-FROM node:20-alpine AS runner
-WORKDIR /app
-
+# Run directly from build stage to preserve pnpm symlinks
 ENV NODE_ENV=production
-
-# Copy built output and dependencies
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/packages ./packages
-COPY --from=build /app/apps/api/dist ./apps/api/dist
-COPY --from=build /app/apps/api/package.json ./apps/api/
-
 EXPOSE 4000
 ENV PORT=4000
 

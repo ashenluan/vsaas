@@ -109,21 +109,6 @@ services:
     networks:
       - vsaas
 
-  nginx:
-    image: nginx:alpine
-    container_name: vsaas-nginx
-    restart: unless-stopped
-    depends_on:
-      - api
-      - web
-      - admin
-    volumes:
-      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    ports:
-      - '${HTTP_PORT:-80}:80'
-    networks:
-      - vsaas
-
 volumes:
   postgres_data:
   redis_data:
