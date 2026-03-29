@@ -412,7 +412,7 @@ export class DigitalHumanService {
     const job = await this.prisma.generation.create({
       data: {
         userId,
-        type: 'DIGITAL_HUMAN',
+        type: 'DIGITAL_HUMAN_VIDEO',
         status: 'PENDING',
         provider: 'aliyun-wan',
         creditsUsed: cost,
@@ -449,7 +449,7 @@ export class DigitalHumanService {
 
   async getVideo(userId: string, id: string) {
     const job = await this.prisma.generation.findFirst({
-      where: { id, userId, type: 'DIGITAL_HUMAN' },
+      where: { id, userId, type: 'DIGITAL_HUMAN_VIDEO' },
     });
     if (!job) throw new NotFoundException('视频任务不存在');
     return job;
