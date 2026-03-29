@@ -32,7 +32,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=build /app/apps/admin/public ./apps/admin/public
 COPY --from=build --chown=nextjs:nodejs /app/apps/admin/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/apps/admin/.next/static ./apps/admin/.next/static
 
