@@ -1,0 +1,275 @@
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+
+@Injectable()
+export class AdminService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async listUsers(query: { page?: number; pageSize?: number; search?: string; role?: string; status?: string }) {
+    const { page = 1, pageSize = 20, search, role, status } = query;
+    const where: any = {};
+    if (search) {
+      where.OR = [
+        { email: { contains: search, mode: 'insensitive' } },
+        { displayName: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+    if (role) where.role = role;
+    if (status) where.status = status;
+
+    const [items, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          role: true,
+          status: true,
+          creditBalance: true,
+          createdAt: true,
+          lastLoginAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
+  }
+
+  async getUserDetail(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        status: true,
+        creditBalance: true,
+        createdAt: true,
+        lastLoginAt: true,
+        _count: {
+          select: { generations: true, orders: true },
+        },
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  async updateUserStatus(userId: string, status: 'ACTIVE' | 'SUSPENDED') {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { status },
+      select: { id: true, email: true, status: true },
+    });
+  }
+
+  async updateUserRole(userId: string, role: 'USER' | 'ADMIN' | 'SUPER_ADMIN') {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { role },
+      select: { id: true, email: true, role: true },
+    });
+  }
+
+  async adjustCredits(userId: string, amount: number, description: string, performerId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) throw new NotFoundException('User not found');
+
+      // 防止负数调整导致余额为负
+      if (amount < 0 && user.creditBalance + amount < 0) {
+        throw new BadRequestException(
+          `积分不足: 当前余额 ${user.creditBalance}，无法扣除 ${Math.abs(amount)}`,
+        );
+      }
+
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: { creditBalance: { increment: amount } },
+        select: { id: true, creditBalance: true },
+      });
+
+      await tx.creditTransaction.create({
+        data: {
+          userId,
+          amount,
+          type: 'ADMIN_ADJUSTMENT',
+          description,
+          balanceAfter: updated.creditBalance,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          performerId,
+          targetId: userId,
+          action: 'ADJUST_CREDITS',
+          details: { amount, description, balanceAfter: updated.creditBalance },
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  async listAllJobs(query: { page?: number; pageSize?: number; type?: string; status?: string; provider?: string }) {
+    const { page = 1, pageSize = 20, type, status, provider } = query;
+    const where: any = {};
+    if (type) where.type = type;
+    if (status) where.status = status;
+    if (provider) where.provider = provider;
+
+    const [items, total] = await Promise.all([
+      this.prisma.generation.findMany({
+        where,
+        include: {
+          user: { select: { id: true, email: true, displayName: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.generation.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
+  }
+
+  async getStats() {
+    const [totalUsers, totalJobs, activeJobs, totalCreditsSpent] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.generation.count(),
+      this.prisma.generation.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
+      this.prisma.creditTransaction.aggregate({
+        where: { type: 'USAGE' },
+        _sum: { amount: true },
+      }),
+    ]);
+    return {
+      totalUsers,
+      totalJobs,
+      activeJobs,
+      totalCreditsSpent: Math.abs(totalCreditsSpent._sum.amount ?? 0),
+    };
+  }
+
+  async listOrders(query: { page?: number; pageSize?: number; status?: string; userId?: string }) {
+    const { page = 1, pageSize = 20, status, userId } = query;
+    const where: any = {};
+    if (status) where.status = status;
+    if (userId) where.userId = userId;
+
+    const [items, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        include: {
+          user: { select: { id: true, email: true, displayName: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
+  }
+
+  async updateOrderStatus(id: string, status: string) {
+    const validStatuses = ['PENDING', 'PAID', 'FAILED', 'REFUNDED'];
+    if (!validStatuses.includes(status)) {
+      throw new BadRequestException(`无效的订单状态，可选值: ${validStatuses.join(', ')}`);
+    }
+    return this.prisma.order.update({
+      where: { id },
+      data: { status: status as any, ...(status === 'PAID' ? { paidAt: new Date() } : {}) },
+    });
+  }
+
+  async getDailyStats(days: number = 30) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    // 使用 SQL 聚合代替全量加载到内存
+    const results: any[] = await this.prisma.$queryRaw`
+      SELECT
+        DATE(created_at) as date,
+        COUNT(*)::int as count,
+        COUNT(*) FILTER (WHERE type IN ('TEXT_TO_IMAGE', 'IMAGE_TO_IMAGE'))::int as images,
+        COUNT(*) FILTER (WHERE type NOT IN ('TEXT_TO_IMAGE', 'IMAGE_TO_IMAGE'))::int as videos
+      FROM generations
+      WHERE created_at >= ${since}
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `;
+
+    return results.map((r) => ({
+      date: r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date),
+      count: r.count,
+      images: r.images,
+      videos: r.videos,
+    }));
+  }
+
+  async getProviderUsageStats() {
+    const results = await this.prisma.generation.groupBy({
+      by: ['provider'],
+      _count: { id: true },
+      _sum: { creditsUsed: true },
+    });
+    return results.map((r) => ({
+      provider: r.provider,
+      count: r._count.id,
+      totalCredits: r._sum.creditsUsed ?? 0,
+    }));
+  }
+
+  async getCreditConsumptionStats(days: number = 30) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    // 使用 SQL 聚合代替全量查询
+    const results: any[] = await this.prisma.$queryRaw`
+      SELECT
+        DATE(created_at) as date,
+        ABS(SUM(amount))::int as amount
+      FROM credit_transactions
+      WHERE created_at >= ${since} AND type = 'USAGE'
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `;
+
+    return results.map((r) => ({
+      date: r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date),
+      amount: r.amount,
+    }));
+  }
+
+  async listProviderConfigs() {
+    const configs = await this.prisma.providerConfig.findMany({
+      orderBy: { name: 'asc' },
+    });
+    // 遮蔽 API Key，只显示前 4 位和后 4 位
+    return configs.map((c) => {
+      const cfg = (c.config as any) || {};
+      const apiKey = cfg.apiKey || '';
+      return {
+        ...c,
+        apiKey: apiKey ? `${apiKey.slice(0, 4)}****${apiKey.slice(-4)}` : '',
+      };
+    });
+  }
+
+  async updateProviderConfig(id: string, data: { isEnabled?: boolean; config?: any }) {
+    return this.prisma.providerConfig.update({
+      where: { id },
+      data: {
+        ...(data.isEnabled !== undefined && { isEnabled: data.isEnabled }),
+        ...(data.config && { config: data.config }),
+      },
+    });
+  }
+}

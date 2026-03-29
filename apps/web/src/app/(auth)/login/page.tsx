@@ -49,7 +49,7 @@ export default function LoginPage() {
           <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/30 flex items-center justify-center">
             <Sparkles size={18} strokeWidth={2.5} className="text-white" />
           </div>
-          <span className="text-2xl mt-0.5 tracking-[-0.02em]">PicMagic<span className="text-blue-400">.</span></span>
+          <span className="text-2xl mt-0.5 tracking-[-0.02em]">青柚<span className="text-blue-400">.</span></span>
         </div>
         
         <div className="relative z-10 max-w-md">
@@ -72,7 +72,7 @@ export default function LoginPage() {
         </div>
         
         <div className="relative z-10 flex justify-between items-center text-sm text-slate-400">
-          <span>© {new Date().getFullYear()} PicMagic</span>
+          <span>© {new Date().getFullYear()} 青柚</span>
           <div className="flex gap-4">
             <a href="#" className="hover:text-white transition-colors">隐私政策</a>
             <a href="#" className="hover:text-white transition-colors">服务条款</a>
@@ -89,7 +89,7 @@ export default function LoginPage() {
             <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/30 flex items-center justify-center text-white">
               <Sparkles size={22} />
             </div>
-            <span className="text-2xl mt-0.5 text-slate-900 tracking-[-0.02em]">PicMagic<span className="text-blue-600">.</span></span>
+            <span className="text-2xl mt-0.5 text-slate-900 tracking-[-0.02em]">青柚<span className="text-blue-600">.</span></span>
           </div>
 
           <div className="mb-8 text-center lg:text-left">

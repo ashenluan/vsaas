@@ -99,7 +99,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <span>Loading workspace...</span>
+          <span>正在加载工作台...</span>
         </div>
       </div>
     );
@@ -125,7 +125,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="w-8 h-8 shrink-0 rounded-[10px] bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
                   <Sparkles size={16} strokeWidth={2.5} />
                 </div>
-                <span className="text-[#1E293B] mt-0.5 tracking-[-0.02em]">PicMagic<span className="text-blue-600">.</span></span>
+                <span className="text-[#1E293B] mt-0.5 tracking-[-0.02em]">青柚<span className="text-blue-600">.</span></span>
               </div>
             ) : (
               <div className="mx-auto w-8 h-8 shrink-0 rounded-[10px] bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
@@ -157,7 +157,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {sidebarOpen && (
             <div className="px-5 pb-2 pt-6">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                CREATION TOOLS
+                创作工具
               </span>
             </div>
           )}
@@ -216,14 +216,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="bg-white p-1.5 rounded-md shadow-sm">
                   <Wallet size={16} className="text-blue-600" />
                 </div>
-                <span className="text-sm font-semibold text-slate-700">Credits</span>
+                <span className="text-sm font-semibold text-slate-700">积分</span>
               </div>
               <div className="flex items-end gap-1 mb-3">
                 <span className="text-2xl font-bold text-slate-900 leading-none">{balance !== null ? balance : '--'}</span>
-                <span className="text-xs text-slate-500 mb-0.5 ml-1">left</span>
+                <span className="text-xs text-slate-500 mb-0.5 ml-1">剩余</span>
               </div>
               <Button size="sm" variant="picmagic" className="w-full text-xs font-bold h-8 cursor-pointer" asChild>
-                <Link href="/billing">Top Up Now</Link>
+                <Link href="/billing">立即充值</Link>
               </Button>
             </div>
           )}
@@ -237,9 +237,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     {userName.charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 pr-2">
-                    <p className="truncate text-sm font-bold text-slate-800 leading-tight">{userName || 'User'}</p>
+                    <p className="truncate text-sm font-bold text-slate-800 leading-tight">{userName || '用户'}</p>
                     <Link href="/settings" className="text-[11px] font-medium text-slate-500 hover:text-primary transition-colors block truncate">
-                      Account Settings
+                      账号设置
                     </Link>
                   </div>
                 </div>
@@ -250,7 +250,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     window.location.href = '/login';
                   }}
                   className="shrink-0 cursor-pointer p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                  title="Logout"
+                  title="退出登录"
                 >
                   <LogOut size={16} />
                 </button>

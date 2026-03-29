@@ -1,0 +1,15 @@
+node_modules
+.next
+dist
+.turbo
+*.log
+.env
+.env.local
+.env.*.local
+.git
+.gitignore
+README.md
+docs/
+.vscode/
+*.md
+infrastructure/k8s/

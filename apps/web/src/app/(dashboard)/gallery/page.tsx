@@ -34,15 +34,15 @@ export default function GalleryPage() {
       {/* Header */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 mb-1">My Assets</h1>
-          <p className="text-sm text-slate-500">Manage your generated images and videos</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 mb-1">我的资产</h1>
+          <p className="text-sm text-slate-500">管理您生成的图片和视频</p>
         </div>
         
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input 
-              placeholder="Search prompts..." 
+              placeholder="搜索提示词..." 
               className="w-full sm:w-64 pl-9 h-10 bg-white border-slate-200 rounded-xl focus-visible:ring-primary shadow-sm"
             />
           </div>
@@ -59,21 +59,21 @@ export default function GalleryPage() {
           className={`rounded-full h-8 px-4 text-xs font-semibold transition-all ${filter === 'ALL' ? 'bg-slate-900 text-white hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}
           onClick={() => setFilter('ALL')}
         >
-          All Assets
+          全部
         </Button>
         <Button 
           variant={filter === 'IMAGE' ? 'default' : 'ghost'} 
           className={`rounded-full h-8 px-4 text-xs font-semibold transition-all ${filter === 'IMAGE' ? 'bg-slate-900 text-white hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}
           onClick={() => setFilter('IMAGE')}
         >
-          <ImageIcon size={14} className="mr-1.5" /> Images
+          <ImageIcon size={14} className="mr-1.5" /> 图片
         </Button>
         <Button 
           variant={filter === 'VIDEO' ? 'default' : 'ghost'} 
           className={`rounded-full h-8 px-4 text-xs font-semibold transition-all ${filter === 'VIDEO' ? 'bg-slate-900 text-white hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}
           onClick={() => setFilter('VIDEO')}
         >
-          <Video size={14} className="mr-1.5" /> Videos
+          <Video size={14} className="mr-1.5" /> 视频
         </Button>
       </div>
 
@@ -89,10 +89,10 @@ export default function GalleryPage() {
           <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
             <FolderOpen size={28} className="text-slate-400" />
           </div>
-          <h3 className="text-base font-semibold text-slate-700 mb-1">No assets found</h3>
-          <p className="text-sm text-slate-500 max-w-[250px] mb-6">You haven't generated any {filter !== 'ALL' ? filter.toLowerCase() : ''} assets yet.</p>
+          <h3 className="text-base font-semibold text-slate-700 mb-1">暂无资产</h3>
+          <p className="text-sm text-slate-500 max-w-[250px] mb-6">您还没有生成任何{filter === 'IMAGE' ? '图片' : filter === 'VIDEO' ? '视频' : ''}资产。</p>
           <Button variant="default" className="rounded-xl shadow-sm bg-primary hover:bg-blue-700" onClick={() => window.location.href = '/workspace'}>
-            Start Creating
+            开始创作
           </Button>
         </div>
       ) : (
@@ -117,13 +117,13 @@ export default function GalleryPage() {
                   ) : (
                     <img
                       src={item.output?.images?.[0] || item.output?.url || item.outputUrl}
-                      alt={item.prompt || 'Generated content'}
+                      alt={item.prompt || '生成内容'}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   )
                 ) : (
                   <div className="flex h-full items-center justify-center bg-slate-50 text-slate-400">
-                    {item.status === 'FAILED' ? 'Failed' : 'Processing...'}
+                    {item.status === 'FAILED' ? '失败' : '处理中...'}
                   </div>
                 )}
                 
@@ -131,7 +131,7 @@ export default function GalleryPage() {
                 <div className="absolute left-3 top-3">
                   <Badge variant="secondary" className="bg-white/90 backdrop-blur-md text-slate-800 border-0 shadow-sm text-[10px] font-bold px-2 py-0.5 pointer-events-none">
                     {item.type?.includes('VIDEO') ? <Video size={10} className="mr-1 inline" /> : <ImageIcon size={10} className="mr-1 inline" />}
-                    {item.type?.includes('VIDEO') ? 'Video' : 'Image'}
+                    {item.type?.includes('VIDEO') ? '视频' : '图片'}
                   </Badge>
                 </div>
 
@@ -156,10 +156,10 @@ export default function GalleryPage() {
               {/* Meta Info */}
               <div className="p-3 bg-white">
                 <p className="truncate text-xs font-medium text-slate-700 mb-1" title={item.prompt}>
-                  {item.prompt || 'Untitled'}
+                  {item.prompt || '未命名'}
                 </p>
                 <p className="text-[10px] font-medium text-slate-400">
-                  {new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {new Date(item.createdAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
                 </p>
               </div>
             </div>

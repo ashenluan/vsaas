@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'PicMagic - AI Creation Platform',
-  description: 'Generate stunning images, videos and digital humans with AI.',
+  title: '青柚 - AI 创作平台',
+  description: '一站式 AI 图片、视频、数字人创作平台',
 };
 
 export default function RootLayout({
@@ -16,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} font-sans antialiased min-h-screen bg-background`}>
+      <body className={`${inter.variable} font-sans antialiased min-h-screen bg-background`} suppressHydrationWarning>
         {children}
       </body>
     </html>

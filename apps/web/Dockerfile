@@ -1,19 +1,17 @@
 FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@10.24.0 --activate
 WORKDIR /app
 
 # Install dependencies
 FROM base AS deps
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY apps/web/package.json ./apps/web/
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/ui/package.json ./packages/ui/
-RUN pnpm install --frozen-lockfile --filter @vsaas/web... --filter @vsaas/ui... --filter @vsaas/shared...
+COPY packages/shared-types/package.json ./packages/shared-types/
+RUN pnpm install --frozen-lockfile --filter @vsaas/web...
 
 # Build
 FROM deps AS build
-COPY packages/shared/ ./packages/shared/
-COPY packages/ui/ ./packages/ui/
+COPY packages/shared-types/ ./packages/shared-types/
 COPY apps/web/ ./apps/web/
 COPY tsconfig.base.json ./
 
@@ -32,7 +30,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=build /app/apps/web/public ./apps/web/public
+# Copy standalone output
 COPY --from=build --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 

@@ -15,7 +15,7 @@ export default function DashboardPage() {
     <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
       <div className="flex flex-col items-center gap-3">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <span>Loading workspace...</span>
+        <span>正在加载工作台...</span>
       </div>
     </div>
   );

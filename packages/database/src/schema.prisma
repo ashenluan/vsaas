@@ -1,0 +1,397 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== Users & Auth ====================
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  passwordHash  String     @map("password_hash")
+  displayName   String?    @map("display_name")
+  avatar        String?
+  role          UserRole   @default(USER)
+  status        UserStatus @default(ACTIVE)
+  creditBalance Int        @default(0) @map("credit_balance")
+  lastLoginAt   DateTime?  @map("last_login_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  generations        Generation[]
+  creditTransactions CreditTransaction[]
+  voices             Voice[]
+  avatars            DigitalHumanAvatar[]
+  composeProjects    ComposeProject[]
+  orders             Order[]
+  assets             Asset[]
+  scripts            Script[]
+  materials          Material[]
+
+  @@map("users")
+}
+
+// ==================== Credits & Billing ====================
+
+enum TransactionType {
+  USAGE
+  PURCHASE
+  REFUND
+  ADMIN_ADJUSTMENT
+  BONUS
+}
+
+model CreditTransaction {
+  id           String          @id @default(cuid())
+  userId       String          @map("user_id")
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount       Int
+  type         TransactionType
+  description  String?
+  referenceId  String?         @map("reference_id")
+  balanceAfter Int             @map("balance_after")
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([referenceId])
+  @@map("credit_transactions")
+}
+
+model CreditPackage {
+  id        String  @id @default(cuid())
+  name      String
+  credits   Int
+  price     Decimal @db.Decimal(10, 2)
+  currency  String  @default("CNY")
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  @@map("credit_packages")
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  userId        String      @map("user_id")
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packageId     String?     @map("package_id")
+  amount        Decimal     @db.Decimal(10, 2)
+  credits       Int
+  currency      String      @default("CNY")
+  status        OrderStatus @default(PENDING)
+  paymentMethod String?     @map("payment_method")
+  externalPayId String?     @map("external_pay_id")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  paidAt        DateTime?   @map("paid_at")
+
+  @@index([userId])
+  @@map("orders")
+}
+
+// ==================== Generation ====================
+
+enum JobType {
+  TEXT_TO_IMAGE
+  IMAGE_TO_IMAGE
+  TEXT_TO_VIDEO
+  IMAGE_TO_VIDEO
+  VOICE_CLONE
+  DIGITAL_HUMAN_VIDEO
+  BATCH_COMPOSE
+  STYLE_COPY
+  TEXT_EDIT
+  HANDHELD_PRODUCT
+  MULTI_FUSION
+  VIRTUAL_TRYON
+  INPAINT
+  STORYBOARD
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Generation {
+  id             String    @id @default(cuid())
+  userId         String    @map("user_id")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           JobType
+  status         JobStatus @default(PENDING)
+  provider       String
+  model          String    @default("")
+  prompt         String?
+  negativePrompt String?   @map("negative_prompt")
+  inputAssetId   String?   @map("input_asset_id")
+  inputAsset     Asset?    @relation("JobInput", fields: [inputAssetId], references: [id])
+  outputAssetId  String?   @map("output_asset_id")
+  outputAsset    Asset?    @relation("JobOutput", fields: [outputAssetId], references: [id])
+  outputUrl      String?   @map("output_url")
+  externalId     String?   @map("external_id")
+  progress       Int       @default(0)
+  creditsCost    Int?      @map("credits_cost")
+  creditsUsed    Int?      @map("credits_used")
+  errorMessage   String?   @map("error_message")
+  errorMsg       String?   @map("error_msg")
+  parameters     Json?
+  input          Json?
+  metadata       Json?
+  result         Json?
+  output         Json?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+
+  @@index([userId, status])
+  @@index([externalId])
+  @@map("generations")
+}
+
+// ==================== Templates ====================
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String
+  type        JobType?
+  thumbnail   String?
+  config      Json
+  isPublic    Boolean  @default(true) @map("is_public")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("templates")
+}
+
+// ==================== Assets ====================
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  VOICE_SAMPLE
+}
+
+model Asset {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AssetType
+  filename  String
+  mimeType  String    @map("mime_type")
+  size      BigInt
+  ossKey    String    @map("oss_key")
+  ossUrl    String    @map("oss_url")
+  mediaId   String?   @map("media_id")
+  duration  Float?
+  width     Int?
+  height    Int?
+  metadata  Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  inputJobs  Generation[] @relation("JobInput")
+  outputJobs Generation[] @relation("JobOutput")
+
+  @@index([userId, type])
+  @@index([mediaId])
+  @@map("assets")
+}
+
+// ==================== Digital Human ====================
+
+enum VoiceCloneStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Voice {
+  id            String           @id @default(cuid())
+  userId        String           @map("user_id")
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  voiceId       String           @default("") @map("voice_id")
+  sampleUrl     String?          @map("sample_url")
+  sampleAssetId String?          @map("sample_asset_id")
+  status        VoiceCloneStatus @default(PENDING)
+  provider      String           @default("qwen")
+  errorMessage  String?          @map("error_message")
+  metadata      Json?
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("voices")
+}
+
+enum MaterialType {
+  IMAGE
+  VIDEO
+  AUDIO
+  BACKGROUND
+  STICKER
+  AVATAR
+}
+
+model Material {
+  id           String       @id @default(cuid())
+  userId       String       @map("user_id")
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  type         MaterialType
+  url          String
+  thumbnailUrl String?      @map("thumbnail_url")
+  size         Int          @default(0)
+  mimeType     String       @default("application/octet-stream") @map("mime_type")
+  metadata     Json?
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@index([userId, type])
+  @@map("materials")
+}
+
+model DigitalHumanAvatar {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  assetId      String   @map("asset_id")
+  assetUrl     String?  @map("asset_url")
+  detectResult Json?    @map("detect_result")
+  isValid      Boolean  @default(false) @map("is_valid")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("digital_human_avatars")
+}
+
+model Script {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  tags      Json     @default("[]")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("scripts")
+}
+
+enum ComposeStatus {
+  DRAFT
+  SUBMITTED
+  PROCESSING
+  COMPLETED
+  PARTIALLY_COMPLETED
+  FAILED
+}
+
+model ComposeProject {
+  id        String        @id @default(cuid())
+  userId    String        @map("user_id")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  config    Json
+  status    ComposeStatus @default(DRAFT)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  jobs ComposeJob[]
+
+  @@index([userId])
+  @@map("compose_projects")
+}
+
+model ComposeJob {
+  id            String         @id @default(cuid())
+  projectId     String         @map("project_id")
+  project       ComposeProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalJobId String?        @map("external_job_id")
+  status        JobStatus      @default(PENDING)
+  progress      Int            @default(0)
+  outputAssets  Json?
+  creditsCost   Int?           @map("credits_cost")
+  errorMessage  String?        @map("error_message")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  completedAt   DateTime?      @map("completed_at")
+
+  @@index([externalJobId])
+  @@map("compose_jobs")
+}
+
+// ==================== Admin Config ====================
+
+model ProviderConfig {
+  id          String   @id @default(cuid())
+  name        String
+  provider    String   @unique
+  apiKey      String   @map("api_key")
+  apiEndpoint String?  @map("api_endpoint")
+  isEnabled   Boolean  @default(true) @map("is_enabled")
+  rateLimit   Int?     @map("rate_limit")
+  config      Json?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("provider_configs")
+}
+
+model ModelConfig {
+  id           String  @id @default(cuid())
+  provider     String
+  modelId      String  @map("model_id")
+  displayName  String  @map("display_name")
+  type         JobType
+  creditCost   Int     @map("credit_cost")
+  costUnit     String  @default("per_image") @map("cost_unit")
+  isActive     Boolean @default(true) @map("is_active")
+  capabilities Json?
+  maxDuration  Int?    @map("max_duration")
+  sortOrder    Int     @default(0) @map("sort_order")
+
+  @@unique([provider, modelId])
+  @@map("model_configs")
+}
+
+// ==================== Audit ====================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  performerId String   @map("performer_id")
+  targetId    String?  @map("target_id")
+  action      String
+  details     Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([performerId])
+  @@index([targetId])
+  @@map("audit_logs")
+}

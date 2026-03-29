@@ -149,6 +149,21 @@ export const scriptApi = {
   delete: (id: string) => apiFetch(`/scripts/${id}`, { method: 'DELETE' }),
 };
 
+// Digital Human - Single Video Creation
+export const digitalHumanApi = {
+  createVideo: (data: {
+    avatarId: string;
+    driveMode: 'text' | 'audio';
+    resolution: string;
+    name?: string;
+    voiceId?: string;
+    text?: string;
+    audioUrl?: string;
+  }) =>
+    apiFetch('/digital-human/create-video', { method: 'POST', body: JSON.stringify(data) }),
+  getVideo: (id: string) => apiFetch(`/digital-human/video/${id}`),
+};
+
 // Digital Human - Compose
 export const composeApi = {
   create: (data: {

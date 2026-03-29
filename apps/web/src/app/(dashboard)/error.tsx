@@ -28,9 +28,9 @@ export default function ErrorPage({
             <AlertTriangle className="h-10 w-10 text-red-500" />
           </div>
           
-          <h2 className="mb-2 text-2xl font-extrabold tracking-tight text-slate-900">Oops, something went wrong!</h2>
+          <h2 className="mb-2 text-2xl font-extrabold tracking-tight text-slate-900">出了点问题</h2>
           <p className="mb-8 text-sm font-medium text-slate-500 max-w-sm">
-            We've encountered an unexpected issue while loading your workspace. Our team has been notified.
+            加载工作台时遇到了意外错误，我们已收到通知并将尽快修复。
           </p>
           
           <div className="flex w-full flex-col gap-3 sm:flex-row">
@@ -38,14 +38,14 @@ export default function ErrorPage({
               onClick={() => reset()} 
               className="flex-1 rounded-xl h-11 font-bold shadow-md hover:shadow-lg transition-all"
             >
-              <RefreshCcw className="mr-2 h-4 w-4" /> Try Again
+              <RefreshCcw className="mr-2 h-4 w-4" /> 重试
             </Button>
             <Button 
               variant="outline" 
               onClick={() => router.push('/workspace')}
               className="flex-1 rounded-xl h-11 font-bold border-slate-200 shadow-sm"
             >
-              <Home className="mr-2 h-4 w-4" /> Go Home
+              <Home className="mr-2 h-4 w-4" /> 返回首页
             </Button>
           </div>
         </CardContent>
