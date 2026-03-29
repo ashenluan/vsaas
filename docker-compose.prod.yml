@@ -1,0 +1,106 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vsaas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-vsaas}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-vsaas}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-vsaas}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vsaas
+
+  redis:
+    image: redis:7-alpine
+    container_name: vsaas-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vsaas
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: vsaas-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-vsaas}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-vsaas}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID}
+      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET}
+      OSS_BUCKET: ${OSS_BUCKET:-vsaas-media}
+      OSS_REGION: ${OSS_REGION:-oss-cn-shanghai}
+      CDN_DOMAIN: ${CDN_DOMAIN:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      GROK_API_KEY: ${GROK_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VOLCENGINE_API_KEY: ${VOLCENGINE_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    ports:
+      - '127.0.0.1:4000:4000'
+    networks:
+      - vsaas
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost/api}
+    container_name: vsaas-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - '127.0.0.1:3000:3000'
+    networks:
+      - vsaas
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost/api}
+    container_name: vsaas-admin
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - '127.0.0.1:3002:3002'
+    networks:
+      - vsaas
+
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  vsaas:
+    driver: bridge
