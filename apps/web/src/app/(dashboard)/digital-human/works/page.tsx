@@ -26,7 +26,7 @@ export default function WorksPage() {
 
   const loadWorks = () => {
     setLoading(true);
-    generationApi.list({ type: 'DIGITAL_HUMAN', page: 1 })
+    generationApi.list({ type: 'DIGITAL_HUMAN_VIDEO', page: 1 })
       .then((data: any) => {
         const items = data.items || [];
         setWorks(items);
