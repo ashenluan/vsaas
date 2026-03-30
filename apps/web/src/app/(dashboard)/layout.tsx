@@ -61,6 +61,7 @@ const navItems: NavItem[] = [
   { label: '多图融合', desc: '多张图片AI智能融合', href: '/generate/multi-fusion', icon: Blend },
   { label: '数字人', desc: '克隆声音，生成数字人视频', href: '/digital-human', icon: UserCircle, badge: 'new', badgeColor: 'bg-emerald-500' },
   { label: '批量混剪', desc: '批量合成数字人视频', href: '/digital-human/compose', icon: Clapperboard },
+  { label: '智能混剪', desc: '素材智能组合批量出片', href: '/mixcut', icon: Scissors, badge: 'new', badgeColor: 'bg-violet-500' },
   { label: '模板广场', desc: '浏览和使用创作模板', href: '/templates', icon: Layers },
   { label: '提示词广场', desc: '探索AI创作提示词', href: '/prompt', icon: BookOpen },
 ];
