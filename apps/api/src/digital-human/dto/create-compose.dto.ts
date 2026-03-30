@@ -60,6 +60,13 @@ class FilterConfigDto {
   @IsOptional() @IsArray() @IsString({ each: true }) filterList?: string[];
 }
 
+class HighlightWordDto {
+  @IsString() word!: string;
+  @IsOptional() @IsString() fontColor?: string;
+  @IsOptional() @IsString() outlineColour?: string;
+  @IsOptional() @IsBoolean() bold?: boolean;
+}
+
 export class CreateComposeDto {
   @IsString()
   voiceId!: string;
@@ -113,4 +120,38 @@ export class CreateComposeDto {
   @ValidateNested()
   @Type(() => FilterConfigDto)
   filterConfig?: FilterConfigDto;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => HighlightWordDto)
+  highlightWords?: HighlightWordDto[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(180)
+  maxDuration?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(18)
+  @Max(35)
+  crf?: number;
+
+  @IsOptional()
+  @IsNumber()
+  speechRate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  mediaVolume?: number;
+
+  @IsOptional()
+  @IsNumber()
+  speechVolume?: number;
+
+  @IsOptional()
+  @IsNumber()
+  bgMusicVolume?: number;
 }

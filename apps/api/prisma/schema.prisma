@@ -141,6 +141,7 @@ model Voice {
   provider  String   @default("aliyun-cosyvoice")
   sampleUrl String   @map("sample_url")
   status    String   @default("PENDING")
+  isPublic  Boolean  @default(false) @map("is_public")
   metadata  Json?    @default("{}")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -159,6 +160,7 @@ model Material {
   thumbnailUrl String?      @map("thumbnail_url")
   size         Int          @default(0)
   mimeType     String       @default("application/octet-stream") @map("mime_type")
+  isPublic     Boolean      @default(false) @map("is_public")
   metadata     Json?        @default("{}")
   createdAt    DateTime     @default(now()) @map("created_at")
 

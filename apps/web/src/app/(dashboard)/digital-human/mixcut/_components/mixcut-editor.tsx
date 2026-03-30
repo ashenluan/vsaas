@@ -1,0 +1,121 @@
+'use client';
+
+import { useMixcutStore } from '../_store/use-mixcut-store';
+import { ShotGroupCard } from './shot-group-card';
+import { GlobalConfigPanel } from './global-config-panel';
+import { PreviewPanel } from './preview-panel';
+import { SubtitleDrawer } from './subtitle-drawer';
+import { ArrowLeft, Save, Play, Sparkles, Plus } from 'lucide-react';
+
+export function MixcutEditor({
+  options,
+  allMaterials,
+  onMaterialAdd,
+}: {
+  options: any;
+  allMaterials: any[];
+  onMaterialAdd: (m: any) => void;
+}) {
+  const { project, setProjectName, setView, activeDrawer, closeDrawer } = useMixcutStore();
+
+  return (
+    <div className="relative">
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setView('list')}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border hover:bg-accent transition-colors"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <input
+            type="text"
+            value={project.name}
+            onChange={(e) => setProjectName(e.target.value)}
+            className="h-9 rounded-lg border border-transparent bg-transparent px-2 text-lg font-semibold hover:border-input focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium hover:bg-accent transition-colors">
+            <Sparkles size={12} /> 智能去重
+          </button>
+          <button className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium hover:bg-accent transition-colors">
+            <Save size={12} /> 保存混剪项目
+          </button>
+          <button className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors">
+            <Play size={12} /> 视频混剪预览
+          </button>
+        </div>
+      </div>
+
+      {/* Three-column editor */}
+      <div className="grid grid-cols-12 gap-4" style={{ minHeight: 'calc(100vh - 180px)' }}>
+        {/* Left: Shot Groups */}
+        <div className="col-span-5 space-y-3 overflow-y-auto pr-1" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+          <div className="mb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">镜头内容与配置</h3>
+                <p className="text-[10px] text-muted-foreground">为各个镜头配置素材、文案、时长等信息</p>
+              </div>
+              <div className="flex gap-1.5">
+                <button className="rounded-md border px-2.5 py-1 text-[11px] hover:bg-accent transition-colors">
+                  镜头组音频设置
+                </button>
+                <button className="rounded-md border px-2.5 py-1 text-[11px] text-primary hover:bg-primary/5 transition-colors">
+                  AI写作助手
+                </button>
+                <button className="rounded-md border px-2.5 py-1 text-[11px] hover:bg-accent transition-colors">
+                  导入脚本
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {project.shotGroups.map((group) => (
+            <ShotGroupCard
+              key={group.id}
+              group={group}
+              allMaterials={allMaterials}
+              onMaterialAdd={onMaterialAdd}
+            />
+          ))}
+
+          <AddShotButton />
+        </div>
+
+        {/* Middle: Global Config */}
+        <div className="col-span-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+          <GlobalConfigPanel options={options} />
+        </div>
+
+        {/* Right: Preview */}
+        <div className="col-span-4">
+          <PreviewPanel />
+        </div>
+      </div>
+
+      {/* Subtitle Drawer */}
+      {activeDrawer?.type === 'subtitle' && (
+        <SubtitleDrawer
+          shotId={activeDrawer.shotId}
+          options={options}
+          onClose={closeDrawer}
+        />
+      )}
+    </div>
+  );
+}
+
+function AddShotButton() {
+  const addShotGroup = useMixcutStore((s) => s.addShotGroup);
+  return (
+    <button
+      onClick={addShotGroup}
+      className="w-full rounded-xl border-2 border-dashed border-input py-4 text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+    >
+      + 新增镜头组
+    </button>
+  );
+}

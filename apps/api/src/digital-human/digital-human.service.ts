@@ -16,6 +16,7 @@ import {
   SUBTITLE_STYLE_LIST,
   BUBBLE_STYLE_LIST,
 } from '../provider/aliyun-ims/ims-compose.provider';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class DigitalHumanService {
@@ -25,9 +26,11 @@ export class DigitalHumanService {
     private readonly prisma: PrismaService,
     private readonly providers: ProviderRegistry,
     private readonly userService: UserService,
+    private readonly storage: StorageService,
     @InjectQueue('voice-cloning') private readonly voiceQueue: Queue,
     @InjectQueue('batch-production') private readonly batchQueue: Queue,
     @InjectQueue('digital-human-video') private readonly dhVideoQueue: Queue,
+    @InjectQueue('mixcut-production') private readonly mixcutQueue: Queue,
   ) {}
 
   // ==================== Voices ====================
@@ -264,6 +267,13 @@ export class DigitalHumanService {
       effectsConfig?: any;
       transitionConfig?: any;
       filterConfig?: any;
+      highlightWords?: { word: string; fontColor?: string; outlineColour?: string; bold?: boolean }[];
+      maxDuration?: number;
+      crf?: number;
+      speechRate?: number;
+      mediaVolume?: number;
+      speechVolume?: number;
+      bgMusicVolume?: number;
     },
   ) {
     // Validate voice (user-owned or public)
@@ -340,6 +350,13 @@ export class DigitalHumanService {
           effectsConfig: data.effectsConfig,
           transitionConfig: data.transitionConfig,
           filterConfig: data.filterConfig,
+          highlightWords: data.highlightWords,
+          maxDuration: data.maxDuration,
+          crf: data.crf,
+          speechRate: data.speechRate,
+          mediaVolume: data.mediaVolume,
+          speechVolume: data.speechVolume,
+          bgMusicVolume: data.bgMusicVolume,
         },
       },
     });
@@ -367,6 +384,209 @@ export class DigitalHumanService {
     });
     if (!job) throw new NotFoundException('Compose job not found');
     return job;
+  }
+
+  // ==================== Mixcut (脚本化自动成片) ====================
+
+  async listMixcutJobs(userId: string) {
+    return this.prisma.generation.findMany({
+      where: { userId, type: 'BATCH_COMPOSE', input: { path: ['mode'], equals: 'mixcut' } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getMixcutJob(userId: string, id: string) {
+    const job = await this.prisma.generation.findFirst({
+      where: { id, userId, type: 'BATCH_COMPOSE' },
+    });
+    if (!job) throw new NotFoundException('混剪任务不存在');
+    return job;
+  }
+
+  async createMixcutJob(
+    userId: string,
+    data: {
+      name: string;
+      shotGroups: {
+        name: string;
+        materialUrls: string[];
+        speechTexts?: string[];
+        duration?: number;
+        splitMode?: string;
+        keepOriginalAudio?: boolean;
+      }[];
+      speechMode?: 'global' | 'group';
+      speechTexts?: string[];
+      voiceId?: string;
+      videoCount: number;
+      resolution: string;
+      bgMusic?: string;
+      bgMusicVolume?: number;
+      mediaVolume?: number;
+      speechVolume?: number;
+      speechRate?: number;
+      subtitleConfig?: any;
+      titleConfig?: any;
+      highlightWords?: { word: string; fontColor?: string; outlineColour?: string; bold?: boolean }[];
+      transitionEnabled?: boolean;
+      transitionDuration?: number;
+      transitionList?: string[];
+      filterEnabled?: boolean;
+      filterList?: string[];
+      bgType?: string;
+      bgColor?: string;
+      maxDuration?: number;
+      crf?: number;
+    },
+  ) {
+    // Validate: at least one shot group with materials
+    if (!data.shotGroups?.length) {
+      throw new BadRequestException('至少需要一个镜头组');
+    }
+    for (const group of data.shotGroups) {
+      if (!group.materialUrls?.length) {
+        throw new BadRequestException(`镜头组 "${group.name}" 没有素材`);
+      }
+    }
+
+    // Validate voice if speechTexts provided
+    if (data.voiceId) {
+      const voice = await this.prisma.voice.findFirst({
+        where: {
+          voiceId: data.voiceId,
+          status: 'READY',
+          OR: [{ userId }, { isPublic: true }],
+        },
+      });
+      if (!voice) throw new BadRequestException('声音不存在或未就绪');
+    }
+
+    // Deduct credits
+    const costPerVideo = 20;
+    const totalCost = costPerVideo * data.videoCount;
+    await this.userService.deductCredits(
+      userId,
+      totalCost,
+      `智能混剪: ${data.name} (${data.videoCount}条视频)`,
+    );
+
+    // Build IMS configs
+    const imsProvider = this.providers.batchComposeProvider;
+
+    const inputConfig = imsProvider.buildInputConfig({
+      mode: data.speechMode === 'group' ? 'group' : 'global',
+      mediaGroups: data.shotGroups.map((g) => ({
+        groupName: g.name,
+        mediaUrls: g.materialUrls,
+        ...(g.speechTexts?.length && { speechTexts: g.speechTexts }),
+        ...(g.duration && { duration: g.duration }),
+        ...(g.splitMode && { splitMode: g.splitMode }),
+      })),
+      ...(data.speechTexts?.length && { speechTexts: data.speechTexts }),
+      ...(data.titleConfig?.titles?.length && { titles: data.titleConfig.titles }),
+      ...(data.bgMusic && { backgroundMusic: [data.bgMusic] }),
+    });
+
+    const { width, height } = this.parseResolutionWH(data.resolution);
+
+    const editingConfig = imsProvider.buildEditingConfig({
+      mediaVolume: data.mediaVolume ?? 1,
+      speechVolume: data.speechVolume ?? 1,
+      speechRate: data.speechRate ?? 0,
+      ...(data.voiceId && { customizedVoice: data.voiceId }),
+      backgroundMusicVolume: data.bgMusicVolume ?? 0.2,
+      subtitleConfig: data.subtitleConfig,
+      ...(data.highlightWords?.length && {
+        specialWordsConfig: data.highlightWords
+          .filter((hw) => hw.word)
+          .map((hw) => ({
+            type: 'Highlight' as const,
+            wordsList: [hw.word],
+            style: {
+              ...(hw.fontColor && { fontColor: hw.fontColor }),
+              ...(hw.outlineColour && { outlineColour: hw.outlineColour }),
+              ...(hw.bold && { bold: true }),
+            },
+          })),
+      }),
+      titleConfig: data.titleConfig?.enabled ? {
+        font: data.titleConfig.font,
+        fontSize: data.titleConfig.fontSize,
+        fontColor: data.titleConfig.fontColor,
+        alignment: data.titleConfig.alignment,
+        y: data.titleConfig.y,
+        effectColorStyleId: data.titleConfig.effectColorStyleId,
+      } : undefined,
+      allowTransition: data.transitionEnabled ?? false,
+      transitionDuration: data.transitionDuration,
+      transitionList: data.transitionList,
+      allowFilter: data.filterEnabled ?? false,
+      filterList: data.filterList,
+      ...(data.bgType === 'blur' && { backgroundImageType: 'Blur' }),
+      ...(data.bgType === 'color' && { backgroundImageType: 'Color' }),
+    });
+
+    const outputOssKey = this.storage.generateKey('mixcut', `${Date.now()}.mp4`);
+    const outputUrl = this.storage.getPublicUrl(outputOssKey);
+
+    const outputConfig = imsProvider.buildOutputConfig({
+      outputUrl,
+      count: data.videoCount,
+      width: width || 1080,
+      height: height || 1920,
+      ...(data.maxDuration && { maxDuration: data.maxDuration }),
+      ...(data.crf && { crf: data.crf }),
+    });
+
+    // Create generation record
+    const job = await this.prisma.generation.create({
+      data: {
+        userId,
+        type: 'BATCH_COMPOSE',
+        status: 'PENDING',
+        provider: 'aliyun-ims',
+        creditsUsed: totalCost,
+        input: {
+          mode: 'mixcut',
+          name: data.name,
+          shotGroups: data.shotGroups,
+          speechMode: data.speechMode,
+          speechTexts: data.speechTexts,
+          voiceId: data.voiceId,
+          videoCount: data.videoCount,
+          resolution: data.resolution,
+          bgMusic: data.bgMusic,
+          subtitleConfig: data.subtitleConfig,
+          titleConfig: data.titleConfig,
+          highlightWords: data.highlightWords,
+        },
+      },
+    });
+
+    // Dispatch to mixcut queue — goes directly to IMS (no TTS/S2V)
+    await this.mixcutQueue.add('mixcut', {
+      jobId: job.id,
+      userId,
+      inputConfig,
+      editingConfig,
+      outputConfig,
+      videoCount: data.videoCount,
+    }, {
+      attempts: 2,
+      backoff: { type: 'exponential', delay: 10000 },
+    });
+
+    this.logger.log(`Mixcut job ${job.id} queued: ${data.videoCount} videos, ${data.shotGroups.length} shot groups`);
+    return job;
+  }
+
+  private parseResolutionWH(resolution: string): { width: number; height: number } {
+    const parts = resolution.split('x').map(Number);
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return { width: parts[0], height: parts[1] };
+    }
+    if (resolution.toUpperCase().includes('1080')) return { width: 1080, height: 1920 };
+    return { width: 720, height: 1280 };
   }
 
   // ==================== Single Video Creation ====================

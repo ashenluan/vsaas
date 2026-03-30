@@ -24,6 +24,13 @@ interface ComposeJobData {
     effectsConfig?: any;
     transitionConfig?: any;
     filterConfig?: any;
+    highlightWords?: { word: string; fontColor?: string; outlineColour?: string; bold?: boolean }[];
+    maxDuration?: number;
+    crf?: number;
+    speechRate?: number;
+    mediaVolume?: number;
+    speechVolume?: number;
+    bgMusicVolume?: number;
   };
 }
 
@@ -213,8 +220,25 @@ export class BatchProductionProcessor extends WorkerHost {
 
       const editingConfig = imsProvider.buildEditingConfig({
         // 不传 customizedVoice — S2V 视频已包含克隆声音的 TTS
-        mediaVolume: 1, // 保留 S2V 视频原始音频（含口播）
+        mediaVolume: input.mediaVolume ?? 1, // 保留 S2V 视频原始音频（含口播）
+        speechVolume: input.speechVolume ?? 1,
+        speechRate: input.speechRate ?? 0,
+        backgroundMusicVolume: input.bgMusicVolume ?? 0.2,
         subtitleConfig: input.subtitleConfig,
+        // 关键词高亮 → IMS SpecialWordsConfig
+        ...(input.highlightWords?.length && {
+          specialWordsConfig: input.highlightWords
+            .filter((hw) => hw.word)
+            .map((hw) => ({
+              type: 'Highlight' as const,
+              wordsList: [hw.word],
+              style: {
+                ...(hw.fontColor && { fontColor: hw.fontColor }),
+                ...(hw.outlineColour && { outlineColour: hw.outlineColour }),
+                ...(hw.bold && { bold: true }),
+              },
+            })),
+        }),
         titleConfig: input.titleConfig ? {
           font: input.titleConfig.font,
           fontSize: input.titleConfig.fontSize,
@@ -244,6 +268,8 @@ export class BatchProductionProcessor extends WorkerHost {
         count: actualVideoCount,
         width: width || 1080,
         height: height || 1920,
+        ...(input.maxDuration && { maxDuration: input.maxDuration }),
+        ...(input.crf && { crf: input.crf }),
       });
 
       // Submit to IMS (传入回调 URL 和验证 token)

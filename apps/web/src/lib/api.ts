@@ -229,3 +229,50 @@ export const composeApi = {
     bubbleStyles: string[];
   }>('/compose/options'),
 };
+
+// Digital Human - Mixcut (智能混剪 / 脚本化自动成片)
+export const mixcutApi = {
+  create: (data: {
+    name: string;
+    shotGroups: {
+      name: string;
+      materialUrls: string[];
+      speechTexts?: string[];
+      duration?: number;
+      splitMode?: string;
+      keepOriginalAudio?: boolean;
+    }[];
+    speechMode?: 'global' | 'group';
+    speechTexts?: string[];
+    voiceId?: string;
+    videoCount: number;
+    resolution: string;
+    bgMusic?: string;
+    bgMusicVolume?: number;
+    mediaVolume?: number;
+    speechVolume?: number;
+    speechRate?: number;
+    subtitleConfig?: any;
+    titleConfig?: any;
+    highlightWords?: { word: string; fontColor?: string; outlineColour?: string; bold?: boolean }[];
+    transitionEnabled?: boolean;
+    transitionDuration?: number;
+    transitionList?: string[];
+    filterEnabled?: boolean;
+    filterList?: string[];
+    bgType?: string;
+    bgColor?: string;
+    maxDuration?: number;
+    crf?: number;
+  }) =>
+    apiFetch('/mixcut', { method: 'POST', body: JSON.stringify(data) }),
+  list: () => apiFetch<any[]>('/mixcut'),
+  get: (id: string) => apiFetch(`/mixcut/${id}`),
+  getOptions: () => apiFetch<{
+    transitions: string[];
+    effects: Record<string, string[]>;
+    filters: Record<string, string[]>;
+    subtitleStyles: string[];
+    bubbleStyles: string[];
+  }>('/mixcut/options'),
+};
