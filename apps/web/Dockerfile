@@ -1,4 +1,5 @@
 FROM node:20-alpine AS base
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 RUN corepack enable && corepack prepare pnpm@10.24.0 --activate
 WORKDIR /app
 
