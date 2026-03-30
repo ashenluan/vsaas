@@ -334,14 +334,19 @@ export default function DigitalHumanPage() {
                       <ImageIcon size={32} className="text-slate-300" />
                     </div>
                   )}
-                  {/* 人脸检测状态 */}
-                  {faceValid && (
-                    <div className="absolute left-2 top-2">
+                  {/* 公共/系统标识 + 人脸检测状态 */}
+                  <div className="absolute left-2 top-2 flex flex-col gap-1">
+                    {avatar.isPublic && (
+                      <span className="inline-flex items-center rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+                        系统
+                      </span>
+                    )}
+                    {faceValid && (
                       <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
                         <ScanFace size={10} /> 已验证
                       </span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                   {/* Hover overlay */}
                   <div className="absolute inset-0 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
                     <Link
@@ -359,25 +364,29 @@ export default function DigitalHumanPage() {
                     {new Date(avatar.createdAt).toLocaleDateString('zh-CN')}
                   </p>
                   <div className="mt-2 flex gap-1.5">
-                    <button
-                      onClick={() => handleDetect(avatar)}
-                      disabled={detecting === avatar.id}
-                      className="flex-1 rounded-lg bg-primary/10 px-2 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
-                    >
-                      {detecting === avatar.id ? '检测中...' : '人脸检测'}
-                    </button>
+                    {!avatar.isPublic && (
+                      <button
+                        onClick={() => handleDetect(avatar)}
+                        disabled={detecting === avatar.id}
+                        className="flex-1 rounded-lg bg-primary/10 px-2 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
+                      >
+                        {detecting === avatar.id ? '检测中...' : '人脸检测'}
+                      </button>
+                    )}
                     <Link
                       href={`/digital-human/create?avatarId=${avatar.id}`}
                       className="flex-1 rounded-lg bg-slate-100 px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 text-center transition-colors"
                     >
                       去创作
                     </Link>
-                    <button
-                      onClick={() => handleDelete(avatar.id)}
-                      className="rounded-lg px-2 py-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {!avatar.isPublic && (
+                      <button
+                        onClick={() => handleDelete(avatar.id)}
+                        className="rounded-lg px-2 py-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

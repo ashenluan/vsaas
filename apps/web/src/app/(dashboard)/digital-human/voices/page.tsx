@@ -173,7 +173,15 @@ export default function VoicesPage() {
           {voices.map((voice: any) => (
             <div key={voice.id} className="rounded-xl border bg-card p-5 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-semibold">{voice.name}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold">{voice.name}</h3>
+                  {voice.isPublic && (
+                    <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">系统</span>
+                  )}
+                  {voice.gender && (
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 leading-none">{voice.gender === 'female' ? '女声' : '男声'}</span>
+                  )}
+                </div>
                 <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
                   voice.status === 'READY' ? 'bg-green-100 text-green-700' :
                   voice.status === 'FAILED' ? 'bg-red-100 text-red-700' :
@@ -211,12 +219,14 @@ export default function VoicesPage() {
                   )}
                 </div>
               )}
-              <button
-                onClick={() => handleDelete(voice.id)}
-                className="text-xs text-red-500 hover:underline"
-              >
-                删除
-              </button>
+              {!voice.isPublic && (
+                <button
+                  onClick={() => handleDelete(voice.id)}
+                  className="text-xs text-red-500 hover:underline"
+                >
+                  删除
+                </button>
+              )}
             </div>
           ))}
         </div>

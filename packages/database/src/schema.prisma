@@ -244,10 +244,15 @@ model Voice {
   status        VoiceCloneStatus @default(PENDING)
   provider      String           @default("qwen")
   errorMessage  String?          @map("error_message")
+  isPublic      Boolean          @default(false) @map("is_public")
+  language      String?          @default("zh-CN")
+  gender        String?
+  tags          Json             @default("[]")
   metadata      Json?
   createdAt     DateTime         @default(now()) @map("created_at")
 
   @@index([userId])
+  @@index([isPublic])
   @@map("voices")
 }
 
@@ -270,10 +275,13 @@ model Material {
   thumbnailUrl String?      @map("thumbnail_url")
   size         Int          @default(0)
   mimeType     String       @default("application/octet-stream") @map("mime_type")
+  isPublic     Boolean      @default(false) @map("is_public")
+  category     String?
   metadata     Json?
   createdAt    DateTime     @default(now()) @map("created_at")
 
   @@index([userId, type])
+  @@index([isPublic, type])
   @@map("materials")
 }
 

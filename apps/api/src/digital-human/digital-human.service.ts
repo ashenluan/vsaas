@@ -34,8 +34,8 @@ export class DigitalHumanService {
 
   async listVoices(userId: string) {
     return this.prisma.voice.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
+      where: { OR: [{ userId }, { isPublic: true }] },
+      orderBy: [{ isPublic: 'desc' }, { createdAt: 'desc' }],
     }) as any;
   }
 
@@ -69,9 +69,13 @@ export class DigitalHumanService {
 
 
   async previewVoice(userId: string, voiceId: string, text: string) {
-    // 校验声音所有权
+    // 校验声音所有权或公共声音
     const voice = await this.prisma.voice.findFirst({
-      where: { voiceId, userId, status: 'READY' },
+      where: {
+        voiceId,
+        status: 'READY',
+        OR: [{ userId }, { isPublic: true }],
+      },
     });
     if (!voice) throw new NotFoundException('Voice not found or not ready');
 
@@ -96,11 +100,13 @@ export class DigitalHumanService {
   // ==================== Materials ====================
 
   async listMaterials(userId: string, type?: string) {
-    const where: any = { userId };
-    if (type) where.type = type;
+    const where: any = { OR: [{ userId }, { isPublic: true }] };
+    if (type) {
+      where.OR = where.OR.map((cond: any) => ({ ...cond, type }));
+    }
     return this.prisma.material.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ isPublic: 'desc' }, { createdAt: 'desc' }],
     });
   }
 
@@ -260,15 +266,22 @@ export class DigitalHumanService {
       filterConfig?: any;
     },
   ) {
-    // Validate voice
+    // Validate voice (user-owned or public)
     const voice = await this.prisma.voice.findFirst({
-      where: { voiceId: data.voiceId, userId, status: 'READY' },
+      where: {
+        voiceId: data.voiceId,
+        status: 'READY',
+        OR: [{ userId }, { isPublic: true }],
+      },
     });
     if (!voice) throw new BadRequestException('Voice not found or not ready');
 
-    // Validate avatar
+    // Validate avatar (user-owned or public)
     const avatar = await this.prisma.material.findFirst({
-      where: { id: data.avatarId, userId },
+      where: {
+        id: data.avatarId,
+        OR: [{ userId }, { isPublic: true }],
+      },
     });
     if (!avatar) throw new BadRequestException('Avatar not found');
 
@@ -367,12 +380,16 @@ export class DigitalHumanService {
       name?: string;
       voiceId?: string;
       text?: string;
+      speechRate?: number;
       audioUrl?: string;
     },
   ) {
-    // Validate avatar
+    // Validate avatar (user-owned or public)
     const avatar = await this.prisma.material.findFirst({
-      where: { id: data.avatarId, userId },
+      where: {
+        id: data.avatarId,
+        OR: [{ userId }, { isPublic: true }],
+      },
     });
     if (!avatar) throw new BadRequestException('数字人形象不存在');
 
@@ -390,7 +407,11 @@ export class DigitalHumanService {
       if (!data.text?.trim()) throw new BadRequestException('请输入台词文案');
 
       const voice = await this.prisma.voice.findFirst({
-        where: { voiceId: data.voiceId, userId, status: 'READY' },
+        where: {
+          voiceId: data.voiceId,
+          status: 'READY',
+          OR: [{ userId }, { isPublic: true }],
+        },
       });
       if (!voice) throw new BadRequestException('声音不存在或未就绪');
     }
@@ -423,7 +444,7 @@ export class DigitalHumanService {
           driveMode: data.driveMode,
           resolution: data.resolution,
           ...(data.driveMode === 'text'
-            ? { voiceId: data.voiceId, text: data.text }
+            ? { voiceId: data.voiceId, text: data.text, speechRate: data.speechRate || 1.0 }
             : { audioUrl: data.audioUrl }),
         },
       },

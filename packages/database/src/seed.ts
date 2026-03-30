@@ -132,6 +132,82 @@ async function main() {
   }
   console.log(`Created ${templates.length} templates`);
 
+  // Create public preset voices
+  const presetVoices = [
+    { name: '甜美女声', voiceId: 'longxiaochun', status: 'READY' as const, provider: 'qwen', isPublic: true, language: 'zh-CN', gender: 'female', tags: JSON.stringify(['甜美', '年轻', '活力']) },
+    { name: '成熟男声', voiceId: 'longshuo', status: 'READY' as const, provider: 'qwen', isPublic: true, language: 'zh-CN', gender: 'male', tags: JSON.stringify(['成熟', '稳重', '磁性']) },
+    { name: '知性女声', voiceId: 'longyue', status: 'READY' as const, provider: 'qwen', isPublic: true, language: 'zh-CN', gender: 'female', tags: JSON.stringify(['知性', '温柔', '专业']) },
+    { name: '活力男声', voiceId: 'longjielidou', status: 'READY' as const, provider: 'qwen', isPublic: true, language: 'zh-CN', gender: 'male', tags: JSON.stringify(['活力', '阳光', '年轻']) },
+    { name: '温柔女声', voiceId: 'longshu', status: 'READY' as const, provider: 'qwen', isPublic: true, language: 'zh-CN', gender: 'female', tags: JSON.stringify(['温柔', '亲和', '自然']) },
+    { name: '播音男声', voiceId: 'longcheng', status: 'READY' as const, provider: 'qwen', isPublic: true, language: 'zh-CN', gender: 'male', tags: JSON.stringify(['播音', '标准', '正式']) },
+  ];
+
+  for (const v of presetVoices) {
+    await prisma.voice.create({
+      data: {
+        userId: admin.id,
+        ...v,
+      },
+    });
+  }
+  console.log(`Created ${presetVoices.length} public preset voices`);
+
+  // Create public preset avatar materials
+  const presetAvatars = [
+    {
+      name: '商务女性',
+      type: 'IMAGE' as const,
+      url: 'https://img.alicdn.com/imgextra/i1/O1CN01example1.jpg',
+      isPublic: true,
+      category: 'business',
+      mimeType: 'image/jpeg',
+      metadata: { faceDetect: { valid: true, faceCount: 1 }, isPreset: true },
+    },
+    {
+      name: '商务男性',
+      type: 'IMAGE' as const,
+      url: 'https://img.alicdn.com/imgextra/i2/O1CN01example2.jpg',
+      isPublic: true,
+      category: 'business',
+      mimeType: 'image/jpeg',
+      metadata: { faceDetect: { valid: true, faceCount: 1 }, isPreset: true },
+    },
+    {
+      name: '休闲女生',
+      type: 'IMAGE' as const,
+      url: 'https://img.alicdn.com/imgextra/i3/O1CN01example3.jpg',
+      isPublic: true,
+      category: 'casual',
+      mimeType: 'image/jpeg',
+      metadata: { faceDetect: { valid: true, faceCount: 1 }, isPreset: true },
+    },
+    {
+      name: '休闲男生',
+      type: 'IMAGE' as const,
+      url: 'https://img.alicdn.com/imgextra/i4/O1CN01example4.jpg',
+      isPublic: true,
+      category: 'casual',
+      mimeType: 'image/jpeg',
+      metadata: { faceDetect: { valid: true, faceCount: 1 }, isPreset: true },
+    },
+  ];
+
+  for (const a of presetAvatars) {
+    await prisma.material.create({
+      data: {
+        userId: admin.id,
+        name: a.name,
+        type: a.type,
+        url: a.url,
+        isPublic: a.isPublic,
+        category: a.category,
+        mimeType: a.mimeType,
+        metadata: a.metadata,
+      },
+    });
+  }
+  console.log(`Created ${presetAvatars.length} public preset avatars`);
+
   console.log('Seeding complete!');
 }
 

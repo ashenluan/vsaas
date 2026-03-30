@@ -32,6 +32,8 @@ const RESOLUTIONS = [
   { label: '竖屏 1080×1920', value: '1080x1920' },
   { label: '横屏 1920×1080', value: '1920x1080' },
   { label: '方形 1080×1080', value: '1080x1080' },
+  { label: '竖屏 4K', value: '2160x3840' },
+  { label: '横屏 4K', value: '3840x2160' },
 ];
 
 function CreateContent() {
@@ -53,6 +55,7 @@ function CreateContent() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
   const [resolution, setResolution] = useState('1080x1920');
+  const [speechRate, setSpeechRate] = useState(1.0);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [projectName, setProjectName] = useState('');
 
@@ -142,6 +145,7 @@ function CreateContent() {
       if (driveMode === 'text') {
         payload.voiceId = selectedVoice;
         payload.text = textContent.trim();
+        if (speechRate !== 1.0) payload.speechRate = speechRate;
       } else {
         payload.audioUrl = audioUrl;
       }
@@ -273,6 +277,9 @@ function CreateContent() {
                     <Check size={12} />
                   </div>
                 )}
+                {avatar.isPublic && (
+                  <div className="absolute left-1 top-1 rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white shadow-sm">系统</div>
+                )}
                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 px-1.5 pb-1 pt-4">
                   <p className="truncate text-[10px] font-medium text-white">{avatar.name}</p>
                 </div>
@@ -314,7 +321,15 @@ function CreateContent() {
                     <Volume2 size={14} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-900">{voice.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-medium text-slate-900">{voice.name}</p>
+                      {voice.isPublic && (
+                        <span className="shrink-0 rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white leading-none">系统</span>
+                      )}
+                      {voice.gender && (
+                        <span className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[9px] text-slate-500 leading-none">{voice.gender === 'female' ? '女' : '男'}</span>
+                      )}
+                    </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleVoicePreview(voice.voiceId || voice.id); }}
                       disabled={previewingVoice === (voice.voiceId || voice.id)}
@@ -451,7 +466,7 @@ function CreateContent() {
             <div className="border-t border-border p-5 space-y-4">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-700">输出分辨率</label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {RESOLUTIONS.map((r) => (
                     <button
                       key={r.value}
@@ -468,6 +483,27 @@ function CreateContent() {
                   ))}
                 </div>
               </div>
+              {driveMode === 'text' && (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    语速调节 <span className="text-slate-400 font-normal">({speechRate.toFixed(1)}x)</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400">0.5x</span>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.1"
+                      value={speechRate}
+                      onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
+                      className="flex-1 accent-primary"
+                    />
+                    <span className="text-xs text-slate-400">2.0x</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">调节数字人的说话速度</p>
+                </div>
+              )}
             </div>
           )}
         </div>
