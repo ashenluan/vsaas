@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as WebSocket from 'ws';
+import WebSocket from 'ws';
 import * as crypto from 'crypto';
 
 export interface VoiceProvider {
@@ -196,7 +196,7 @@ export class QwenVoiceProvider implements VoiceProvider {
         }
       });
 
-      ws.on('error', (err) => {
+      ws.on('error', (err: Error) => {
         cleanup();
         if (!settled) {
           settled = true;
