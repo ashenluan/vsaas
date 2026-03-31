@@ -527,7 +527,7 @@ export class DigitalHumanService {
     });
 
     const outputOssKey = this.storage.generateKey('mixcut', `${Date.now()}.mp4`);
-    const outputUrl = this.storage.getOssUrl(outputOssKey);
+    const outputUrl = this.storage.getOssUrl(outputOssKey).replace(/\.mp4$/, '_{index}.mp4');
 
     const outputConfig = imsProvider.buildOutputConfig({
       outputUrl,

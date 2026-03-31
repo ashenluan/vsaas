@@ -259,9 +259,9 @@ export class BatchProductionProcessor extends WorkerHost {
         filterList: input.filterConfig?.filterList,
       });
 
-      // IMS 使用 MediaURL 作为输出前缀，会自动追加 _001.mp4 等后缀
+      // IMS 要求 MediaURL 包含 {index} 占位符，会替换为 001, 002 等
       const outputOssKey = this.storage.generateKey('compose', `${jobId}.mp4`);
-      const outputUrl = this.storage.getOssUrl(outputOssKey);
+      const outputUrl = this.storage.getOssUrl(outputOssKey).replace(/\.mp4$/, '_{index}.mp4');
 
       const outputConfig = imsProvider.buildOutputConfig({
         outputUrl,
