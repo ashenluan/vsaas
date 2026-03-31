@@ -1,4 +1,20 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+export const API_UNAUTHORIZED_EVENT = 'api:unauthorized';
+
+export class ApiError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+function dispatchUnauthorizedEvent() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(API_UNAUTHORIZED_EVENT));
+}
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -16,32 +32,40 @@ export async function apiFetch<T = any>(
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}/api${path}`, {
-    ...options,
-    headers,
-  });
-
-  if (res.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      window.location.href = '/login';
-    }
-    throw new Error('Unauthorized');
-  }
-
-  // 安全解析 JSON — 防止 502/504 等非 JSON 响应导致崩溃
-  let data: any;
   try {
-    data = await res.json();
-  } catch {
-    throw new Error(`请求失败 (${res.status}): 服务器返回了非预期的响应`);
-  }
+    const res = await fetch(`${API_BASE}/api${path}`, {
+      ...options,
+      headers,
+    });
 
-  if (!res.ok) {
-    throw new Error(data.message || `Request failed: ${res.status}`);
+    // Parse JSON defensively so upstream UI gets a useful error instead of a syntax failure.
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new ApiError(`Request failed (${res.status}): Server returned a non-JSON response`, res.status);
+    }
+
+    if (!res.ok) {
+      const message = data?.message || (res.status === 401 ? 'Unauthorized' : `Request failed: ${res.status}`);
+      if (res.status === 401) {
+        dispatchUnauthorizedEvent();
+      }
+      throw new ApiError(message, res.status);
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    if (error instanceof Error) {
+      throw new ApiError(`Network error: ${error.message}`);
+    }
+
+    throw new ApiError('Network error: Request could not be completed');
   }
-  return data;
 }
 
 // Auth

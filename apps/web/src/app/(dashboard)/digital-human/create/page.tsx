@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { voiceApi, materialApi, scriptApi, apiFetch } from '@/lib/api';
+import { voiceApi, materialApi, scriptApi, apiFetch, ApiError } from '@/lib/api';
 import { uploadToOSS } from '@/lib/upload';
 import { useWs } from '@/components/ws-provider';
 import {
@@ -46,6 +46,8 @@ function CreateContent() {
   const [voices, setVoices] = useState<any[]>([]);
   const [scripts, setScripts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authRedirecting, setAuthRedirecting] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState('');
 
   // Selections
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(presetAvatarId);
@@ -85,16 +87,49 @@ function CreateContent() {
 
   // Load data
   useEffect(() => {
-    Promise.all([
-      materialApi.list('IMAGE').catch(() => []),
-      voiceApi.list().catch(() => []),
-      scriptApi.list().catch(() => []),
-    ]).then(([a, v, s]) => {
-      setAvatars(Array.isArray(a) ? a : (a as any)?.items || []);
-      const voiceList = Array.isArray(v) ? v : (v as any)?.items || [];
-      setVoices(voiceList.filter((voice: any) => voice.status === 'READY'));
-      setScripts(Array.isArray(s) ? s : (s as any)?.items || []);
-    }).finally(() => setLoading(false));
+    Promise.allSettled([
+      materialApi.list('IMAGE'),
+      voiceApi.list(),
+      scriptApi.list(),
+    ])
+      .then(([avatarsResult, voicesResult, scriptsResult]) => {
+        setBootstrapError('');
+        setAuthRedirecting(false);
+
+        const bootstrapErrors = [avatarsResult, voicesResult, scriptsResult]
+          .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+          .map((result) => result.reason);
+
+        const unauthorizedError = bootstrapErrors.find((err) => err instanceof ApiError && err.status === 401);
+        if (unauthorizedError) {
+          setAuthRedirecting(true);
+          return;
+        }
+
+        if (avatarsResult.status === 'rejected' || voicesResult.status === 'rejected') {
+          const criticalError = avatarsResult.status === 'rejected'
+            ? avatarsResult.reason
+            : voicesResult.status === 'rejected'
+              ? voicesResult.reason
+              : null;
+          setBootstrapError(criticalError?.message || '加载创作数据失败，请稍后重试');
+          return;
+        }
+
+        const a = avatarsResult.value;
+        const v = voicesResult.value;
+        const s = scriptsResult.status === 'fulfilled' ? scriptsResult.value : [];
+
+        if (scriptsResult.status === 'rejected') {
+          setBootstrapError(scriptsResult.reason?.message || '脚本加载失败，暂时无法使用脚本导入');
+        }
+
+        setAvatars(Array.isArray(a) ? a : (a as any)?.items || []);
+        const voiceList = Array.isArray(v) ? v : (v as any)?.items || [];
+        setVoices(voiceList.filter((voice: any) => voice.status === 'READY'));
+        setScripts(Array.isArray(s) ? s : (s as any)?.items || []);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const handleAudioFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -170,6 +205,22 @@ function CreateContent() {
     );
   }
 
+  if (authRedirecting) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-card p-4 text-sm text-slate-600">
+        登录状态已失效，正在跳转到登录页...
+      </div>
+    );
+  }
+
+  if (bootstrapError && avatars.length === 0 && voices.length === 0) {
+    return (
+      <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm font-medium text-red-500">
+        {bootstrapError}
+      </div>
+    );
+  }
+
   // 显示结果
   if (result) {
     const isProcessing = result.status === 'PENDING' || result.status === 'PROCESSING';
@@ -235,6 +286,12 @@ function CreateContent() {
     <div className="flex gap-6">
       {/* 左侧：创作面板 */}
       <div className="flex-1 space-y-6">
+        {bootstrapError && (
+          <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-medium text-red-500">
+            {bootstrapError}
+          </div>
+        )}
+
         {/* 作品名称 */}
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <label className="mb-2 block text-sm font-bold text-slate-700">作品名称（可选）</label>

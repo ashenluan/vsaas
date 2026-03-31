@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { userApi } from '@/lib/api';
+import { API_UNAUTHORIZED_EVENT, userApi } from '@/lib/api';
 import { WsProvider } from '@/components/ws-provider';
 import {
   Home,
@@ -75,10 +75,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [checkedAuth, setCheckedAuth] = useState(false);
 
   useEffect(() => {
+    const handleUnauthorized = () => {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      router.replace('/login');
+    };
+
+    window.addEventListener(API_UNAUTHORIZED_EVENT, handleUnauthorized);
+
     const token = localStorage.getItem('accessToken');
     if (!token) {
       router.replace('/login');
-      return;
+      return () => {
+        window.removeEventListener(API_UNAUTHORIZED_EVENT, handleUnauthorized);
+      };
     }
 
     userApi
@@ -89,17 +99,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setCheckedAuth(true);
       })
       .catch((err: any) => {
-        // Only redirect to login on auth errors, not on network/parse errors
-        if (err?.message === 'Unauthorized' || err?.message?.includes('401')) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          router.replace('/login');
-        } else {
-          // Non-auth error: still allow page to load
-          console.error('Profile load error:', err);
-          setCheckedAuth(true);
+        if (err?.status === 401 || err?.message === 'Unauthorized') {
+          handleUnauthorized();
+          return;
         }
+
+        // Non-auth error: still allow page to load
+        console.error('Profile load error:', err);
+        setCheckedAuth(true);
       });
+
+    return () => {
+      window.removeEventListener(API_UNAUTHORIZED_EVENT, handleUnauthorized);
+    };
   }, [router]);
 
   if (!checkedAuth) {
