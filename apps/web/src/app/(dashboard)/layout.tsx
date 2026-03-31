@@ -88,10 +88,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setUserName(profile.displayName || profile.email || '');
         setCheckedAuth(true);
       })
-      .catch(() => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        router.replace('/login');
+      .catch((err: any) => {
+        // Only redirect to login on auth errors, not on network/parse errors
+        if (err?.message === 'Unauthorized' || err?.message?.includes('401')) {
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          router.replace('/login');
+        } else {
+          // Non-auth error: still allow page to load
+          console.error('Profile load error:', err);
+          setCheckedAuth(true);
+        }
       });
   }, [router]);
 
