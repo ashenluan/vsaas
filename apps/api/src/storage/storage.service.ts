@@ -2,6 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
+/** Default signed URL expiration: 7 days */
+const SIGNED_URL_EXPIRES = 7 * 24 * 3600;
+
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
@@ -43,10 +46,26 @@ export class StorageService {
     };
   }
 
-  getPublicUrl(key: string): string {
+  getPublicUrl(key: string, expiresIn: number = SIGNED_URL_EXPIRES): string {
     if (this.cdnDomain) {
       return `https://${this.cdnDomain}/${key}`;
     }
+    // Bucket has Block Public Access enabled, so we return signed URLs
+    return this.getSignedReadUrl(key, expiresIn);
+  }
+
+  getSignedReadUrl(key: string, expiresIn: number = SIGNED_URL_EXPIRES): string {
+    const host = `https://${this.bucket}.${this.region}.aliyuncs.com`;
+    const expires = Math.floor(Date.now() / 1000) + expiresIn;
+    const signature = crypto
+      .createHmac('sha1', this.accessKeySecret)
+      .update(`GET\n\n\n${expires}\n/${this.bucket}/${key}`)
+      .digest('base64');
+    return `${host}/${key}?OSSAccessKeyId=${encodeURIComponent(this.accessKeyId)}&Expires=${expires}&Signature=${encodeURIComponent(signature)}`;
+  }
+
+  /** Plain unsigned OSS URL — use for IMS output targets, not for user-facing display */
+  getOssUrl(key: string): string {
     return `https://${this.bucket}.${this.region}.aliyuncs.com/${key}`;
   }
 

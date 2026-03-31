@@ -261,7 +261,7 @@ export class BatchProductionProcessor extends WorkerHost {
 
       // IMS 使用 MediaURL 作为输出前缀，会自动追加 _001.mp4 等后缀
       const outputOssKey = this.storage.generateKey('compose', `${jobId}.mp4`);
-      const outputUrl = this.storage.getPublicUrl(outputOssKey);
+      const outputUrl = this.storage.getOssUrl(outputOssKey);
 
       const outputConfig = imsProvider.buildOutputConfig({
         outputUrl,
