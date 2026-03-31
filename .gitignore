@@ -42,3 +42,6 @@ packages/database/src/generated/
 
 # Claude
 .claude/
+
+# Local worktrees
+.worktrees/
