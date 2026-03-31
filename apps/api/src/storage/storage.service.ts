@@ -64,6 +64,29 @@ export class StorageService {
     return `${host}/${key}?OSSAccessKeyId=${encodeURIComponent(this.accessKeyId)}&Expires=${expires}&Signature=${encodeURIComponent(signature)}`;
   }
 
+  /**
+   * If the URL belongs to our OSS bucket and is unsigned, return a signed version.
+   * Already-signed URLs or external URLs are returned as-is.
+   */
+  ensureSignedUrl(url: string, expiresIn: number = SIGNED_URL_EXPIRES): string {
+    try {
+      const parsed = new URL(url);
+      // Already signed?
+      if (parsed.searchParams.has('OSSAccessKeyId') || parsed.searchParams.has('Signature')) {
+        return url;
+      }
+      // Belongs to our bucket?
+      const expectedHost = `${this.bucket}.${this.region}.aliyuncs.com`;
+      if (parsed.hostname !== expectedHost) {
+        return url; // external URL, return as-is
+      }
+      const key = parsed.pathname.replace(/^\//, '');
+      return this.getSignedReadUrl(key, expiresIn);
+    } catch {
+      return url;
+    }
+  }
+
   /** Plain unsigned OSS URL — use for IMS output targets, not for user-facing display */
   getOssUrl(key: string): string {
     return `https://${this.bucket}.${this.region}.aliyuncs.com/${key}`;
