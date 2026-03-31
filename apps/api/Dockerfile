@@ -13,10 +13,11 @@ COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-validators/package.json ./packages/shared-validators/
 RUN pnpm install --frozen-lockfile --filter @vsaas/api...
 
-# Generate Prisma client
+# Generate Prisma client (use API's own schema which has correct enums)
 FROM deps AS prisma
 COPY packages/database/ ./packages/database/
-RUN cd packages/database && npx prisma generate
+COPY apps/api/prisma/ ./apps/api/prisma/
+RUN cd apps/api && npx prisma generate
 
 # Build
 FROM prisma AS build
