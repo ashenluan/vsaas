@@ -197,7 +197,18 @@ export class GenerationService {
   }) {
     const { type, status, page = 1, pageSize = 20 } = query;
     const where: any = { userId };
-    if (type) where.type = type;
+    // Map frontend shorthand types to valid JobType enum values
+    if (type) {
+      const typeMap: Record<string, string[]> = {
+        'IMAGE': ['TEXT_TO_IMAGE', 'IMAGE_TO_IMAGE', 'STYLE_COPY', 'TEXT_EDIT', 'HANDHELD_PRODUCT', 'MULTI_FUSION', 'VIRTUAL_TRYON', 'INPAINT'],
+        'VIDEO': ['TEXT_TO_VIDEO', 'IMAGE_TO_VIDEO', 'STORYBOARD'],
+      };
+      if (typeMap[type]) {
+        where.type = { in: typeMap[type] };
+      } else {
+        where.type = type;
+      }
+    }
     if (status) where.status = status;
 
     const [items, total] = await Promise.all([
