@@ -250,12 +250,8 @@ export class QwenVoiceProvider implements VoiceProvider {
       throw new Error(`OSS upload failed: ${resp.status} ${errText.slice(0, 200)}`);
     }
 
-    // Return signed read URL (works even with private bucket)
-    const readExpires = Math.floor(Date.now() / 1000) + 86400;
-    const readSign = crypto
-      .createHmac('sha1', accessKeySecret)
-      .update(`GET\n\n\n${readExpires}\n/${bucket}/${key}`)
-      .digest('base64');
-    return `${host}/${key}?OSSAccessKeyId=${encodeURIComponent(accessKeyId)}&Expires=${readExpires}&Signature=${encodeURIComponent(readSign)}`;
+    // Bucket is public-read, return plain URL (no signature needed)
+    // DashScope S2V API may reject URLs with query parameters
+    return `${host}/${key}`;
   }
 }

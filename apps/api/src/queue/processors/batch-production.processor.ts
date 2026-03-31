@@ -129,9 +129,8 @@ export class BatchProductionProcessor extends WorkerHost {
             try {
               step.status = 's2v';
               const dhProvider = this.providers.digitalHumanProvider;
-              const signedAvatarUrl = this.storage.ensureSignedUrl(input.avatarUrl);
               const result = await dhProvider.generateVideo(
-                signedAvatarUrl,
+                input.avatarUrl,
                 step.ttsAudioUrl!,
                 this.parseResolution(input.resolution),
               );
