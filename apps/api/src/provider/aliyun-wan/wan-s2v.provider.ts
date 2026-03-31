@@ -28,7 +28,7 @@ export class WanS2VProvider implements DigitalHumanProvider {
     this.logger.log(`Detecting image for S2V: ${imageUrl.slice(0, 80)}`);
 
     // Use synchronous mode for detect (fast enough, no need for async)
-    const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/image-synthesis', {
+    const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/face-detect', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -42,19 +42,31 @@ export class WanS2VProvider implements DigitalHumanProvider {
 
     const data: any = await response.json();
 
-    if (!response.ok) {
-      throw new Error(`S2V detect error: ${data.message || response.statusText}`);
-    }
-
-    // If API returns task_id (async mode fallback), poll for result
-    if (data.output?.task_id && !data.output?.result) {
-      return this.pollDetectResult(apiKey!, data.output.task_id);
+    if (!response.ok || data.code) {
+      const msg = data.message || response.statusText;
+      throw new Error(this.translateDetectError(msg));
     }
 
     return {
-      valid: data.output?.result === 'pass',
+      valid: data.output?.check_pass === true,
       result: data.output,
     };
+  }
+
+  private translateDetectError(msg: string): string {
+    if (msg.includes('image resolution is invalid')) {
+      return '图片分辨率不符合要求：宽度和高度需在400~7000像素之间。支持格式：jpg、jpeg、png、bmp、webp。';
+    }
+    if (msg.includes('url error')) {
+      return '图片地址无法访问，请确保图片为公网可访问的HTTP/HTTPS链接。';
+    }
+    if (msg.includes('image download') || msg.includes('fetch image')) {
+      return '图片下载失败，请检查图片链接是否有效。';
+    }
+    if (msg.includes('face') && msg.includes('not found')) {
+      return '未检测到人脸，请上传包含清晰人脸的正面照片。';
+    }
+    return `人脸检测失败: ${msg}`;
   }
 
   private async pollDetectResult(apiKey: string, taskId: string): Promise<{ valid: boolean; result: any }> {
@@ -90,7 +102,7 @@ export class WanS2VProvider implements DigitalHumanProvider {
 
     this.logger.log(`Generating S2V video: image=${imageUrl.slice(0, 50)}`);
 
-    const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/image-synthesis', {
+    const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/video-synthesis', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -130,9 +142,14 @@ export class WanS2VProvider implements DigitalHumanProvider {
 
     const data: any = await response.json();
 
+    // S2V returns video_url at output.results.video_url (results is an object, not array)
+    const videoUrl = data.output?.video_url
+      || data.output?.results?.video_url
+      || data.output?.results?.[0]?.video_url;
+
     return {
       status: data.output?.task_status || 'UNKNOWN',
-      videoUrl: data.output?.video_url,
+      videoUrl,
       progress: data.output?.progress,
     };
   }
