@@ -5,6 +5,23 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProviderRegistry } from '../provider/provider.registry';
 import { UserService } from '../user/user.service';
 
+const VALID_GENERATION_JOB_TYPES = new Set([
+  'TEXT_TO_IMAGE',
+  'IMAGE_TO_IMAGE',
+  'TEXT_TO_VIDEO',
+  'IMAGE_TO_VIDEO',
+  'VOICE_CLONE',
+  'DIGITAL_HUMAN_VIDEO',
+  'BATCH_COMPOSE',
+  'STYLE_COPY',
+  'TEXT_EDIT',
+  'HANDHELD_PRODUCT',
+  'MULTI_FUSION',
+  'VIRTUAL_TRYON',
+  'INPAINT',
+  'STORYBOARD',
+]);
+
 @Injectable()
 export class GenerationService {
   private readonly logger = new Logger(GenerationService.name);
@@ -204,9 +221,12 @@ export class GenerationService {
         'VIDEO': ['TEXT_TO_VIDEO', 'IMAGE_TO_VIDEO', 'STORYBOARD'],
       };
       if (typeMap[type]) {
-        where.type = { in: typeMap[type] };
-      } else {
+        const validTypes = typeMap[type].filter((jobType) => VALID_GENERATION_JOB_TYPES.has(jobType));
+        if (validTypes.length > 0) where.type = { in: validTypes };
+      } else if (VALID_GENERATION_JOB_TYPES.has(type)) {
         where.type = type;
+      } else {
+        where.type = { in: [] };
       }
     }
     if (status) where.status = status;
