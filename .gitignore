@@ -45,3 +45,19 @@ packages/database/src/generated/
 
 # Local worktrees
 .worktrees/
+
+# One-off scripts
+check-*.py
+debug-*.py
+deploy-*.py
+fix-*.py
+rebuild-*.py
+retry-*.py
+run-*.py
+seed-*.py
+setup-*.py
+test-*.py
+upload-*.py
+
+# Git bundles
+*.bundle
