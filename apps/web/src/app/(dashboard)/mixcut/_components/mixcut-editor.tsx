@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { ShotGroupCard } from './shot-group-card';
 import { GlobalConfigPanel } from './global-config-panel';
@@ -9,6 +9,21 @@ import { SubtitleDrawer } from './subtitle-drawer';
 import { ScriptImportModal } from './script-import-modal';
 import { mixcutApi } from '@/lib/api';
 import { ArrowLeft, Save, Play, Sparkles, Plus, Loader2, Check, Film } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 export function MixcutEditor({
   options,
@@ -19,8 +34,21 @@ export function MixcutEditor({
   allMaterials: any[];
   onMaterialAdd: (m: any) => void;
 }) {
-  const { project, setProjectName, setView, activeDrawer, closeDrawer, subtitleStyle, titleStyle, globalConfig, highlightWords } = useMixcutStore();
+  const { project, setProjectName, setView, activeDrawer, closeDrawer, subtitleStyle, titleStyle, globalConfig, highlightWords, reorderShotGroups } = useMixcutStore();
   const setProjectId = useMixcutStore((s) => s.setProjectId);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIndex = project.shotGroups.findIndex((g) => g.id === active.id);
+    const toIndex = project.shotGroups.findIndex((g) => g.id === over.id);
+    if (fromIndex !== -1 && toIndex !== -1) reorderShotGroups(fromIndex, toIndex);
+  }, [project.shotGroups, reorderShotGroups]);
   const [scriptModalOpen, setScriptModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -135,14 +163,13 @@ export function MixcutEditor({
             </div>
           </div>
 
-          {project.shotGroups.map((group) => (
-            <ShotGroupCard
-              key={group.id}
-              group={group}
-              allMaterials={allMaterials}
-              onMaterialAdd={onMaterialAdd}
-            />
-          ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={project.shotGroups.map((g) => g.id)} strategy={verticalListSortingStrategy}>
+              {project.shotGroups.map((group) => (
+                <SortableShotGroup key={group.id} group={group} allMaterials={allMaterials} onMaterialAdd={onMaterialAdd} />
+              ))}
+            </SortableContext>
+          </DndContext>
 
           {project.shotGroups.length === 0 && (
             <div className="rounded-xl border-2 border-dashed border-input bg-muted/30 p-8 text-center">
@@ -181,6 +208,26 @@ export function MixcutEditor({
           onClose={closeDrawer}
         />
       )}
+    </div>
+  );
+}
+
+function SortableShotGroup({ group, allMaterials, onMaterialAdd }: { group: any; allMaterials: any[]; onMaterialAdd: (m: any) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <ShotGroupCard
+        group={group}
+        allMaterials={allMaterials}
+        onMaterialAdd={onMaterialAdd}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
     </div>
   );
 }

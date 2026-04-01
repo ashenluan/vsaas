@@ -33,6 +33,23 @@ export function GlobalConfigPanel({ options }: { options: any }) {
 
   const transitionsData = options?.transitions || [];
   const filtersData = options?.filters || {};
+  const allFilters = Object.values(filtersData).flat() as string[];
+
+  const handleSmartMatchTransitions = () => {
+    if (transitionsData.length === 0) return;
+    // Pick 3-5 random transitions
+    const count = Math.min(transitionsData.length, Math.max(3, Math.floor(Math.random() * 3) + 3));
+    const shuffled = [...transitionsData].sort(() => Math.random() - 0.5);
+    updateGlobalConfig({ transitionEnabled: true, transitionList: shuffled.slice(0, count) });
+  };
+
+  const handleSmartMatchFilters = () => {
+    if (allFilters.length === 0) return;
+    // Pick 2-4 random filters
+    const count = Math.min(allFilters.length, Math.max(2, Math.floor(Math.random() * 3) + 2));
+    const shuffled = [...allFilters].sort(() => Math.random() - 0.5);
+    updateGlobalConfig({ filterEnabled: true, filterList: shuffled.slice(0, count) });
+  };
 
   return (
     <div className="space-y-3">
@@ -113,7 +130,7 @@ export function GlobalConfigPanel({ options }: { options: any }) {
             </div>
           </>
         )}
-        <button className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
+        <button onClick={handleSmartMatchTransitions} className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
           智能匹配转场
         </button>
       </ConfigSection>
@@ -163,7 +180,7 @@ export function GlobalConfigPanel({ options }: { options: any }) {
             ))}
           </div>
         )}
-        <button className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
+        <button onClick={handleSmartMatchFilters} className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
           智能匹配滤镜
         </button>
       </ConfigSection>

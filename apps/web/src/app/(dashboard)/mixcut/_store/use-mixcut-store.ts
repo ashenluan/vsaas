@@ -164,6 +164,9 @@ interface MixcutState {
   updateShotGroup: (id: string, partial: Partial<ShotGroup>) => void;
   addMaterialToShot: (shotId: string, material: ShotMaterial) => void;
   removeMaterialFromShot: (shotId: string, materialId: string) => void;
+  reorderShotGroups: (fromIndex: number, toIndex: number) => void;
+  duplicateShotGroup: (id: string) => void;
+  reorderMaterialsInShot: (shotId: string, fromIndex: number, toIndex: number) => void;
   addSubtitleToShot: (shotId: string, subtitle: ShotSubtitle) => void;
   updateSubtitleInShot: (shotId: string, index: number, subtitle: Partial<ShotSubtitle>) => void;
   removeSubtitleFromShot: (shotId: string, index: number) => void;
@@ -259,6 +262,43 @@ export const useMixcutStore = create<MixcutState>()(
                 ? { ...g, materials: g.materials.filter((m) => m.id !== materialId) }
                 : g,
             ),
+          },
+        })),
+      reorderShotGroups: (fromIndex, toIndex) =>
+        set((s) => {
+          const groups = [...s.project.shotGroups];
+          const [moved] = groups.splice(fromIndex, 1);
+          groups.splice(toIndex, 0, moved);
+          return { project: { ...s.project, shotGroups: groups } };
+        }),
+      duplicateShotGroup: (id) =>
+        set((s) => {
+          const idx = s.project.shotGroups.findIndex((g) => g.id === id);
+          if (idx === -1) return s;
+          const orig = s.project.shotGroups[idx];
+          const copy: ShotGroup = {
+            ...orig,
+            id: `shot_${Date.now()}_dup`,
+            name: `${orig.name}_副本`,
+            materials: orig.materials.map((m) => ({ ...m })),
+            subtitles: orig.subtitles.map((sub) => ({ ...sub })),
+            stickers: orig.stickers.map((st) => ({ ...st })),
+          };
+          const groups = [...s.project.shotGroups];
+          groups.splice(idx + 1, 0, copy);
+          return { project: { ...s.project, shotGroups: groups } };
+        }),
+      reorderMaterialsInShot: (shotId, fromIndex, toIndex) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            shotGroups: s.project.shotGroups.map((g) => {
+              if (g.id !== shotId) return g;
+              const mats = [...g.materials];
+              const [moved] = mats.splice(fromIndex, 1);
+              mats.splice(toIndex, 0, moved);
+              return { ...g, materials: mats };
+            }),
           },
         })),
       addSubtitleToShot: (shotId, subtitle) =>
