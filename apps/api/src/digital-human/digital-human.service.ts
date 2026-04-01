@@ -255,8 +255,8 @@ export class DigitalHumanService {
       effects: VFX_EFFECT_LIST,
       advancedEffects: ADVANCED_EFFECT_LIST,
       filters: FILTER_LIST,
-      subtitleStyles: SUBTITLE_STYLE_LIST,
-      bubbleStyles: BUBBLE_STYLE_LIST,
+      subtitleStyles: SUBTITLE_STYLE_LIST.map(s => s.id),
+      bubbleStyles: BUBBLE_STYLE_LIST.map(s => s.id),
       fonts: FONT_LIST,
       imsVoices: IMS_VOICE_LIST,
     };

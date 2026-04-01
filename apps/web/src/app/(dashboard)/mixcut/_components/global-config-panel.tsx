@@ -32,23 +32,23 @@ const RESOLUTIONS: Record<string, { label: string; value: string }[]> = {
 };
 
 export function GlobalConfigPanel({ options }: { options: any }) {
-  const { globalConfig, updateGlobalConfig } = useMixcutStore();
+  const { globalConfig, updateGlobalConfig, project, openDrawer } = useMixcutStore();
 
   const transitionsData: { id: string; label: string }[] = options?.transitions || [];
   const advancedTransitionsData: { id: string; label: string }[] = options?.advancedTransitions || [];
   const allTransitions = [...transitionsData, ...advancedTransitionsData];
   const transitionCategories = (() => {
-    const catNames: Record<string, string> = { '01': 'MG转场', '02': '遮罩转场', '03': '特效转场', '04': '运镜转场', '05': '渐变转场', '06': '创意转场' };
-    const advCats: Record<string, { id: string; label: string }[]> = {};
-    advancedTransitionsData.forEach((t) => {
-      const m = t.id.match(/^OT0001-(\d{2})-/);
-      if (m) { const k = catNames[m[1]] || `其他${m[1]}`; (advCats[k] ??= []).push(t); }
-    });
-    return [{ name: '基础转场', items: transitionsData }, ...Object.entries(advCats).map(([name, items]) => ({ name, items }))];
+    return [
+      { name: '基础转场', items: transitionsData },
+      ...(advancedTransitionsData.length > 0 ? [{ name: '高级转场', items: advancedTransitionsData }] : []),
+    ];
   })();
   const filtersData: Record<string, { id: string; label: string }[]> = options?.filters || {};
   const allFilters = Object.values(filtersData).flat();
-  const effectsData: Record<string, { id: string; label: string }[]> = options?.effects || {};
+  const effectsData: Record<string, { id: string; label: string }[]> = {
+    ...(options?.effects || {}),
+    ...(options?.advancedEffects || {}),
+  };
 
   const [transitionTab, setTransitionTab] = useState<'smart' | 'custom'>('custom');
   const [transitionCategoryTab, setTransitionCategoryTab] = useState(0);
@@ -103,7 +103,13 @@ export function GlobalConfigPanel({ options }: { options: any }) {
 
       {/* 全局字幕配音 & 标题 */}
       <ConfigSection icon={Type} label="全局字幕配音&标题" badge="AI">
-        <button className="w-full rounded-lg border border-dashed py-2 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
+        <button
+          onClick={() => {
+            const firstGroup = project.shotGroups[0];
+            if (firstGroup) openDrawer('subtitle', firstGroup.id);
+          }}
+          className="w-full rounded-lg border border-dashed py-2 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+        >
           添加
         </button>
       </ConfigSection>

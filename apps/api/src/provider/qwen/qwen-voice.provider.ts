@@ -122,8 +122,8 @@ export class QwenVoiceProvider implements VoiceProvider {
       model = 'cosyvoice-v2';
       wsVoiceId = `${voiceId}_v2`;
     } else if (QwenVoiceProvider.IMS_STANDARD_VOICES.has(voiceId)) {
-      // IMS standard voices: use cosyvoice-v1 model with voice ID as-is
-      model = 'cosyvoice-v1';
+      // IMS standard voices: Sambert-based, model = sambert-{voiceId}-v1
+      model = `sambert-${voiceId}-v1`;
       wsVoiceId = voiceId;
     } else {
       // Cloned voices: use cosyvoice-v3.5-plus
@@ -144,7 +144,10 @@ export class QwenVoiceProvider implements VoiceProvider {
 
   // CosyVoice only supports WebSocket, not HTTP REST.
   // Docs: https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api
+  // Sambert also uses WebSocket but with 'out' streaming mode.
+  // Docs: https://help.aliyun.com/zh/model-studio/sambert-websocket-api
   private synthesizeViaWebSocket(model: string, text: string, voiceId: string): Promise<Buffer> {
+    const isSambert = model.startsWith('sambert-');
     return new Promise((resolve, reject) => {
       const apiKey = this.config.get<string>('DASHSCOPE_API_KEY') || '';
       const workspaceId = this.config.get<string>('DASHSCOPE_WORKSPACE_ID') || '';
@@ -173,25 +176,48 @@ export class QwenVoiceProvider implements VoiceProvider {
       const cleanup = () => clearTimeout(timeoutId);
 
       ws.on('open', () => {
-        ws.send(JSON.stringify({
-          header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
-          payload: {
-            task_group: 'audio',
-            task: 'tts',
-            function: 'SpeechSynthesizer',
-            model,
-            parameters: {
-              text_type: 'PlainText',
-              voice: voiceId,
-              format: 'mp3',
-              sample_rate: 22050,
-              volume: 50,
-              rate: 1,
-              pitch: 1,
+        if (isSambert) {
+          // Sambert: streaming 'out', text in initial payload
+          ws.send(JSON.stringify({
+            header: { action: 'run-task', task_id: taskId, streaming: 'out' },
+            payload: {
+              task_group: 'audio',
+              task: 'tts',
+              function: 'SpeechSynthesizer',
+              model,
+              parameters: {
+                text_type: 'PlainText',
+                format: 'mp3',
+                sample_rate: 16000,
+                volume: 50,
+                rate: 1,
+                pitch: 1,
+              },
+              input: { text },
             },
-            input: {},
-          },
-        }));
+          }));
+        } else {
+          // CosyVoice: streaming 'duplex', text via continue-task
+          ws.send(JSON.stringify({
+            header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
+            payload: {
+              task_group: 'audio',
+              task: 'tts',
+              function: 'SpeechSynthesizer',
+              model,
+              parameters: {
+                text_type: 'PlainText',
+                voice: voiceId,
+                format: 'mp3',
+                sample_rate: 22050,
+                volume: 50,
+                rate: 1,
+                pitch: 1,
+              },
+              input: {},
+            },
+          }));
+        }
       });
 
       ws.on('message', (data: Buffer, isBinary: boolean) => {
@@ -204,13 +230,12 @@ export class QwenVoiceProvider implements VoiceProvider {
           const event = JSON.parse(data.toString());
           const eventType = event.header?.event;
 
-          if (eventType === 'task-started') {
-            // Send text
+          if (eventType === 'task-started' && !isSambert) {
+            // CosyVoice duplex: send text after task-started
             ws.send(JSON.stringify({
               header: { action: 'continue-task', task_id: taskId, streaming: 'duplex' },
               payload: { input: { text } },
             }));
-            // Signal end of text
             ws.send(JSON.stringify({
               header: { action: 'finish-task', task_id: taskId, streaming: 'duplex' },
               payload: { input: {} },
