@@ -5,57 +5,50 @@ import { ModelGenerationPage, OptionSelector } from '@/components/generation/mod
 import { ImageIcon } from 'lucide-react';
 
 const SIZES = [
+  { label: 'Auto', value: 'auto', desc: '自动' },
   { label: '1:1', value: '1024x1024', desc: '方形' },
-  { label: '2:3', value: '1024x1536', desc: '竖版' },
   { label: '3:2', value: '1536x1024', desc: '横版' },
-];
-
-const COUNTS = [
-  { label: '1 张', value: 1 },
-  { label: '2 张', value: 2 },
-  { label: '4 张', value: 4 },
+  { label: '2:3', value: '1024x1536', desc: '竖版' },
 ];
 
 export default function GrokImagePage() {
-  const [size, setSize] = useState('1024x1024');
-  const [count, setCount] = useState(1);
+  const [size, setSize] = useState('auto');
 
-  const [w, h] = size.split('x').map(Number);
+  const getWidthHeight = () => {
+    if (size === 'auto') return { width: 1024, height: 1024 };
+    const [w, h] = size.split('x').map(Number);
+    return { width: w, height: h };
+  };
 
   return (
     <ModelGenerationPage
-      modelName="Grok 图片"
-      modelDesc="xAI Grok-2 Image · 高质量AI图片生成"
+      modelName="Grok 图生图"
+      modelDesc="基于参考图片生成新图片"
       providerId="grok"
       type="image"
       icon={ImageIcon}
-      showNegativePrompt
-      buildPayload={(prompt, negativePrompt, referenceImage) => ({
-        prompt,
-        negativePrompt: negativePrompt || undefined,
-        width: w,
-        height: h,
-        providerId: 'grok',
-        count,
-        referenceImage,
-      })}
+      buildPayload={(prompt, negativePrompt, referenceImage) => {
+        const { width, height } = getWidthHeight();
+        return {
+          prompt,
+          negativePrompt: negativePrompt || undefined,
+          width,
+          height,
+          providerId: 'grok',
+          count: 2,
+          referenceImage,
+        };
+      }}
       renderParameters={() => (
-        <>
-          <OptionSelector
-            label="图片尺寸"
-            options={SIZES}
-            value={size}
-            onChange={setSize}
-          />
-          <OptionSelector
-            label="生成数量"
-            options={COUNTS}
-            value={count}
-            onChange={setCount}
-          />
-        </>
+        <OptionSelector
+          icon="📐"
+          label="图片尺寸"
+          options={SIZES}
+          value={size}
+          onChange={setSize}
+        />
       )}
-      estimateCost={() => count * 8}
+      estimateCost={() => 10}
     />
   );
 }

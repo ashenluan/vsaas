@@ -4,50 +4,88 @@ import { useState } from 'react';
 import { ModelGenerationPage, OptionSelector } from '@/components/generation/model-generation-page';
 import { ImageIcon } from 'lucide-react';
 
+const MODELS = [
+  { label: '🍌 Banana Pro', value: 'banana-pro' },
+  { label: '🍌 Banana 2', value: 'banana-2' },
+];
+
 const SIZES = [
-  { label: '1:1', value: '1024x1024', desc: '方形' },
-  { label: '5:3', value: '1280x768', desc: '横版' },
-  { label: '3:5', value: '768x1280', desc: '竖版' },
+  { label: '1:1', value: '1024x1024' },
+  { label: '4:3', value: '1024x768' },
+  { label: '3:4', value: '768x1024' },
+  { label: '16:9', value: '1280x720' },
+  { label: '9:16', value: '720x1280' },
+  { label: '2:3', value: '1024x1536' },
+  { label: '3:2', value: '1536x1024' },
+  { label: '21:9', value: '1680x720' },
+];
+
+const OUTPUT_SIZES = [
+  { label: '1K', value: '1k', desc: '标准' },
+  { label: '2K', value: '2k', desc: '高清' },
+  { label: '4K', value: '4k', desc: '超清' },
 ];
 
 const COUNTS = [
   { label: '1 张', value: 1 },
-  { label: '2 张', value: 2 },
-  { label: '4 张', value: 4 },
+  { label: '3 张', value: 3 },
+  { label: '5 张', value: 5 },
+  { label: '10 张', value: 10 },
 ];
 
 export default function BananaImagePage() {
+  const [model, setModel] = useState('banana-pro');
   const [size, setSize] = useState('1024x1024');
+  const [outputSize, setOutputSize] = useState('1k');
   const [count, setCount] = useState(1);
 
   const [w, h] = size.split('x').map(Number);
 
   return (
     <ModelGenerationPage
-      modelName="Banana 作图"
-      modelDesc="Google Imagen 3.0 · 超高质量图片生成"
+      modelName="Nano Banana"
+      modelDesc="选择 Banana 模型，输入提示词，生成专业级图片"
+      titleIcon="🍌"
       providerId="google-imagen"
       type="image"
       icon={ImageIcon}
-      showNegativePrompt
+      promptPlaceholder="详细的描述可以获得更好的生成效果..."
       buildPayload={(prompt, negativePrompt, referenceImage) => ({
         prompt,
         negativePrompt: negativePrompt || undefined,
         width: w,
         height: h,
         providerId: 'google-imagen',
+        model,
+        outputSize,
         count,
         referenceImage,
       })}
       renderParameters={() => (
         <>
           <OptionSelector
-            label="图片尺寸"
+            icon="🤖"
+            label="选择模型版本"
+            options={MODELS}
+            value={model}
+            onChange={setModel}
+          />
+          <OptionSelector
+            icon="📐"
+            label="图片比例"
             options={SIZES}
             value={size}
             onChange={setSize}
           />
           <OptionSelector
+            icon="🖼️"
+            label="输出尺寸"
+            options={OUTPUT_SIZES}
+            value={outputSize}
+            onChange={setOutputSize}
+          />
+          <OptionSelector
+            icon="🔢"
             label="生成数量"
             options={COUNTS}
             value={count}
@@ -55,7 +93,10 @@ export default function BananaImagePage() {
           />
         </>
       )}
-      estimateCost={() => count * 10}
+      estimateCost={() => {
+        const base = outputSize === '4k' ? 15 : outputSize === '2k' ? 12 : 10;
+        return count * base;
+      }}
     />
   );
 }
