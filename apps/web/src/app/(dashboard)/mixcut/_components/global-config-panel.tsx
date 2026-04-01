@@ -32,33 +32,31 @@ const RESOLUTIONS: Record<string, { label: string; value: string }[]> = {
 export function GlobalConfigPanel({ options }: { options: any }) {
   const { globalConfig, updateGlobalConfig } = useMixcutStore();
 
-  const transitionsData = options?.transitions || [];
-  const filtersData = options?.filters || {};
-  const allFilters = Object.values(filtersData).flat() as string[];
-  const effectsData = options?.effects || {};
+  const transitionsData: { id: string; label: string }[] = options?.transitions || [];
+  const filtersData: Record<string, { id: string; label: string }[]> = options?.filters || {};
+  const allFilters = Object.values(filtersData).flat();
+  const effectsData: Record<string, { id: string; label: string }[]> = options?.effects || {};
 
   const handleSmartMatchTransitions = () => {
     if (transitionsData.length === 0) return;
-    // Pick 3-5 random transitions
     const count = Math.min(transitionsData.length, Math.max(3, Math.floor(Math.random() * 3) + 3));
     const shuffled = [...transitionsData].sort(() => Math.random() - 0.5);
-    updateGlobalConfig({ transitionEnabled: true, transitionList: shuffled.slice(0, count) });
+    updateGlobalConfig({ transitionEnabled: true, transitionList: shuffled.slice(0, count).map((t) => t.id) });
   };
 
   const handleSmartMatchFilters = () => {
     if (allFilters.length === 0) return;
-    // Pick 2-4 random filters
     const count = Math.min(allFilters.length, Math.max(2, Math.floor(Math.random() * 3) + 2));
     const shuffled = [...allFilters].sort(() => Math.random() - 0.5);
-    updateGlobalConfig({ filterEnabled: true, filterList: shuffled.slice(0, count) });
+    updateGlobalConfig({ filterEnabled: true, filterList: shuffled.slice(0, count).map((f) => f.id) });
   };
 
-  const allEffects = Object.values(effectsData).flat() as string[];
+  const allEffects = Object.values(effectsData).flat();
   const handleSmartMatchEffects = () => {
     if (allEffects.length === 0) return;
-    const first = allEffects.sort(() => Math.random() - 0.5).slice(0, 3);
-    const rest = allEffects.sort(() => Math.random() - 0.5).slice(0, 5);
-    updateGlobalConfig({ vfxEffectEnabled: true, vfxFirstClipEffectList: first, vfxNotFirstClipEffectList: rest, vfxEffectProbability: 50 });
+    const shuffled1 = [...allEffects].sort(() => Math.random() - 0.5);
+    const shuffled2 = [...allEffects].sort(() => Math.random() - 0.5);
+    updateGlobalConfig({ vfxEffectEnabled: true, vfxFirstClipEffectList: shuffled1.slice(0, 3).map((e) => e.id), vfxNotFirstClipEffectList: shuffled2.slice(0, 5).map((e) => e.id), vfxEffectProbability: 50 });
   };
 
   const PRESET_MUSIC = [
@@ -220,22 +218,22 @@ export function GlobalConfigPanel({ options }: { options: any }) {
               <span className="text-[10px] text-muted-foreground">{globalConfig.transitionDuration.toFixed(1)}s</span>
             </div>
             <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
-              {transitionsData.map((t: string) => (
+              {transitionsData.map((t) => (
                 <button
-                  key={t}
+                  key={t.id}
                   onClick={() => {
-                    const list = globalConfig.transitionList.includes(t)
-                      ? globalConfig.transitionList.filter((x) => x !== t)
-                      : [...globalConfig.transitionList, t];
+                    const list = globalConfig.transitionList.includes(t.id)
+                      ? globalConfig.transitionList.filter((x) => x !== t.id)
+                      : [...globalConfig.transitionList, t.id];
                     updateGlobalConfig({ transitionList: list });
                   }}
                   className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
-                    globalConfig.transitionList.includes(t)
+                    globalConfig.transitionList.includes(t.id)
                       ? 'border-blue-400 bg-blue-50 text-blue-700 font-medium'
                       : 'border-input hover:bg-accent'
                   }`}
                 >
-                  {t}
+                  {t.label}
                 </button>
               ))}
             </div>
@@ -314,22 +312,22 @@ export function GlobalConfigPanel({ options }: { options: any }) {
               <div key={category}>
                 <span className="mb-0.5 block text-[9px] font-medium text-amber-600">{category}</span>
                 <div className="flex flex-wrap gap-1">
-                  {(items as string[]).map((f) => (
+                  {(items as { id: string; label: string }[]).map((f) => (
                     <button
-                      key={f}
+                      key={f.id}
                       onClick={() => {
-                        const list = globalConfig.filterList.includes(f)
-                          ? globalConfig.filterList.filter((x) => x !== f)
-                          : [...globalConfig.filterList, f];
+                        const list = globalConfig.filterList.includes(f.id)
+                          ? globalConfig.filterList.filter((x) => x !== f.id)
+                          : [...globalConfig.filterList, f.id];
                         updateGlobalConfig({ filterList: list });
                       }}
                       className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
-                        globalConfig.filterList.includes(f)
+                        globalConfig.filterList.includes(f.id)
                           ? 'border-amber-400 bg-amber-50 text-amber-700 font-medium'
                           : 'border-input hover:bg-accent'
                       }`}
                     >
-                      {f}
+                      {f.label}
                     </button>
                   ))}
                 </div>
@@ -377,22 +375,22 @@ export function GlobalConfigPanel({ options }: { options: any }) {
                 <div key={category}>
                   <span className="mb-0.5 block text-[9px] font-medium text-purple-600">{category}</span>
                   <div className="flex flex-wrap gap-1">
-                    {(items as string[]).map((eff) => (
+                    {(items as { id: string; label: string }[]).map((eff) => (
                       <button
-                        key={eff}
+                        key={eff.id}
                         onClick={() => {
-                          const list = globalConfig.vfxFirstClipEffectList.includes(eff)
-                            ? globalConfig.vfxFirstClipEffectList.filter((x) => x !== eff)
-                            : [...globalConfig.vfxFirstClipEffectList, eff];
+                          const list = globalConfig.vfxFirstClipEffectList.includes(eff.id)
+                            ? globalConfig.vfxFirstClipEffectList.filter((x) => x !== eff.id)
+                            : [...globalConfig.vfxFirstClipEffectList, eff.id];
                           updateGlobalConfig({ vfxFirstClipEffectList: list });
                         }}
                         className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
-                          globalConfig.vfxFirstClipEffectList.includes(eff)
+                          globalConfig.vfxFirstClipEffectList.includes(eff.id)
                             ? 'border-purple-400 bg-purple-50 text-purple-700 font-medium'
                             : 'border-input hover:bg-accent'
                         }`}
                       >
-                        {eff}
+                        {eff.label}
                       </button>
                     ))}
                   </div>
@@ -408,22 +406,22 @@ export function GlobalConfigPanel({ options }: { options: any }) {
                 <div key={category}>
                   <span className="mb-0.5 block text-[9px] font-medium text-indigo-600">{category}</span>
                   <div className="flex flex-wrap gap-1">
-                    {(items as string[]).map((eff) => (
+                    {(items as { id: string; label: string }[]).map((eff) => (
                       <button
-                        key={eff}
+                        key={eff.id}
                         onClick={() => {
-                          const list = globalConfig.vfxNotFirstClipEffectList.includes(eff)
-                            ? globalConfig.vfxNotFirstClipEffectList.filter((x) => x !== eff)
-                            : [...globalConfig.vfxNotFirstClipEffectList, eff];
+                          const list = globalConfig.vfxNotFirstClipEffectList.includes(eff.id)
+                            ? globalConfig.vfxNotFirstClipEffectList.filter((x) => x !== eff.id)
+                            : [...globalConfig.vfxNotFirstClipEffectList, eff.id];
                           updateGlobalConfig({ vfxNotFirstClipEffectList: list });
                         }}
                         className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
-                          globalConfig.vfxNotFirstClipEffectList.includes(eff)
+                          globalConfig.vfxNotFirstClipEffectList.includes(eff.id)
                             ? 'border-indigo-400 bg-indigo-50 text-indigo-700 font-medium'
                             : 'border-input hover:bg-accent'
                         }`}
                       >
-                        {eff}
+                        {eff.label}
                       </button>
                     ))}
                   </div>

@@ -11,10 +11,13 @@ import { ProviderRegistry } from '../provider/provider.registry';
 import { UserService } from '../user/user.service';
 import {
   TRANSITION_LIST,
+  ADVANCED_TRANSITION_LIST,
   VFX_EFFECT_LIST,
+  ADVANCED_EFFECT_LIST,
   FILTER_LIST,
   SUBTITLE_STYLE_LIST,
   BUBBLE_STYLE_LIST,
+  FONT_LIST,
 } from '../provider/aliyun-ims/ims-compose.provider';
 import { StorageService } from '../storage/storage.service';
 
@@ -244,11 +247,14 @@ export class DigitalHumanService {
    */
   getComposeOptions() {
     return {
-      transitions: [...TRANSITION_LIST],
+      transitions: TRANSITION_LIST,
+      advancedTransitions: ADVANCED_TRANSITION_LIST,
       effects: VFX_EFFECT_LIST,
+      advancedEffects: ADVANCED_EFFECT_LIST,
       filters: FILTER_LIST,
       subtitleStyles: SUBTITLE_STYLE_LIST,
       bubbleStyles: BUBBLE_STYLE_LIST,
+      fonts: FONT_LIST,
     };
   }
 
