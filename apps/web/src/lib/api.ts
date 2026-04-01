@@ -167,8 +167,8 @@ export const voiceApi = {
   clone: (data: { name: string; sampleUrl: string }) =>
     apiFetch('/voices/clone', { method: 'POST', body: JSON.stringify(data) }),
   delete: (id: string) => apiFetch(`/voices/${id}`, { method: 'DELETE' }),
-  preview: (voiceId: string, text: string) =>
-    apiFetch('/voices/preview', { method: 'POST', body: JSON.stringify({ voiceId, text }) }),
+  preview: (voiceId: string, text: string, voiceType?: 'builtin' | 'cloned') =>
+    apiFetch('/voices/preview', { method: 'POST', body: JSON.stringify({ voiceId, text, voiceType }) }),
 };
 
 // Digital Human - Materials (avatars, backgrounds, images, videos)
@@ -272,6 +272,8 @@ export const composeApi = {
     filters: Record<string, string[]>;
     subtitleStyles: string[];
     bubbleStyles: string[];
+    fonts: { id: string; label: string; chinese: boolean }[];
+    imsVoices: Record<string, { id: string; label: string; desc: string }[]>;
   }>('/compose/options'),
 };
 
@@ -322,5 +324,7 @@ export const mixcutApi = {
     filters: Record<string, string[]>;
     subtitleStyles: string[];
     bubbleStyles: string[];
+    fonts: { id: string; label: string; chinese: boolean }[];
+    imsVoices: Record<string, { id: string; label: string; desc: string }[]>;
   }>('/mixcut/options'),
 };

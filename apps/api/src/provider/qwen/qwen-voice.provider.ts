@@ -73,21 +73,65 @@ export class QwenVoiceProvider implements VoiceProvider {
     };
   }
 
-  // Known system preset voice IDs (no _v2 suffix in DB)
-  private static readonly SYSTEM_VOICES = new Set([
-    'longxiaochun', 'longshuo', 'longyue', 'longjielidou',
-    'longshu', 'longcheng', 'longanyang', 'longhua',
-    'longxiaoxia', 'longlaotie', 'longshaoxia',
+  // CosyVoice v1 system voices (use cosyvoice-v2 model with _v2 suffix)
+  private static readonly COSYVOICE_V1_VOICES = new Set([
+    'longwan', 'longcheng', 'longhua', 'longxiaochun', 'longxiaoxia',
+    'longxiaocheng', 'longxiaobai', 'longlaotie', 'longshu', 'longshuo',
+    'longjing', 'longmiao', 'longyue', 'longyuan', 'longfei',
+    'longjielidou', 'longtong', 'longxiang', 'loongstella', 'loongbella',
+  ]);
+
+  // CosyVoice v2 voices (use cosyvoice-v2 model, ID already has _v2 suffix)
+  private static readonly COSYVOICE_V2_VOICES = new Set([
+    'longcheng_v2', 'longhua_v2', 'longshu_v2', 'loongbella_v2',
+    'longwan_v2', 'longxiaochun_v2', 'longxiaoxia_v2',
+  ]);
+
+  // IMS standard voices (use cosyvoice-v1 model, voice ID as-is)
+  private static readonly IMS_STANDARD_VOICES = new Set([
+    'zhimiao_emo', 'zhimi_emo', 'zhibei_emo', 'zhiyan_emo', 'zhitian_emo',
+    'zhitian', 'zhiqing', 'zhichu', 'zhide', 'zhifei', 'zhijia', 'zhilun',
+    'zhinan', 'zhiqi', 'zhiqian', 'zhiru', 'zhiwei', 'zhixiang',
+    'abin', 'zhixiaobai', 'zhixiaoxia',
+    'zhiya', 'aixia', 'aiyue', 'aiya', 'aijing', 'aimei', 'siyue', 'aina',
+    'aishuo', 'aiyu', 'xiaomei', 'yina', 'sijing',
+    'zhiyuan', 'zhiyue', 'zhistella', 'zhigui', 'zhishuo', 'zhida',
+    'aiqi', 'aicheng', 'aijia', 'siqi', 'sijia', 'mashu', 'yuer', 'ruoxi',
+    'aida', 'sicheng', 'ninger', 'xiaoyun', 'xiaogang', 'ruilin',
+    'zhimao', 'laomei', 'laotie', 'xiaoxian', 'guijie', 'stella',
+    'maoxiaomei', 'qiaowei', 'ailun', 'aifei', 'yaqun', 'stanley', 'kenny', 'rosa',
+    'aitong', 'aiwei', 'jielidou', 'xiaobei', 'sitong', 'aibao',
+    'perla', 'camila', 'masha', 'kyong', 'tien', 'tomoka', 'tomoya',
+    'indah', 'farah', 'tala',
+    'ava', 'luca', 'luna', 'emily', 'eric', 'annie', 'andy', 'abby',
+    'lydia', 'olivia', 'wendy', 'harry',
+    'cuijie', 'kelly', 'jiajia', 'dahu', 'aikan', 'taozi', 'qingqing',
+    'xiaoze', 'shanshan', 'chuangirl',
   ]);
 
   async synthesizeSpeech(text: string, voiceId: string): Promise<{ audioUrl: string }> {
-    const isSystemVoice = QwenVoiceProvider.SYSTEM_VOICES.has(voiceId);
-    // System voices → cosyvoice-v2 (with _v2 suffix)
-    // Cloned voices → cosyvoice-v3.5-plus (voice ID as-is)
-    const model = isSystemVoice ? 'cosyvoice-v2' : 'cosyvoice-v3.5-plus';
-    const wsVoiceId = isSystemVoice ? `${voiceId}_v2` : voiceId;
+    let model: string;
+    let wsVoiceId: string;
 
-    this.logger.log(`Synthesizing speech via WebSocket (model: ${model}, voice: ${wsVoiceId}, system: ${isSystemVoice}): ${text.slice(0, 50)}...`);
+    if (QwenVoiceProvider.COSYVOICE_V2_VOICES.has(voiceId)) {
+      // CosyVoice v2 voices: already have _v2 suffix
+      model = 'cosyvoice-v2';
+      wsVoiceId = voiceId;
+    } else if (QwenVoiceProvider.COSYVOICE_V1_VOICES.has(voiceId)) {
+      // CosyVoice v1 voices: add _v2 suffix for cosyvoice-v2 model
+      model = 'cosyvoice-v2';
+      wsVoiceId = `${voiceId}_v2`;
+    } else if (QwenVoiceProvider.IMS_STANDARD_VOICES.has(voiceId)) {
+      // IMS standard voices: use cosyvoice-v1 model with voice ID as-is
+      model = 'cosyvoice-v1';
+      wsVoiceId = voiceId;
+    } else {
+      // Cloned voices: use cosyvoice-v3.5-plus
+      model = 'cosyvoice-v3.5-plus';
+      wsVoiceId = voiceId;
+    }
+
+    this.logger.log(`Synthesizing speech via WebSocket (model: ${model}, voice: ${wsVoiceId}): ${text.slice(0, 50)}...`);
 
     const audioBuffer = await this.synthesizeViaWebSocket(model, text, wsVoiceId);
     this.logger.log(`TTS audio received: ${audioBuffer.length} bytes`);

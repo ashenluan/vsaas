@@ -75,6 +75,7 @@ export function PreviewPanel() {
         resolution: globalConfig.resolution,
         // Voice
         ...((globalConfig as any).voiceId && { voiceId: (globalConfig as any).voiceId }),
+        ...((globalConfig as any).voiceType && { voiceType: (globalConfig as any).voiceType }),
         // Background music
         ...(globalConfig.bgMusic && { bgMusic: globalConfig.bgMusic }),
         ...(globalConfig.bgMusicVolume !== 0.2 && { bgMusicVolume: globalConfig.bgMusicVolume }),

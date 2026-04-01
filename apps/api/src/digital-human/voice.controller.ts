@@ -30,7 +30,7 @@ export class VoiceController {
 
   @Post('preview')
   preview(@Req() req: any, @Body() body: PreviewVoiceDto) {
-    return this.service.previewVoice(req.user.sub, body.voiceId, body.text);
+    return this.service.previewVoice(req.user.sub, body.voiceId, body.text, body.voiceType);
   }
 
   @Delete(':id')

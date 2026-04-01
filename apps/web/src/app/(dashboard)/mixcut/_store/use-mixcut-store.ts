@@ -80,6 +80,7 @@ export interface GlobalConfig {
   coverType: 'auto' | 'custom';
   coverUrl: string;
   voiceId?: string;
+  voiceType?: 'builtin' | 'cloned';
   watermarkText: string;
   watermarkPosition: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
   watermarkOpacity: number;

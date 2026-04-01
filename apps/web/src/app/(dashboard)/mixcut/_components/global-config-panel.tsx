@@ -8,6 +8,7 @@ import {
   Sparkles, Settings2, Check,
 } from 'lucide-react';
 import { VoiceSelectSection } from './voice-select-section';
+import { getPreviewUrl } from '../_lib/effect-previews';
 
 const ASPECT_RATIOS = [
   { label: '9:16', value: '9:16' as const, icon: Smartphone },
@@ -318,11 +319,17 @@ export function GlobalConfigPanel({ options }: { options: any }) {
                             : 'border-input hover:border-blue-300 hover:bg-accent'
                         }`}
                       >
-                        <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
-                          selected ? 'from-blue-100 to-blue-200' : 'from-muted to-muted/60'
-                        }`}>
-                          <ArrowRightLeft size={12} className={selected ? 'text-blue-600' : 'text-muted-foreground/50'} />
-                        </div>
+                        {getPreviewUrl(t.id) ? (
+                          <div className="h-10 w-full overflow-hidden rounded">
+                            <img src={getPreviewUrl(t.id)} alt={t.label} className="h-full w-full object-cover" loading="lazy" />
+                          </div>
+                        ) : (
+                          <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
+                            selected ? 'from-blue-100 to-blue-200' : 'from-muted to-muted/60'
+                          }`}>
+                            <ArrowRightLeft size={12} className={selected ? 'text-blue-600' : 'text-muted-foreground/50'} />
+                          </div>
+                        )}
                         <span className={`text-[9px] leading-tight text-center line-clamp-1 ${
                           selected ? 'text-blue-700 font-medium' : 'text-muted-foreground'
                         }`}>
@@ -556,11 +563,17 @@ export function GlobalConfigPanel({ options }: { options: any }) {
                         : 'border-input hover:border-amber-300 hover:bg-accent'
                     }`}
                   >
-                    <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
-                      selected ? 'from-amber-100 to-amber-200' : 'from-muted to-muted/60'
-                    }`}>
-                      <Palette size={12} className={selected ? 'text-amber-600' : 'text-muted-foreground/50'} />
-                    </div>
+                    {getPreviewUrl(f.id) ? (
+                      <div className="h-10 w-full overflow-hidden rounded">
+                        <img src={getPreviewUrl(f.id)} alt={f.label} className="h-full w-full object-cover" loading="lazy" />
+                      </div>
+                    ) : (
+                      <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
+                        selected ? 'from-amber-100 to-amber-200' : 'from-muted to-muted/60'
+                      }`}>
+                        <Palette size={12} className={selected ? 'text-amber-600' : 'text-muted-foreground/50'} />
+                      </div>
+                    )}
                     <span className={`text-[9px] leading-tight text-center line-clamp-1 ${
                       selected ? 'text-amber-700 font-medium' : 'text-muted-foreground'
                     }`}>
@@ -722,13 +735,19 @@ export function GlobalConfigPanel({ options }: { options: any }) {
                           : 'border-input hover:border-indigo-300 hover:bg-accent'
                     }`}
                   >
-                    <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
-                      selected
-                        ? isFirst ? 'from-purple-100 to-purple-200' : 'from-indigo-100 to-indigo-200'
-                        : 'from-muted to-muted/60'
-                    }`}>
-                      <Sparkles size={12} className={selected ? (isFirst ? 'text-purple-600' : 'text-indigo-600') : 'text-muted-foreground/50'} />
-                    </div>
+                    {getPreviewUrl(eff.id) ? (
+                      <div className="h-10 w-full overflow-hidden rounded">
+                        <img src={getPreviewUrl(eff.id)} alt={eff.label} className="h-full w-full object-cover" loading="lazy" />
+                      </div>
+                    ) : (
+                      <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
+                        selected
+                          ? isFirst ? 'from-purple-100 to-purple-200' : 'from-indigo-100 to-indigo-200'
+                          : 'from-muted to-muted/60'
+                      }`}>
+                        <Sparkles size={12} className={selected ? (isFirst ? 'text-purple-600' : 'text-indigo-600') : 'text-muted-foreground/50'} />
+                      </div>
+                    )}
                     <span className={`text-[9px] leading-tight text-center line-clamp-1 ${
                       selected ? (isFirst ? 'text-purple-700 font-medium' : 'text-indigo-700 font-medium') : 'text-muted-foreground'
                     }`}>

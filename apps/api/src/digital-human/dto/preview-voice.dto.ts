@@ -1,4 +1,4 @@
-import { IsString, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsOptional, MinLength, MaxLength } from 'class-validator';
 
 export class PreviewVoiceDto {
   @IsString()
@@ -9,4 +9,8 @@ export class PreviewVoiceDto {
   @MinLength(1, { message: '请输入预览文本' })
   @MaxLength(500, { message: '预览文本最多500字' })
   text!: string;
+
+  @IsOptional()
+  @IsString()
+  voiceType?: 'builtin' | 'cloned';
 }

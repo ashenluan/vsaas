@@ -99,6 +99,11 @@ export class CreateMixcutDto {
   @IsString()
   voiceId?: string;
 
+  // Voice type: 'builtin' for IMS system voices, 'cloned' for user-cloned voices
+  @IsOptional()
+  @IsString()
+  voiceType?: 'builtin' | 'cloned';
+
   @IsInt()
   @Min(1, { message: '视频数量最少为1' })
   @Max(1000, { message: '视频数量最多为1000' })

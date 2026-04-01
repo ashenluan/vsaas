@@ -4,17 +4,27 @@ import { useState, useRef } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { aiApi, voiceApi } from '@/lib/api';
 import { uploadToOSS } from '@/lib/upload';
-import { X, ChevronLeft, ChevronRight, Plus, Trash2, Wand2, Loader2, AlertTriangle, CheckCircle, RefreshCw, Volume2, Mic2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Plus, Trash2, Wand2, Loader2, AlertTriangle, CheckCircle, RefreshCw, Volume2, Mic2, Check } from 'lucide-react';
+import { getPreviewUrl } from '../_lib/effect-previews';
 
 const FONTS = [
-  { value: 'Alibaba PuHuiTi 2.0 65 Medium', label: '阿里巴巴普惠体' },
-  { value: 'Alibaba PuHuiTi 2.0 95 ExtraBold', label: '阿里巴巴普惠体(粗)' },
-  { value: 'KaiTi', label: '楷体' },
-  { value: 'SimHei', label: '黑体' },
-  { value: 'SimSun', label: '宋体' },
+  { value: 'Alibaba PuHuiTi', label: '阿里巴巴普惠体' },
   { value: 'Microsoft YaHei', label: '微软雅黑' },
-  { value: 'HappyZcool-2016', label: '快乐体' },
-  { value: 'FZLanTingHei-M-GBK', label: '方正兰亭黑' },
+  { value: 'SimSun', label: '宋体' },
+  { value: 'KaiTi', label: '楷体' },
+  { value: 'FZFangSong-Z02S', label: '方正仿宋简体' },
+  { value: 'FZHei-B01S', label: '方正黑体简体' },
+  { value: 'FZKai-Z03S', label: '方正楷体简体' },
+  { value: 'FZShuSong-Z01S', label: '方正书宋简体' },
+  { value: 'Source Han Sans CN', label: '思源黑体' },
+  { value: 'Source Han Serif CN', label: '思源宋体' },
+  { value: 'WenQuanYi MicroHei', label: '文泉驿微米黑' },
+  { value: 'WenQuanYi Zen Hei Mono', label: '文泉驿等宽正黑' },
+  { value: 'WenQuanYi Zen Hei Sharp', label: '文泉驿点阵正黑' },
+  { value: 'Yuanti SC', label: '圆体' },
+  { value: 'HappyZcool-2016', label: '站酷快乐体' },
+  { value: 'Roboto', label: 'Roboto' },
+  { value: 'Roboto Bold', label: 'Roboto Bold' },
 ];
 
 const ALIGNMENTS = [
@@ -641,20 +651,43 @@ function SubtitleStyleTab({
             <button className="rounded border border-primary/30 bg-primary/5 px-2 py-0.5 text-[11px] text-primary">推荐花字</button>
             <button className="rounded border px-2 py-0.5 text-[11px] text-muted-foreground">系统花字</button>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {subtitleStyles.map((id: string) => (
-              <button
-                key={id}
-                onClick={() => onUpdate({ effectColorStyleId: id })}
-                className={`rounded-md border px-2 py-1 text-[10px] transition-all ${
-                  style.effectColorStyleId === id
-                    ? 'border-primary bg-primary/10 text-primary font-medium'
-                    : 'border-input hover:bg-accent'
-                }`}
-              >
-                {id.replace('CS000', '花字')}
-              </button>
-            ))}
+          <div className="grid grid-cols-4 gap-1.5 max-h-52 overflow-y-auto">
+            {subtitleStyles.map((id: string) => {
+              const selected = style.effectColorStyleId === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => onUpdate({ effectColorStyleId: id })}
+                  className={`relative flex flex-col items-center gap-0.5 rounded-lg border p-1 transition-all ${
+                    selected
+                      ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
+                      : 'border-input hover:border-primary/30 hover:bg-accent'
+                  }`}
+                >
+                  {getPreviewUrl(id) ? (
+                    <div className="h-10 w-full overflow-hidden rounded">
+                      <img src={getPreviewUrl(id)} alt={id} className="h-full w-full object-cover" loading="lazy" />
+                    </div>
+                  ) : (
+                    <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
+                      selected ? 'from-purple-100 to-pink-100' : 'from-muted to-muted/60'
+                    }`}>
+                      <span className="text-[9px] text-muted-foreground/60">花字</span>
+                    </div>
+                  )}
+                  <span className={`text-[9px] leading-tight text-center line-clamp-1 ${
+                    selected ? 'text-primary font-medium' : 'text-muted-foreground'
+                  }`}>
+                    {id.replace('CS000', '花字')}
+                  </span>
+                  {selected && (
+                    <div className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
+                      <Check size={8} className="text-white" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -682,20 +715,43 @@ function SubtitleStyleTab({
       {style.bubbleStyleId && bubbleStyles.length > 0 && (
         <div>
           <div className="mb-1 text-[10px] text-muted-foreground">选择气泡字样式</div>
-          <div className="flex flex-wrap gap-1.5">
-            {bubbleStyles.map((id: string) => (
-              <button
-                key={id}
-                onClick={() => onUpdate({ bubbleStyleId: id })}
-                className={`rounded-md border px-2 py-1 text-[10px] transition-all ${
-                  style.bubbleStyleId === id
-                    ? 'border-primary bg-primary/10 text-primary font-medium'
-                    : 'border-input hover:bg-accent'
-                }`}
-              >
-                {id.replace('BS000', '气泡')}
-              </button>
-            ))}
+          <div className="grid grid-cols-4 gap-1.5 max-h-52 overflow-y-auto">
+            {bubbleStyles.map((id: string) => {
+              const selected = style.bubbleStyleId === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => onUpdate({ bubbleStyleId: id })}
+                  className={`relative flex flex-col items-center gap-0.5 rounded-lg border p-1 transition-all ${
+                    selected
+                      ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
+                      : 'border-input hover:border-primary/30 hover:bg-accent'
+                  }`}
+                >
+                  {getPreviewUrl(id) ? (
+                    <div className="h-10 w-full overflow-hidden rounded">
+                      <img src={getPreviewUrl(id)} alt={id} className="h-full w-full object-cover" loading="lazy" />
+                    </div>
+                  ) : (
+                    <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
+                      selected ? 'from-blue-100 to-cyan-100' : 'from-muted to-muted/60'
+                    }`}>
+                      <span className="text-[9px] text-muted-foreground/60">气泡</span>
+                    </div>
+                  )}
+                  <span className={`text-[9px] leading-tight text-center line-clamp-1 ${
+                    selected ? 'text-primary font-medium' : 'text-muted-foreground'
+                  }`}>
+                    {id.replace('BS000', '气泡')}
+                  </span>
+                  {selected && (
+                    <div className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
+                      <Check size={8} className="text-white" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

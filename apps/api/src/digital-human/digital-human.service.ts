@@ -18,6 +18,7 @@ import {
   SUBTITLE_STYLE_LIST,
   BUBBLE_STYLE_LIST,
   FONT_LIST,
+  IMS_VOICE_LIST,
 } from '../provider/aliyun-ims/ims-compose.provider';
 import { StorageService } from '../storage/storage.service';
 
@@ -74,16 +75,18 @@ export class DigitalHumanService {
   }
 
 
-  async previewVoice(userId: string, voiceId: string, text: string) {
-    // 校验声音所有权或公共声音
-    const voice = await this.prisma.voice.findFirst({
-      where: {
-        voiceId,
-        status: 'READY',
-        OR: [{ userId }, { isPublic: true }],
-      },
-    });
-    if (!voice) throw new NotFoundException('Voice not found or not ready');
+  async previewVoice(userId: string, voiceId: string, text: string, voiceType?: string) {
+    if (voiceType !== 'builtin') {
+      // 校验克隆声音所有权或公共声音
+      const voice = await this.prisma.voice.findFirst({
+        where: {
+          voiceId,
+          status: 'READY',
+          OR: [{ userId }, { isPublic: true }],
+        },
+      });
+      if (!voice) throw new NotFoundException('Voice not found or not ready');
+    }
 
     try {
       const voiceProvider = this.providers.voiceProvider;
@@ -255,6 +258,7 @@ export class DigitalHumanService {
       subtitleStyles: SUBTITLE_STYLE_LIST,
       bubbleStyles: BUBBLE_STYLE_LIST,
       fonts: FONT_LIST,
+      imsVoices: IMS_VOICE_LIST,
     };
   }
 
@@ -462,6 +466,7 @@ export class DigitalHumanService {
       speechMode?: 'global' | 'group';
       speechTexts?: string[];
       voiceId?: string;
+      voiceType?: 'builtin' | 'cloned';
       videoCount: number;
       resolution: string;
       bgMusic?: string;
@@ -500,14 +505,18 @@ export class DigitalHumanService {
 
     // Validate voice if speechTexts provided
     if (data.voiceId) {
-      const voice = await this.prisma.voice.findFirst({
-        where: {
-          voiceId: data.voiceId,
-          status: 'READY',
-          OR: [{ userId }, { isPublic: true }],
-        },
-      });
-      if (!voice) throw new BadRequestException('声音不存在或未就绪');
+      if (data.voiceType === 'builtin') {
+        // Built-in IMS voices don't need DB validation
+      } else {
+        const voice = await this.prisma.voice.findFirst({
+          where: {
+            voiceId: data.voiceId,
+            status: 'READY',
+            OR: [{ userId }, { isPublic: true }],
+          },
+        });
+        if (!voice) throw new BadRequestException('声音不存在或未就绪');
+      }
     }
 
     // Deduct credits
@@ -542,7 +551,8 @@ export class DigitalHumanService {
       mediaVolume: data.mediaVolume ?? 1,
       speechVolume: data.speechVolume ?? 1,
       speechRate: data.speechRate ?? 0,
-      ...(data.voiceId && { customizedVoice: data.voiceId }),
+      ...(data.voiceId && data.voiceType === 'builtin' && { voice: data.voiceId }),
+      ...(data.voiceId && data.voiceType !== 'builtin' && { customizedVoice: data.voiceId }),
       backgroundMusicVolume: data.bgMusicVolume ?? 0.2,
       subtitleConfig: data.subtitleConfig,
       ...(data.highlightWords?.length && {
