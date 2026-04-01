@@ -55,6 +55,9 @@ export function MixcutEditor({
   const [aiWriterOpen, setAiWriterOpen] = useState(false);
   const [aiTopic, setAiTopic] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiTone, setAiTone] = useState('neutral');
+  const [aiLength, setAiLength] = useState('medium');
+  const [aiAudience, setAiAudience] = useState('general');
 
   const handleSave = async () => {
     setSaving(true);
@@ -98,7 +101,10 @@ export function MixcutEditor({
     if (!aiTopic.trim()) return;
     setAiGenerating(true);
     try {
-      const res = await aiApi.generateScript(aiTopic.trim(), project.shotGroups.length || 5);
+      const res = await aiApi.generateScript(
+        `[风格:${aiTone}][篇幅:${aiLength}][受众:${aiAudience}] ${aiTopic.trim()}`,
+        project.shotGroups.length || 5,
+      );
       const store = useMixcutStore.getState();
       // Create shot groups from script paragraphs
       res.script.forEach((paragraph, idx) => {
@@ -269,9 +275,84 @@ export function MixcutEditor({
               value={aiTopic}
               onChange={(e) => setAiTopic(e.target.value)}
               placeholder="例如：夏日防晒小技巧、新品发布会开场、健身打卡vlog..."
-              rows={4}
+              rows={3}
               className="mb-3 w-full resize-none rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
+
+            {/* AI Writer Settings */}
+            <div className="mb-3 space-y-2.5 rounded-lg border bg-muted/30 p-3">
+              <div>
+                <label className="mb-1 block text-[10px] font-medium text-muted-foreground">文案风格</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { value: 'promotional', label: '促销带货' },
+                    { value: 'informational', label: '知识科普' },
+                    { value: 'emotional', label: '情感共鸣' },
+                    { value: 'humorous', label: '幽默搞笑' },
+                    { value: 'neutral', label: '通用中性' },
+                  ].map((t) => (
+                    <button
+                      key={t.value}
+                      onClick={() => setAiTone(t.value)}
+                      className={`rounded-md border px-2 py-1 text-[10px] transition-all ${
+                        aiTone === t.value
+                          ? 'border-primary bg-primary/10 text-primary font-medium'
+                          : 'border-input hover:bg-accent'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-medium text-muted-foreground">文案篇幅</label>
+                <div className="flex gap-1.5">
+                  {[
+                    { value: 'short', label: '精简 (每段1-2句)' },
+                    { value: 'medium', label: '适中 (每段2-3句)' },
+                    { value: 'long', label: '详细 (每段3-5句)' },
+                  ].map((l) => (
+                    <button
+                      key={l.value}
+                      onClick={() => setAiLength(l.value)}
+                      className={`flex-1 rounded-md border py-1 text-[10px] transition-all ${
+                        aiLength === l.value
+                          ? 'border-primary bg-primary/10 text-primary font-medium'
+                          : 'border-input hover:bg-accent'
+                      }`}
+                    >
+                      {l.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-medium text-muted-foreground">目标受众</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { value: 'general', label: '大众通用' },
+                    { value: 'youth', label: '年轻潮流' },
+                    { value: 'professional', label: '商务专业' },
+                    { value: 'female', label: '女性用户' },
+                    { value: 'parent', label: '宝妈宝爸' },
+                  ].map((a) => (
+                    <button
+                      key={a.value}
+                      onClick={() => setAiAudience(a.value)}
+                      className={`rounded-md border px-2 py-1 text-[10px] transition-all ${
+                        aiAudience === a.value
+                          ? 'border-primary bg-primary/10 text-primary font-medium'
+                          : 'border-input hover:bg-accent'
+                      }`}
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             <div className="mb-3 text-[10px] text-muted-foreground">
               将生成 {project.shotGroups.length || 5} 段脚本，对应当前镜头组数量
             </div>

@@ -4,10 +4,18 @@ import { useState } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { useJobUpdates } from '@/components/ws-provider';
 import { mixcutApi } from '@/lib/api';
-import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw, Clock, CalendarClock } from 'lucide-react';
+import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw, Clock, CalendarClock, Shield } from 'lucide-react';
 
 export function PreviewPanel() {
   const { project, subtitleStyle, titleStyle, globalConfig, highlightWords, setScheduledAt } = useMixcutStore();
+
+  // Watermark position mapping
+  const watermarkPositionStyle: Record<string, React.CSSProperties> = {
+    topLeft: { top: 8, left: 8 },
+    topRight: { top: 8, right: 8 },
+    bottomLeft: { bottom: 24, left: 8 },
+    bottomRight: { bottom: 24, right: 8 },
+  };
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; jobId?: string; error?: string } | null>(null);
   const [progress, setProgress] = useState<{ status?: string; progress?: number; message?: string } | null>(null);
@@ -172,6 +180,77 @@ export function PreviewPanel() {
             <p className="text-[10px] text-white/40">模拟效果</p>
           </div>
 
+          {/* Watermark preview */}
+          {globalConfig.watermarkText && (
+            <div
+              className="absolute pointer-events-none select-none"
+              style={{
+                ...watermarkPositionStyle[globalConfig.watermarkPosition],
+                opacity: globalConfig.watermarkOpacity,
+              }}
+            >
+              <span className="text-[10px] text-white/80 font-medium drop-shadow-md">
+                {globalConfig.watermarkText}
+              </span>
+            </div>
+          )}
+
+          {/* Title preview */}
+          {titleStyle.enabled && titleStyle.text && (
+            <div
+              className="absolute left-0 right-0 text-center pointer-events-none"
+              style={{ top: `${titleStyle.y * 100}%` }}
+            >
+              <span
+                className="drop-shadow-lg"
+                style={{
+                  fontSize: Math.max(8, titleStyle.fontSize / 5),
+                  color: titleStyle.fontColor,
+                  fontWeight: 'bold',
+                }}
+              >
+                {titleStyle.text}
+              </span>
+            </div>
+          )}
+
+          {/* Subtitle preview */}
+          {project.shotGroups.some((g) => g.subtitles.length > 0) && (
+            <div
+              className="absolute left-2 right-2 text-center pointer-events-none"
+              style={{ top: `${subtitleStyle.y * 100}%` }}
+            >
+              <span
+                className="inline-block rounded px-1"
+                style={{
+                  fontSize: Math.max(7, subtitleStyle.fontSize / 5),
+                  color: subtitleStyle.fontColor,
+                  fontWeight: subtitleStyle.bold ? 'bold' : 'normal',
+                  fontStyle: subtitleStyle.italic ? 'italic' : 'normal',
+                  textDecoration: subtitleStyle.underline ? 'underline' : 'none',
+                  textShadow: subtitleStyle.outline > 0 ? `0 0 ${subtitleStyle.outline}px ${subtitleStyle.outlineColour}` : 'none',
+                }}
+              >
+                {project.shotGroups.find((g) => g.subtitles.length > 0)?.subtitles[0]?.text?.slice(0, 20) || '字幕预览'}
+              </span>
+            </div>
+          )}
+
+          {/* Active effects badges */}
+          {(globalConfig.transitionEnabled || globalConfig.filterEnabled || globalConfig.vfxEffectEnabled) && (
+            <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+              {globalConfig.transitionEnabled && (
+                <span className="rounded bg-blue-500/70 px-1 py-0.5 text-[8px] text-white">转场 {globalConfig.transitionList.length}</span>
+              )}
+              {globalConfig.filterEnabled && (
+                <span className="rounded bg-amber-500/70 px-1 py-0.5 text-[8px] text-white">滤镜 {globalConfig.filterList.length}</span>
+              )}
+              {globalConfig.vfxEffectEnabled && (
+                <span className="rounded bg-purple-500/70 px-1 py-0.5 text-[8px] text-white">特效</span>
+              )}
+            </div>
+          )}
+
           {/* Time indicator */}
           <div className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
             {formatTime(Math.round(totalDuration))}
@@ -185,6 +264,11 @@ export function PreviewPanel() {
         <p>正式生成会产出高像素视频</p>
         <p>模拟效果不支持转场、滤镜、背景、封面</p>
         <p>以上效果仅会在最终成片应用</p>
+        {globalConfig.watermarkText && (
+          <p className="text-primary">水印: "{globalConfig.watermarkText}" ({{
+            topLeft: '左上', topRight: '右上', bottomLeft: '左下', bottomRight: '右下'
+          }[globalConfig.watermarkPosition]}，{Math.round(globalConfig.watermarkOpacity * 100)}%透明度)</p>
+        )}
       </div>
 
       {/* Stats */}

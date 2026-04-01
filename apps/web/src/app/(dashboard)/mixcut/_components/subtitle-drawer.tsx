@@ -2,9 +2,9 @@
 
 import { useState, useRef } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
-import { aiApi } from '@/lib/api';
+import { aiApi, voiceApi } from '@/lib/api';
 import { uploadToOSS } from '@/lib/upload';
-import { X, ChevronLeft, ChevronRight, Plus, Trash2, Wand2, Loader2, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Plus, Trash2, Wand2, Loader2, AlertTriangle, CheckCircle, RefreshCw, Volume2, Mic2 } from 'lucide-react';
 
 const FONTS = [
   { value: 'Alibaba PuHuiTi 2.0 65 Medium', label: '阿里巴巴普惠体' },
@@ -62,13 +62,59 @@ export function SubtitleDrawer({
             className="relative w-full overflow-hidden rounded-xl border border-gray-700 bg-black"
             style={{ aspectRatio: '9/16' }}
           >
-            <div className="absolute inset-0 flex items-end justify-center pb-12">
-              <p className="max-w-[80%] text-center text-sm font-medium text-white drop-shadow-lg">
+            {/* Title preview */}
+            {titleStyle.enabled && titleStyle.text && (
+              <div
+                className="absolute left-2 right-2 text-center pointer-events-none"
+                style={{ top: `${titleStyle.y * 100}%` }}
+              >
+                <span
+                  className="drop-shadow-lg"
+                  style={{
+                    fontSize: Math.max(8, titleStyle.fontSize / 5),
+                    color: titleStyle.fontColor,
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {titleStyle.text}
+                </span>
+              </div>
+            )}
+
+            {/* Subtitle preview with actual styling */}
+            <div
+              className="absolute left-2 right-2 text-center pointer-events-none"
+              style={{ top: `${subtitleStyle.y * 100}%` }}
+            >
+              <span
+                className="inline-block rounded px-1"
+                style={{
+                  fontSize: Math.max(8, subtitleStyle.fontSize / 5),
+                  color: subtitleStyle.fontColor,
+                  opacity: subtitleStyle.fontColorOpacity,
+                  fontWeight: subtitleStyle.bold ? 'bold' : 'normal',
+                  fontStyle: subtitleStyle.italic ? 'italic' : 'normal',
+                  textDecoration: subtitleStyle.underline ? 'underline' : 'none',
+                  textShadow: subtitleStyle.outline > 0
+                    ? `0 0 ${subtitleStyle.outline}px ${subtitleStyle.outlineColour}, 1px 1px ${subtitleStyle.outline}px ${subtitleStyle.outlineColour}`
+                    : 'none',
+                }}
+              >
                 {shotGroup.subtitles[0]?.text || '字幕预览'}
-              </p>
+              </span>
+            </div>
+
+            {/* Effect badges */}
+            <div className="absolute top-2 left-2 flex flex-wrap gap-0.5">
+              {subtitleStyle.effectColorStyleId && (
+                <span className="rounded bg-pink-500/70 px-1 py-0.5 text-[7px] text-white">花字</span>
+              )}
+              {subtitleStyle.bubbleStyleId && (
+                <span className="rounded bg-cyan-500/70 px-1 py-0.5 text-[7px] text-white">气泡</span>
+              )}
             </div>
           </div>
-          <p className="mt-2 text-[10px] text-gray-400">关闭抖音视图</p>
+          <p className="mt-2 text-[10px] text-gray-400">实时字幕预览</p>
         </div>
 
         {/* Config panel */}
@@ -184,7 +230,28 @@ function SubtitleContent({
   const [showCopyLib, setShowCopyLib] = useState(false);
   const [copyLibCategory, setCopyLibCategory] = useState('促销');
   const [asrLoading, setAsrLoading] = useState(false);
+  const [voicePreviewLoading, setVoicePreviewLoading] = useState<number | null>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const { globalConfig } = useMixcutStore();
+
+  const handleVoicePreview = async (index: number) => {
+    const text = subtitles[index]?.text;
+    const voiceId = subtitles[index]?.voiceId || (globalConfig as any).voiceId;
+    if (!text || !voiceId) return;
+    setVoicePreviewLoading(index);
+    try {
+      const result = await voiceApi.preview(voiceId, text.slice(0, 100));
+      if (result?.audioUrl) {
+        const audio = new Audio(result.audioUrl);
+        audio.play();
+        audio.onended = () => setVoicePreviewLoading(null);
+      } else {
+        setVoicePreviewLoading(null);
+      }
+    } catch {
+      setVoicePreviewLoading(null);
+    }
+  };
 
   const handleAsrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -287,6 +354,14 @@ function SubtitleContent({
                 <button className="text-[10px] text-muted-foreground hover:text-primary">字幕特效设置</button>
                 <button className="text-[10px] text-muted-foreground hover:text-primary">文案库导入</button>
                 <button
+                  onClick={() => handleVoicePreview(i)}
+                  disabled={voicePreviewLoading === i || !sub.text || !(sub.voiceId || (globalConfig as any).voiceId)}
+                  className="text-[10px] text-muted-foreground hover:text-primary disabled:opacity-50"
+                  title={!(sub.voiceId || (globalConfig as any).voiceId) ? '请先选择配音声音' : '试听配音效果'}
+                >
+                  {voicePreviewLoading === i ? <><Loader2 size={10} className="inline animate-spin mr-0.5" />播放中...</> : <><Volume2 size={10} className="inline mr-0.5" />试听</>}
+                </button>
+                <button
                   onClick={() => handleRiskDetect(i)}
                   disabled={riskLoading === i}
                   className="text-[10px] text-muted-foreground hover:text-primary disabled:opacity-50"
@@ -315,8 +390,16 @@ function SubtitleContent({
               rows={3}
               className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
-            <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-              <span>预计时长: {Math.ceil((sub.text?.length || 0) / 5)}秒</span>
+            <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-3">
+                <span>预计时长: {Math.ceil((sub.text?.length || 0) / 5)}秒</span>
+                <span>阅读速度: ~{Math.round((sub.text?.length || 0) / Math.max(Math.ceil((sub.text?.length || 0) / 5), 1))}字/秒</span>
+                {(sub.voiceId || (globalConfig as any).voiceId) && (
+                  <span className="flex items-center gap-0.5 text-primary">
+                    <Mic2 size={9} /> 已配音
+                  </span>
+                )}
+              </div>
               <span>{sub.text?.length || 0} / 2000</span>
             </div>
 

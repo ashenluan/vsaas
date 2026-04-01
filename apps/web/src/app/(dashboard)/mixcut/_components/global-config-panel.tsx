@@ -1,10 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import {
   Type, Music, ArrowRightLeft, Droplet, Palette, Mic2, Volume2,
   Image as ImageIcon, Film, Shield, MonitorSmartphone, Smartphone, Monitor, Square,
-  Sparkles, Settings2,
+  Sparkles, Settings2, Check,
 } from 'lucide-react';
 import { VoiceSelectSection } from './voice-select-section';
 
@@ -33,14 +34,33 @@ export function GlobalConfigPanel({ options }: { options: any }) {
   const { globalConfig, updateGlobalConfig } = useMixcutStore();
 
   const transitionsData: { id: string; label: string }[] = options?.transitions || [];
+  const advancedTransitionsData: { id: string; label: string }[] = options?.advancedTransitions || [];
+  const allTransitions = [...transitionsData, ...advancedTransitionsData];
+  const transitionCategories = (() => {
+    const catNames: Record<string, string> = { '01': 'MG转场', '02': '遮罩转场', '03': '特效转场', '04': '运镜转场', '05': '渐变转场', '06': '创意转场' };
+    const advCats: Record<string, { id: string; label: string }[]> = {};
+    advancedTransitionsData.forEach((t) => {
+      const m = t.id.match(/^OT0001-(\d{2})-/);
+      if (m) { const k = catNames[m[1]] || `其他${m[1]}`; (advCats[k] ??= []).push(t); }
+    });
+    return [{ name: '基础转场', items: transitionsData }, ...Object.entries(advCats).map(([name, items]) => ({ name, items }))];
+  })();
   const filtersData: Record<string, { id: string; label: string }[]> = options?.filters || {};
   const allFilters = Object.values(filtersData).flat();
   const effectsData: Record<string, { id: string; label: string }[]> = options?.effects || {};
 
+  const [transitionTab, setTransitionTab] = useState<'smart' | 'custom'>('custom');
+  const [transitionCategoryTab, setTransitionCategoryTab] = useState(0);
+  const filterCategoryNames = Object.keys(filtersData);
+  const [filterCategoryTab, setFilterCategoryTab] = useState(0);
+  const effectCategoryNames = Object.keys(effectsData);
+  const [effectCategoryTab, setEffectCategoryTab] = useState(0);
+  const [effectSection, setEffectSection] = useState<'first' | 'rest'>('first');
+
   const handleSmartMatchTransitions = () => {
-    if (transitionsData.length === 0) return;
-    const count = Math.min(transitionsData.length, Math.max(3, Math.floor(Math.random() * 3) + 3));
-    const shuffled = [...transitionsData].sort(() => Math.random() - 0.5);
+    if (allTransitions.length === 0) return;
+    const count = Math.min(allTransitions.length, Math.max(5, Math.floor(Math.random() * 4) + 4));
+    const shuffled = [...allTransitions].sort(() => Math.random() - 0.5);
     updateGlobalConfig({ transitionEnabled: true, transitionList: shuffled.slice(0, count).map((t) => t.id) });
   };
 
@@ -204,8 +224,141 @@ export function GlobalConfigPanel({ options }: { options: any }) {
         </div>
         {globalConfig.transitionEnabled && (
           <>
-            <div className="mb-2">
-              <label className="mb-1 block text-[10px] text-muted-foreground">转场时长</label>
+            {/* Smart / Custom tabs */}
+            <div className="mb-2 flex rounded-lg border bg-muted/30 p-0.5">
+              <button
+                onClick={() => {
+                  setTransitionTab('smart');
+                  handleSmartMatchTransitions();
+                }}
+                className={`flex-1 rounded-md py-1.5 text-[11px] font-medium transition-all ${
+                  transitionTab === 'smart'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                智能匹配
+              </button>
+              <button
+                onClick={() => setTransitionTab('custom')}
+                className={`flex-1 rounded-md py-1.5 text-[11px] font-medium transition-all ${
+                  transitionTab === 'custom'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                自定义
+              </button>
+            </div>
+
+            {transitionTab === 'custom' && (
+              <>
+                {/* Category tabs */}
+                <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-thin">
+                  {transitionCategories.map((cat, idx) => (
+                    <button
+                      key={cat.name}
+                      onClick={() => setTransitionCategoryTab(idx)}
+                      className={`shrink-0 rounded-md border px-2 py-1 text-[10px] transition-all ${
+                        transitionCategoryTab === idx
+                          ? 'border-blue-400 bg-blue-50 text-blue-700 font-medium'
+                          : 'border-input hover:bg-accent'
+                      }`}
+                    >
+                      {cat.name}
+                      <span className="ml-0.5 text-[9px] opacity-60">
+                        {cat.items.filter((t) => globalConfig.transitionList.includes(t.id)).length || ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Select all for current category */}
+                {transitionCategories[transitionCategoryTab] && (
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">
+                      {transitionCategories[transitionCategoryTab].items.filter((t) => globalConfig.transitionList.includes(t.id)).length}
+                      /{transitionCategories[transitionCategoryTab].items.length} 已选
+                    </span>
+                    <button
+                      onClick={() => {
+                        const catItems = transitionCategories[transitionCategoryTab].items;
+                        const catIds = catItems.map((t) => t.id);
+                        const allSelected = catIds.every((id) => globalConfig.transitionList.includes(id));
+                        if (allSelected) {
+                          updateGlobalConfig({ transitionList: globalConfig.transitionList.filter((id) => !catIds.includes(id)) });
+                        } else {
+                          const merged = [...new Set([...globalConfig.transitionList, ...catIds])];
+                          updateGlobalConfig({ transitionList: merged });
+                        }
+                      }}
+                      className="text-[10px] text-primary hover:underline"
+                    >
+                      {transitionCategories[transitionCategoryTab].items.every((t) => globalConfig.transitionList.includes(t.id)) ? '取消全选' : '全选'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Transition grid */}
+                <div className="grid grid-cols-3 gap-1.5 max-h-48 overflow-y-auto">
+                  {(transitionCategories[transitionCategoryTab]?.items || []).map((t) => {
+                    const selected = globalConfig.transitionList.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          const list = selected
+                            ? globalConfig.transitionList.filter((x) => x !== t.id)
+                            : [...globalConfig.transitionList, t.id];
+                          updateGlobalConfig({ transitionList: list });
+                        }}
+                        className={`relative flex flex-col items-center gap-0.5 rounded-lg border p-1.5 transition-all ${
+                          selected
+                            ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-300'
+                            : 'border-input hover:border-blue-300 hover:bg-accent'
+                        }`}
+                      >
+                        <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
+                          selected ? 'from-blue-100 to-blue-200' : 'from-muted to-muted/60'
+                        }`}>
+                          <ArrowRightLeft size={12} className={selected ? 'text-blue-600' : 'text-muted-foreground/50'} />
+                        </div>
+                        <span className={`text-[9px] leading-tight text-center line-clamp-1 ${
+                          selected ? 'text-blue-700 font-medium' : 'text-muted-foreground'
+                        }`}>
+                          {t.label}
+                        </span>
+                        {selected && (
+                          <div className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-500">
+                            <Check size={8} className="text-white" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {transitionTab === 'smart' && (
+              <div className="rounded-lg border bg-blue-50/50 p-3 text-center">
+                <p className="text-[11px] text-blue-700 font-medium mb-1">已智能匹配 {globalConfig.transitionList.length} 个转场</p>
+                <p className="text-[9px] text-blue-500">系统根据视频内容自动推荐最佳转场组合</p>
+                <button
+                  onClick={handleSmartMatchTransitions}
+                  className="mt-2 rounded-md border border-blue-300 bg-white px-3 py-1 text-[10px] text-blue-600 hover:bg-blue-50 transition-colors"
+                >
+                  重新匹配
+                </button>
+              </div>
+            )}
+
+            {/* Duration */}
+            <div className="mt-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] text-muted-foreground">转场时长</label>
+                <span className="text-[10px] tabular-nums font-medium">{globalConfig.transitionDuration.toFixed(1)}s</span>
+              </div>
               <input
                 type="range"
                 min={0.1}
@@ -215,33 +368,45 @@ export function GlobalConfigPanel({ options }: { options: any }) {
                 onChange={(e) => updateGlobalConfig({ transitionDuration: Number(e.target.value) })}
                 className="w-full accent-primary"
               />
-              <span className="text-[10px] text-muted-foreground">{globalConfig.transitionDuration.toFixed(1)}s</span>
             </div>
-            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
-              {transitionsData.map((t) => (
+
+            {/* Match mode */}
+            <div className="mt-2">
+              <label className="mb-1 block text-[10px] text-muted-foreground">匹配模式</label>
+              <div className="flex gap-1.5">
                 <button
-                  key={t.id}
-                  onClick={() => {
-                    const list = globalConfig.transitionList.includes(t.id)
-                      ? globalConfig.transitionList.filter((x) => x !== t.id)
-                      : [...globalConfig.transitionList, t.id];
-                    updateGlobalConfig({ transitionList: list });
-                  }}
-                  className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
-                    globalConfig.transitionList.includes(t.id)
+                  onClick={() => updateGlobalConfig({ useUniformTransition: false })}
+                  className={`flex-1 rounded-md border py-1.5 text-[10px] transition-all ${
+                    !globalConfig.useUniformTransition
                       ? 'border-blue-400 bg-blue-50 text-blue-700 font-medium'
                       : 'border-input hover:bg-accent'
                   }`}
                 >
-                  {t.label}
+                  每组随机
                 </button>
-              ))}
+                <button
+                  onClick={() => updateGlobalConfig({ useUniformTransition: true })}
+                  className={`flex-1 rounded-md border py-1.5 text-[10px] transition-all ${
+                    globalConfig.useUniformTransition
+                      ? 'border-blue-400 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-input hover:bg-accent'
+                  }`}
+                >
+                  统一随机
+                </button>
+              </div>
+              <p className="mt-1 text-[9px] text-muted-foreground">
+                {globalConfig.useUniformTransition ? '所有视频使用相同的随机转场' : '每个视频独立随机选择转场效果'}
+              </p>
             </div>
           </>
         )}
-        <button onClick={handleSmartMatchTransitions} className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
-          智能匹配转场
-        </button>
+        {globalConfig.transitionList.length > 0 && (
+          <div className="mt-2 rounded-md border border-blue-200 bg-blue-50/50 px-2 py-1.5">
+            <p className="text-[10px] text-blue-700">已选 {globalConfig.transitionList.length} 个转场效果</p>
+            <p className="text-[9px] text-blue-500">转场将在镜头切换时{globalConfig.useUniformTransition ? '统一' : '随机'}应用，时长 {globalConfig.transitionDuration.toFixed(1)}s</p>
+          </div>
+        )}
       </ConfigSection>
 
       {/* 水印设置 */}
@@ -293,6 +458,25 @@ export function GlobalConfigPanel({ options }: { options: any }) {
                 className="w-full accent-primary"
               />
             </div>
+            {/* Watermark preview */}
+            <div className="relative mt-2 h-20 rounded-lg border bg-black/80 overflow-hidden">
+              <div
+                className="absolute text-white font-medium"
+                style={{
+                  ...(globalConfig.watermarkPosition === 'topLeft' ? { top: 6, left: 6 } : {}),
+                  ...(globalConfig.watermarkPosition === 'topRight' ? { top: 6, right: 6 } : {}),
+                  ...(globalConfig.watermarkPosition === 'bottomLeft' ? { bottom: 6, left: 6 } : {}),
+                  ...(globalConfig.watermarkPosition === 'bottomRight' ? { bottom: 6, right: 6 } : {}),
+                  opacity: globalConfig.watermarkOpacity,
+                  fontSize: 11,
+                }}
+              >
+                {globalConfig.watermarkText}
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-[9px] text-white/30">水印位置预览</span>
+              </div>
+            </div>
           </div>
         )}
       </ConfigSection>
@@ -307,32 +491,96 @@ export function GlobalConfigPanel({ options }: { options: any }) {
           />
         </div>
         {globalConfig.filterEnabled && (
-          <div className="max-h-40 space-y-2 overflow-y-auto">
-            {Object.entries(filtersData).map(([category, items]) => (
-              <div key={category}>
-                <span className="mb-0.5 block text-[9px] font-medium text-amber-600">{category}</span>
-                <div className="flex flex-wrap gap-1">
-                  {(items as { id: string; label: string }[]).map((f) => (
-                    <button
-                      key={f.id}
-                      onClick={() => {
-                        const list = globalConfig.filterList.includes(f.id)
-                          ? globalConfig.filterList.filter((x) => x !== f.id)
-                          : [...globalConfig.filterList, f.id];
-                        updateGlobalConfig({ filterList: list });
-                      }}
-                      className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
-                        globalConfig.filterList.includes(f.id)
-                          ? 'border-amber-400 bg-amber-50 text-amber-700 font-medium'
-                          : 'border-input hover:bg-accent'
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
+          <>
+            {/* Category tabs */}
+            <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-thin">
+              {filterCategoryNames.map((name, idx) => (
+                <button
+                  key={name}
+                  onClick={() => setFilterCategoryTab(idx)}
+                  className={`shrink-0 rounded-md border px-2 py-1 text-[10px] transition-all ${
+                    filterCategoryTab === idx
+                      ? 'border-amber-400 bg-amber-50 text-amber-700 font-medium'
+                      : 'border-input hover:bg-accent'
+                  }`}
+                >
+                  {name}
+                  <span className="ml-0.5 text-[9px] opacity-60">
+                    {(filtersData[name] || []).filter((f) => globalConfig.filterList.includes(f.id)).length || ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Select all for current category */}
+            {filterCategoryNames[filterCategoryTab] && (
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] text-muted-foreground">
+                  {(filtersData[filterCategoryNames[filterCategoryTab]] || []).filter((f) => globalConfig.filterList.includes(f.id)).length}
+                  /{(filtersData[filterCategoryNames[filterCategoryTab]] || []).length} 已选
+                </span>
+                <button
+                  onClick={() => {
+                    const catItems = filtersData[filterCategoryNames[filterCategoryTab]] || [];
+                    const catIds = catItems.map((f) => f.id);
+                    const allSelected = catIds.every((id) => globalConfig.filterList.includes(id));
+                    if (allSelected) {
+                      updateGlobalConfig({ filterList: globalConfig.filterList.filter((id) => !catIds.includes(id)) });
+                    } else {
+                      updateGlobalConfig({ filterList: [...new Set([...globalConfig.filterList, ...catIds])] });
+                    }
+                  }}
+                  className="text-[10px] text-primary hover:underline"
+                >
+                  {(filtersData[filterCategoryNames[filterCategoryTab]] || []).every((f) => globalConfig.filterList.includes(f.id)) ? '取消全选' : '全选'}
+                </button>
               </div>
-            ))}
+            )}
+
+            {/* Filter grid */}
+            <div className="grid grid-cols-3 gap-1.5 max-h-48 overflow-y-auto">
+              {(filtersData[filterCategoryNames[filterCategoryTab]] || []).map((f) => {
+                const selected = globalConfig.filterList.includes(f.id);
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => {
+                      const list = selected
+                        ? globalConfig.filterList.filter((x) => x !== f.id)
+                        : [...globalConfig.filterList, f.id];
+                      updateGlobalConfig({ filterList: list });
+                    }}
+                    className={`relative flex flex-col items-center gap-0.5 rounded-lg border p-1.5 transition-all ${
+                      selected
+                        ? 'border-amber-400 bg-amber-50 ring-1 ring-amber-300'
+                        : 'border-input hover:border-amber-300 hover:bg-accent'
+                    }`}
+                  >
+                    <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
+                      selected ? 'from-amber-100 to-amber-200' : 'from-muted to-muted/60'
+                    }`}>
+                      <Palette size={12} className={selected ? 'text-amber-600' : 'text-muted-foreground/50'} />
+                    </div>
+                    <span className={`text-[9px] leading-tight text-center line-clamp-1 ${
+                      selected ? 'text-amber-700 font-medium' : 'text-muted-foreground'
+                    }`}>
+                      {f.label}
+                    </span>
+                    {selected && (
+                      <div className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500">
+                        <Check size={8} className="text-white" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+        {globalConfig.filterList.length > 0 && (
+          <div className="mt-2 rounded-md border border-amber-200 bg-amber-50/50 px-2 py-1.5">
+            <p className="text-[10px] text-amber-700">已选 {globalConfig.filterList.length} 个滤镜效果</p>
+            <p className="text-[9px] text-amber-500">滤镜将随机应用到各视频片段，提升画面质感</p>
           </div>
         )}
         <button onClick={handleSmartMatchFilters} className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
@@ -354,7 +602,7 @@ export function GlobalConfigPanel({ options }: { options: any }) {
             <div className="mb-2">
               <div className="flex items-center justify-between mb-1">
                 <label className="text-[10px] text-muted-foreground">特效出现概率</label>
-                <span className="text-[10px] tabular-nums text-muted-foreground">{globalConfig.vfxEffectProbability}%</span>
+                <span className="text-[10px] tabular-nums font-medium">{globalConfig.vfxEffectProbability}%</span>
               </div>
               <input
                 type="range"
@@ -366,69 +614,144 @@ export function GlobalConfigPanel({ options }: { options: any }) {
                 className="w-full accent-primary"
               />
             </div>
-            <div className="mb-2">
-              <span className="mb-1 block text-[10px] font-medium text-purple-600">首片段特效</span>
-              <div className="text-[9px] text-muted-foreground mb-1">仅应用于第一个片段</div>
+
+            {/* First / Rest clip toggle */}
+            <div className="mb-2 flex rounded-lg border bg-muted/30 p-0.5">
+              <button
+                onClick={() => setEffectSection('first')}
+                className={`flex-1 rounded-md py-1.5 text-[11px] font-medium transition-all ${
+                  effectSection === 'first'
+                    ? 'bg-purple-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                首片段特效
+              </button>
+              <button
+                onClick={() => setEffectSection('rest')}
+                className={`flex-1 rounded-md py-1.5 text-[11px] font-medium transition-all ${
+                  effectSection === 'rest'
+                    ? 'bg-indigo-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                其余片段特效
+              </button>
             </div>
-            <div className="max-h-40 space-y-2 overflow-y-auto mb-3">
-              {Object.entries(effectsData).map(([category, items]) => (
-                <div key={category}>
-                  <span className="mb-0.5 block text-[9px] font-medium text-purple-600">{category}</span>
-                  <div className="flex flex-wrap gap-1">
-                    {(items as { id: string; label: string }[]).map((eff) => (
-                      <button
-                        key={eff.id}
-                        onClick={() => {
-                          const list = globalConfig.vfxFirstClipEffectList.includes(eff.id)
-                            ? globalConfig.vfxFirstClipEffectList.filter((x) => x !== eff.id)
-                            : [...globalConfig.vfxFirstClipEffectList, eff.id];
-                          updateGlobalConfig({ vfxFirstClipEffectList: list });
-                        }}
-                        className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
-                          globalConfig.vfxFirstClipEffectList.includes(eff.id)
-                            ? 'border-purple-400 bg-purple-50 text-purple-700 font-medium'
-                            : 'border-input hover:bg-accent'
-                        }`}
-                      >
-                        {eff.label}
-                      </button>
-                    ))}
-                  </div>
+            <p className="mb-2 text-[9px] text-muted-foreground">
+              {effectSection === 'first' ? '仅应用于视频第一个片段' : '应用于除首片段外的所有片段'}
+            </p>
+
+            {/* Category tabs */}
+            <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-thin">
+              {effectCategoryNames.map((name, idx) => {
+                const list = effectSection === 'first' ? globalConfig.vfxFirstClipEffectList : globalConfig.vfxNotFirstClipEffectList;
+                const catItems = effectsData[name] || [];
+                const selectedCount = catItems.filter((e) => list.includes(e.id)).length;
+                const isFirst = effectSection === 'first';
+                return (
+                  <button
+                    key={name}
+                    onClick={() => setEffectCategoryTab(idx)}
+                    className={`shrink-0 rounded-md border px-2 py-1 text-[10px] transition-all ${
+                      effectCategoryTab === idx
+                        ? isFirst
+                          ? 'border-purple-400 bg-purple-50 text-purple-700 font-medium'
+                          : 'border-indigo-400 bg-indigo-50 text-indigo-700 font-medium'
+                        : 'border-input hover:bg-accent'
+                    }`}
+                  >
+                    {name}
+                    <span className="ml-0.5 text-[9px] opacity-60">{selectedCount || ''}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Select all for current category */}
+            {effectCategoryNames[effectCategoryTab] && (() => {
+              const list = effectSection === 'first' ? globalConfig.vfxFirstClipEffectList : globalConfig.vfxNotFirstClipEffectList;
+              const listKey = effectSection === 'first' ? 'vfxFirstClipEffectList' : 'vfxNotFirstClipEffectList';
+              const catItems = effectsData[effectCategoryNames[effectCategoryTab]] || [];
+              const catIds = catItems.map((e) => e.id);
+              const allSelected = catIds.length > 0 && catIds.every((id) => list.includes(id));
+              return (
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">
+                    {catItems.filter((e) => list.includes(e.id)).length}/{catItems.length} 已选
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (allSelected) {
+                        updateGlobalConfig({ [listKey]: list.filter((id) => !catIds.includes(id)) });
+                      } else {
+                        updateGlobalConfig({ [listKey]: [...new Set([...list, ...catIds])] });
+                      }
+                    }}
+                    className="text-[10px] text-primary hover:underline"
+                  >
+                    {allSelected ? '取消全选' : '全选'}
+                  </button>
                 </div>
-              ))}
-            </div>
-            <div className="mb-2">
-              <span className="mb-1 block text-[10px] font-medium text-indigo-600">其余片段特效</span>
-              <div className="text-[9px] text-muted-foreground mb-1">应用于除首片段外的片段</div>
-            </div>
-            <div className="max-h-40 space-y-2 overflow-y-auto">
-              {Object.entries(effectsData).map(([category, items]) => (
-                <div key={category}>
-                  <span className="mb-0.5 block text-[9px] font-medium text-indigo-600">{category}</span>
-                  <div className="flex flex-wrap gap-1">
-                    {(items as { id: string; label: string }[]).map((eff) => (
-                      <button
-                        key={eff.id}
-                        onClick={() => {
-                          const list = globalConfig.vfxNotFirstClipEffectList.includes(eff.id)
-                            ? globalConfig.vfxNotFirstClipEffectList.filter((x) => x !== eff.id)
-                            : [...globalConfig.vfxNotFirstClipEffectList, eff.id];
-                          updateGlobalConfig({ vfxNotFirstClipEffectList: list });
-                        }}
-                        className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
-                          globalConfig.vfxNotFirstClipEffectList.includes(eff.id)
-                            ? 'border-indigo-400 bg-indigo-50 text-indigo-700 font-medium'
-                            : 'border-input hover:bg-accent'
-                        }`}
-                      >
-                        {eff.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              );
+            })()}
+
+            {/* Effect grid */}
+            <div className="grid grid-cols-3 gap-1.5 max-h-48 overflow-y-auto">
+              {(effectsData[effectCategoryNames[effectCategoryTab]] || []).map((eff) => {
+                const list = effectSection === 'first' ? globalConfig.vfxFirstClipEffectList : globalConfig.vfxNotFirstClipEffectList;
+                const listKey = effectSection === 'first' ? 'vfxFirstClipEffectList' : 'vfxNotFirstClipEffectList';
+                const selected = list.includes(eff.id);
+                const isFirst = effectSection === 'first';
+                return (
+                  <button
+                    key={eff.id}
+                    onClick={() => {
+                      const updated = selected
+                        ? list.filter((x) => x !== eff.id)
+                        : [...list, eff.id];
+                      updateGlobalConfig({ [listKey]: updated });
+                    }}
+                    className={`relative flex flex-col items-center gap-0.5 rounded-lg border p-1.5 transition-all ${
+                      selected
+                        ? isFirst
+                          ? 'border-purple-400 bg-purple-50 ring-1 ring-purple-300'
+                          : 'border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300'
+                        : isFirst
+                          ? 'border-input hover:border-purple-300 hover:bg-accent'
+                          : 'border-input hover:border-indigo-300 hover:bg-accent'
+                    }`}
+                  >
+                    <div className={`flex h-8 w-full items-center justify-center rounded bg-gradient-to-br ${
+                      selected
+                        ? isFirst ? 'from-purple-100 to-purple-200' : 'from-indigo-100 to-indigo-200'
+                        : 'from-muted to-muted/60'
+                    }`}>
+                      <Sparkles size={12} className={selected ? (isFirst ? 'text-purple-600' : 'text-indigo-600') : 'text-muted-foreground/50'} />
+                    </div>
+                    <span className={`text-[9px] leading-tight text-center line-clamp-1 ${
+                      selected ? (isFirst ? 'text-purple-700 font-medium' : 'text-indigo-700 font-medium') : 'text-muted-foreground'
+                    }`}>
+                      {eff.label}
+                    </span>
+                    {selected && (
+                      <div className={`absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ${isFirst ? 'bg-purple-500' : 'bg-indigo-500'}`}>
+                        <Check size={8} className="text-white" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </>
+        )}
+        {(globalConfig.vfxFirstClipEffectList.length > 0 || globalConfig.vfxNotFirstClipEffectList.length > 0) && (
+          <div className="mt-2 rounded-md border border-purple-200 bg-purple-50/50 px-2 py-1.5">
+            <p className="text-[10px] text-purple-700">
+              首片段 {globalConfig.vfxFirstClipEffectList.length} 个 · 其余片段 {globalConfig.vfxNotFirstClipEffectList.length} 个
+            </p>
+            <p className="text-[9px] text-purple-500">特效出现概率 {globalConfig.vfxEffectProbability}%，为视频增添动态视觉效果</p>
+          </div>
         )}
         <button onClick={handleSmartMatchEffects} className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
           智能匹配特效
