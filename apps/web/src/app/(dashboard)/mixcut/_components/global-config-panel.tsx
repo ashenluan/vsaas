@@ -2,9 +2,10 @@
 
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import {
-  Type, Music, ArrowRightLeft, Droplet, Palette,
+  Type, Music, ArrowRightLeft, Droplet, Palette, Mic2,
   Image as ImageIcon, Film, Shield, MonitorSmartphone, Smartphone, Monitor, Square,
 } from 'lucide-react';
+import { VoiceSelectSection } from './voice-select-section';
 
 const ASPECT_RATIOS = [
   { label: '9:16', value: '9:16' as const, icon: Smartphone },
@@ -45,6 +46,11 @@ export function GlobalConfigPanel({ options }: { options: any }) {
         <button className="w-full rounded-lg border border-dashed py-2 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
           添加
         </button>
+      </ConfigSection>
+
+      {/* 配音声音 */}
+      <ConfigSection icon={Mic2} label="配音声音">
+        <VoiceSelectSection />
       </ConfigSection>
 
       {/* 背景音乐 */}

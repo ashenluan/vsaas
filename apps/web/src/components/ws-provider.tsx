@@ -63,10 +63,13 @@ export function useJobUpdates(jobId: string | null, onUpdate: (data: JobUpdateEv
 
   useEffect(() => {
     if (!jobId) return;
-    return subscribe('job:update', (data: JobUpdateEvent) => {
-      if (data.jobId === jobId) {
-        callbackRef.current(data);
-      }
+    // Listen to both generic job:update and mixcut-specific events
+    const unsub1 = subscribe('job:update', (data: JobUpdateEvent) => {
+      if (data.jobId === jobId) callbackRef.current(data);
     });
+    const unsub2 = subscribe('mixcut:progress', (data: any) => {
+      if (data.jobId === jobId) callbackRef.current(data);
+    });
+    return () => { unsub1(); unsub2(); };
   }, [jobId, subscribe]);
 }

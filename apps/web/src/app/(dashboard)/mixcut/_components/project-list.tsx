@@ -1,10 +1,31 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useMixcutStore, createShotGroup } from '../_store/use-mixcut-store';
-import { Plus, FileText, Trash2, Film, Clock, Layers } from 'lucide-react';
+import { ScriptImportModal } from './script-import-modal';
+import { mixcutApi } from '@/lib/api';
+import { Plus, FileText, Trash2, Film, Clock, Layers, Loader2, RefreshCw } from 'lucide-react';
+
+const STATUS_BADGES: Record<string, { label: string; className: string }> = {
+  PENDING: { label: '等待中', className: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+  PROCESSING: { label: '处理中', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+  COMPLETED: { label: '已完成', className: 'bg-green-50 text-green-700 border-green-200' },
+  FAILED: { label: '失败', className: 'bg-red-50 text-red-700 border-red-200' },
+};
 
 export function ProjectList() {
   const { setView, resetProject, loadProject } = useMixcutStore();
+  const [scriptModalOpen, setScriptModalOpen] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  const fetchProjects = () => {
+    setLoading(true);
+    mixcutApi.list().then(setProjects).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchProjects(); }, []);
 
   const handleCreate = () => {
     resetProject();
@@ -12,9 +33,63 @@ export function ProjectList() {
   };
 
   const handleCreateFromScript = () => {
-    resetProject();
-    setView('editor');
+    setScriptModalOpen(true);
   };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await mixcutApi.delete(id);
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+    } catch { /* ignore */ }
+  };
+
+  const handleOpenProject = (job: any) => {
+    const input = job.input || {};
+    if (input.isDraft && input.projectData) {
+      // Restore draft project
+      loadProject({
+        id: job.id,
+        name: input.name || job.id,
+        shotGroups: input.projectData.shotGroups || [createShotGroup('视频组_1')],
+        subtitleStyle: input.projectData.subtitleStyle || useMixcutStore.getState().subtitleStyle,
+        titleStyle: input.projectData.titleStyle || useMixcutStore.getState().titleStyle,
+        globalConfig: input.projectData.globalConfig || useMixcutStore.getState().globalConfig,
+        highlightWords: input.projectData.highlightWords || [],
+      });
+    } else {
+      // Open completed/in-progress job as read-only view
+      const shotGroups = (input.shotGroups || []).map((g: any, i: number) => {
+        const group = createShotGroup(g.name || `视频组_${i + 1}`);
+        group.materials = (g.materialUrls || []).map((url: string, j: number) => ({
+          id: `m_${i}_${j}`,
+          name: `素材_${j + 1}`,
+          type: 'VIDEO' as const,
+          url,
+        }));
+        if (g.speechTexts?.length) {
+          group.subtitles = g.speechTexts.map((t: string) => ({ text: t }));
+        }
+        return group;
+      });
+
+      loadProject({
+        id: job.id,
+        name: input.name || '混剪项目',
+        shotGroups: shotGroups.length ? shotGroups : [createShotGroup('视频组_1')],
+        subtitleStyle: input.subtitleConfig || useMixcutStore.getState().subtitleStyle,
+        titleStyle: input.titleConfig || useMixcutStore.getState().titleStyle,
+        globalConfig: useMixcutStore.getState().globalConfig,
+        highlightWords: input.highlightWords || [],
+      });
+    }
+  };
+
+  const filtered = search
+    ? projects.filter((p) => {
+        const name = p.input?.name || p.id;
+        return name.toLowerCase().includes(search.toLowerCase());
+      })
+    : projects;
 
   return (
     <div>
@@ -56,40 +131,69 @@ export function ProjectList() {
       <div>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">混剪项目</h2>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchProjects}
+              className="flex h-8 w-8 items-center justify-center rounded-md border hover:bg-accent transition-colors"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
             <input
               type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="搜索项目..."
               className="flex h-8 w-48 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
         </div>
 
-        {/* Example projects */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {['示例-自助海鲜店', '示例-室内游乐场', '示例-火锅店'].map((name, i) => (
-            <ProjectCard
-              key={i}
-              name={name}
-              resolution="1080 x 1920"
-              materialCount={[6, 8, 8][i]}
-              shotCount={4}
-              onOpen={() => {
-                // Create sample project and open editor
-                const project = {
-                  name,
-                  shotGroups: Array.from({ length: 4 }, (_, j) => createShotGroup(`视频组_${j + 1}`)),
-                  subtitleStyle: useMixcutStore.getState().subtitleStyle,
-                  titleStyle: useMixcutStore.getState().titleStyle,
-                  globalConfig: useMixcutStore.getState().globalConfig,
-                  highlightWords: [],
-                };
-                loadProject(project);
-              }}
-            />
-          ))}
-        </div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="mb-3 h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">加载项目列表...</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-xl border border-dashed bg-muted/30 p-16 text-center">
+            <Film className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">
+              {projects.length === 0 ? '还没有混剪项目，点击上方创建' : '没有匹配的项目'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((job) => {
+              const input = job.input || {};
+              const name = input.name || '混剪项目';
+              const shotGroups = input.shotGroups || input.projectData?.shotGroups || [];
+              const materialCount = shotGroups.reduce(
+                (sum: number, g: any) => sum + (g.materialUrls?.length || g.materials?.length || 0),
+                0,
+              );
+              return (
+                <ProjectCard
+                  key={job.id}
+                  name={name}
+                  status={job.status}
+                  isDraft={!!input.isDraft}
+                  resolution={input.resolution || job.input?.projectData?.globalConfig?.resolution || '—'}
+                  materialCount={materialCount}
+                  shotCount={shotGroups.length}
+                  createdAt={job.createdAt}
+                  updatedAt={job.updatedAt}
+                  onOpen={() => handleOpenProject(job)}
+                  onDelete={() => handleDelete(job.id)}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
+      <ScriptImportModal
+        open={scriptModalOpen}
+        onClose={() => setScriptModalOpen(false)}
+        mode="replace"
+      />
     </div>
   );
 }
@@ -131,18 +235,30 @@ function ActionCard({
 
 function ProjectCard({
   name,
+  status,
+  isDraft,
   resolution,
   materialCount,
   shotCount,
+  createdAt,
+  updatedAt,
   onOpen,
+  onDelete,
 }: {
   name: string;
+  status: string;
+  isDraft: boolean;
   resolution: string;
   materialCount: number;
   shotCount: number;
+  createdAt?: string;
+  updatedAt?: string;
   onOpen: () => void;
+  onDelete: () => void;
 }) {
-  const now = new Date().toLocaleString('zh-CN');
+  const badge = isDraft
+    ? { label: '草稿', className: 'bg-gray-50 text-gray-600 border-gray-200' }
+    : STATUS_BADGES[status] || STATUS_BADGES.PENDING;
 
   return (
     <div
@@ -150,9 +266,14 @@ function ProjectCard({
       className="group cursor-pointer rounded-xl border bg-card p-4 shadow-sm transition-all duration-200 hover:border-primary/50 hover:shadow-md"
     >
       <div className="mb-3 flex items-start justify-between">
-        <h3 className="text-sm font-semibold group-hover:text-primary transition-colors">{name}</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold group-hover:text-primary transition-colors truncate">{name}</h3>
+          <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-medium ${badge.className}`}>
+            {badge.label}
+          </span>
+        </div>
         <button
-          onClick={(e) => { e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="rounded p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 transition-all"
         >
           <Trash2 size={14} />
@@ -160,18 +281,22 @@ function ProjectCard({
       </div>
 
       <div className="space-y-1.5 text-[11px] text-muted-foreground">
-        <div className="flex items-center gap-1.5">
-          <Clock size={10} /> 创建时间：{now}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Clock size={10} /> 更新时间：{now}
-        </div>
+        {createdAt && (
+          <div className="flex items-center gap-1.5">
+            <Clock size={10} /> 创建：{new Date(createdAt).toLocaleString('zh-CN')}
+          </div>
+        )}
+        {updatedAt && (
+          <div className="flex items-center gap-1.5">
+            <Clock size={10} /> 更新：{new Date(updatedAt).toLocaleString('zh-CN')}
+          </div>
+        )}
         <div className="flex gap-4 pt-1">
-          <span>画面比例：{resolution}</span>
+          <span>分辨率：{resolution}</span>
         </div>
         <div className="flex gap-4">
-          <span>素材数量：{materialCount}</span>
-          <span>镜头数量：{shotCount}</span>
+          <span>素材：{materialCount}</span>
+          <span>镜头：{shotCount}</span>
         </div>
       </div>
     </div>

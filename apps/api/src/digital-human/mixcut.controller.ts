@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   Post,
+  Put,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -19,6 +21,16 @@ export class MixcutController {
   @Post()
   create(@Req() req: any, @Body() body: CreateMixcutDto) {
     return this.service.createMixcutJob(req.user.sub, body);
+  }
+
+  @Put('draft')
+  saveDraft(@Req() req: any, @Body() body: any) {
+    return this.service.saveMixcutDraft(req.user.sub, body);
+  }
+
+  @Delete(':id')
+  remove(@Req() req: any, @Param('id') id: string) {
+    return this.service.deleteMixcutProject(req.user.sub, id);
   }
 
   @Get()

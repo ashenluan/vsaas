@@ -2,13 +2,24 @@
 
 import { useState } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
+import { useJobUpdates } from '@/components/ws-provider';
 import { mixcutApi } from '@/lib/api';
-import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 
 export function PreviewPanel() {
   const { project, subtitleStyle, titleStyle, globalConfig, highlightWords } = useMixcutStore();
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; jobId?: string; error?: string } | null>(null);
+  const [progress, setProgress] = useState<{ status?: string; progress?: number; message?: string } | null>(null);
+
+  // Real-time progress via WebSocket
+  useJobUpdates(result?.jobId || null, (data: any) => {
+    setProgress({
+      status: data.status,
+      progress: data.progress,
+      message: data.message || '',
+    });
+  });
 
   // Estimate total combinations
   const shotCombinations = project.shotGroups.reduce((acc, group) => {
@@ -53,6 +64,8 @@ export function PreviewPanel() {
         speechMode: hasGroupSpeech ? 'group' as const : undefined,
         videoCount: estimatedCount,
         resolution: globalConfig.resolution,
+        // Voice
+        ...((globalConfig as any).voiceId && { voiceId: (globalConfig as any).voiceId }),
         // Background music
         ...(globalConfig.bgMusic && { bgMusic: globalConfig.bgMusic }),
         ...(globalConfig.bgMusicVolume !== 0.2 && { bgMusicVolume: globalConfig.bgMusicVolume }),
@@ -117,7 +130,7 @@ export function PreviewPanel() {
   };
 
   return (
-    <div className="space-y-4">
+    <div id="mixcut-preview-panel" className="space-y-4">
       <div>
         <h3 className="flex items-center gap-2 text-sm font-semibold">
           <Eye size={14} /> 配置预览
@@ -207,12 +220,41 @@ export function PreviewPanel() {
             : 'border-red-200 bg-red-50 text-red-700'
         }`}>
           {result.success ? (
-            <div className="flex items-center gap-2">
-              <CheckCircle size={14} />
-              <div>
-                <p className="font-medium">任务已提交</p>
-                <p className="text-[10px] opacity-80">任务ID: {result.jobId}</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={14} />
+                <div>
+                  <p className="font-medium">任务已提交</p>
+                  <p className="text-[10px] opacity-80">任务ID: {result.jobId}</p>
+                </div>
               </div>
+              {/* Real-time progress */}
+              {progress && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="flex items-center gap-1">
+                      {progress.status === 'COMPLETED' ? (
+                        <CheckCircle size={12} />
+                      ) : progress.status === 'FAILED' ? (
+                        <AlertCircle size={12} className="text-red-500" />
+                      ) : (
+                        <RefreshCw size={12} className="animate-spin" />
+                      )}
+                      {progress.status === 'COMPLETED' ? '已完成' : progress.status === 'FAILED' ? '失败' : '处理中'}
+                    </span>
+                    <span className="tabular-nums">{progress.progress ?? 0}%</span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-green-200">
+                    <div
+                      className="h-full rounded-full bg-green-600 transition-all duration-500"
+                      style={{ width: `${progress.progress ?? 0}%` }}
+                    />
+                  </div>
+                  {progress.message && (
+                    <p className="text-[10px] opacity-70">{progress.message}</p>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2">

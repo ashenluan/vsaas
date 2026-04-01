@@ -293,6 +293,9 @@ export const mixcutApi = {
     apiFetch('/mixcut', { method: 'POST', body: JSON.stringify(data) }),
   list: () => apiFetch<any[]>('/mixcut'),
   get: (id: string) => apiFetch(`/mixcut/${id}`),
+  saveDraft: (data: { id?: string; name: string; projectData: any }) =>
+    apiFetch('/mixcut/draft', { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => apiFetch(`/mixcut/${id}`, { method: 'DELETE' }),
   getOptions: () => apiFetch<{
     transitions: string[];
     effects: Record<string, string[]>;

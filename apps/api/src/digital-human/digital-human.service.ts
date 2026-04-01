@@ -403,6 +403,44 @@ export class DigitalHumanService {
     return job;
   }
 
+  async saveMixcutDraft(
+    userId: string,
+    data: { id?: string; name: string; projectData: any },
+  ) {
+    if (data.id) {
+      // Update existing draft
+      const existing = await this.prisma.generation.findFirst({
+        where: { id: data.id, userId, type: 'BATCH_COMPOSE' },
+      });
+      if (!existing) throw new NotFoundException('混剪项目不存在');
+      return this.prisma.generation.update({
+        where: { id: data.id },
+        data: {
+          input: { mode: 'mixcut', isDraft: true, name: data.name, ...data.projectData },
+        },
+      });
+    }
+    // Create new draft
+    return this.prisma.generation.create({
+      data: {
+        userId,
+        type: 'BATCH_COMPOSE',
+        status: 'PENDING',
+        provider: 'aliyun-ims',
+        input: { mode: 'mixcut', isDraft: true, name: data.name, ...data.projectData },
+      },
+    });
+  }
+
+  async deleteMixcutProject(userId: string, id: string) {
+    const job = await this.prisma.generation.findFirst({
+      where: { id, userId, type: 'BATCH_COMPOSE' },
+    });
+    if (!job) throw new NotFoundException('混剪项目不存在');
+    await this.prisma.generation.delete({ where: { id } });
+    return { success: true };
+  }
+
   async createMixcutJob(
     userId: string,
     data: {

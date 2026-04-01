@@ -70,6 +70,7 @@ export interface GlobalConfig {
   resolution: '1080x1920' | '720x1280' | '1920x1080' | '1280x720' | '1080x1080' | '720x720';
   coverType: 'auto' | 'custom';
   coverUrl: string;
+  voiceId?: string;
 }
 
 export type MixcutView = 'list' | 'editor';
@@ -155,6 +156,7 @@ interface MixcutState {
   // Current project
   project: MixcutProject;
   setProjectName: (name: string) => void;
+  setProjectId: (id: string) => void;
 
   // Shot groups
   addShotGroup: () => void;
@@ -210,6 +212,8 @@ export const useMixcutStore = create<MixcutState>()(
       project: { ...initialProject },
       setProjectName: (name) =>
         set((s) => ({ project: { ...s.project, name } })),
+      setProjectId: (id) =>
+        set((s) => ({ project: { ...s.project, id } })),
 
       // Shot groups
       addShotGroup: () =>

@@ -1,11 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { ShotGroupCard } from './shot-group-card';
 import { GlobalConfigPanel } from './global-config-panel';
 import { PreviewPanel } from './preview-panel';
 import { SubtitleDrawer } from './subtitle-drawer';
-import { ArrowLeft, Save, Play, Sparkles, Plus } from 'lucide-react';
+import { ScriptImportModal } from './script-import-modal';
+import { mixcutApi } from '@/lib/api';
+import { ArrowLeft, Save, Play, Sparkles, Plus, Loader2, Check, Film } from 'lucide-react';
 
 export function MixcutEditor({
   options,
@@ -16,7 +19,49 @@ export function MixcutEditor({
   allMaterials: any[];
   onMaterialAdd: (m: any) => void;
 }) {
-  const { project, setProjectName, setView, activeDrawer, closeDrawer } = useMixcutStore();
+  const { project, setProjectName, setView, activeDrawer, closeDrawer, subtitleStyle, titleStyle, globalConfig, highlightWords } = useMixcutStore();
+  const setProjectId = useMixcutStore((s) => s.setProjectId);
+  const [scriptModalOpen, setScriptModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const result = await mixcutApi.saveDraft({
+        id: project.id,
+        name: project.name,
+        projectData: {
+          shotGroups: project.shotGroups,
+          subtitleStyle,
+          titleStyle,
+          globalConfig,
+          highlightWords,
+        },
+      });
+      // Write back the ID so subsequent saves update the same record
+      if (result?.id && !project.id) {
+        setProjectId(result.id);
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch { /* ignore */ }
+    setSaving(false);
+  };
+
+  const handleDedup = () => {
+    const store = useMixcutStore.getState();
+    const updated = store.project.shotGroups.map((group) => {
+      const seen = new Set<string>();
+      const deduped = group.materials.filter((m) => {
+        if (seen.has(m.url)) return false;
+        seen.add(m.url);
+        return true;
+      });
+      return { ...group, materials: deduped };
+    });
+    updated.forEach((g) => store.updateShotGroup(g.id, { materials: g.materials }));
+  };
 
   return (
     <div className="relative">
@@ -37,13 +82,27 @@ export function MixcutEditor({
           />
         </div>
         <div className="flex items-center gap-2">
-          <button className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium hover:bg-accent transition-colors">
+          <button
+            onClick={handleDedup}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium hover:bg-accent transition-colors"
+          >
             <Sparkles size={12} /> 智能去重
           </button>
-          <button className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium hover:bg-accent transition-colors">
-            <Save size={12} /> 保存混剪项目
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium hover:bg-accent disabled:opacity-50 transition-colors"
+          >
+            {saving ? <Loader2 size={12} className="animate-spin" /> : saved ? <Check size={12} className="text-green-600" /> : <Save size={12} />}
+            {saving ? '保存中...' : saved ? '已保存' : '保存混剪项目'}
           </button>
-          <button className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors">
+          <button
+            onClick={() => {
+              const el = document.getElementById('mixcut-preview-panel');
+              el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+          >
             <Play size={12} /> 视频混剪预览
           </button>
         </div>
@@ -66,7 +125,10 @@ export function MixcutEditor({
                 <button className="rounded-md border px-2.5 py-1 text-[11px] text-primary hover:bg-primary/5 transition-colors">
                   AI写作助手
                 </button>
-                <button className="rounded-md border px-2.5 py-1 text-[11px] hover:bg-accent transition-colors">
+                <button
+                  onClick={() => setScriptModalOpen(true)}
+                  className="rounded-md border px-2.5 py-1 text-[11px] hover:bg-accent transition-colors"
+                >
                   导入脚本
                 </button>
               </div>
@@ -82,6 +144,14 @@ export function MixcutEditor({
             />
           ))}
 
+          {project.shotGroups.length === 0 && (
+            <div className="rounded-xl border-2 border-dashed border-input bg-muted/30 p-8 text-center">
+              <Film size={32} className="mx-auto mb-3 text-muted-foreground/40" />
+              <p className="text-sm font-medium text-muted-foreground">还没有镜头组</p>
+              <p className="mt-1 text-[11px] text-muted-foreground/70">点击下方「+ 新增镜头组」开始，或使用「导入脚本」快速创建</p>
+            </div>
+          )}
+
           <AddShotButton />
         </div>
 
@@ -95,6 +165,13 @@ export function MixcutEditor({
           <PreviewPanel />
         </div>
       </div>
+
+      {/* Script Import Modal */}
+      <ScriptImportModal
+        open={scriptModalOpen}
+        onClose={() => setScriptModalOpen(false)}
+        mode="append"
+      />
 
       {/* Subtitle Drawer */}
       {activeDrawer?.type === 'subtitle' && (
