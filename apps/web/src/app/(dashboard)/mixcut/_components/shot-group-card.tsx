@@ -41,6 +41,7 @@ export function ShotGroupCard({
   const [collapsed, setCollapsed] = useState(false);
   const [previewMaterial, setPreviewMaterial] = useState<ShotMaterial | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showEffects, setShowEffects] = useState(false);
 
   const matSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -289,9 +290,18 @@ export function ShotGroupCard({
       {!collapsed && <div className="flex border-t">
         <ActionBtn icon={Type} label="字幕配音&标题" onClick={() => openDrawer('subtitle', group.id)} />
         <ActionBtn icon={Wand2} label="智能混剪" sublabel="随音频，视频智能截取" />
-        <ActionBtn icon={Sparkles} label="场景特效" />
+        <ActionBtn icon={Sparkles} label="场景特效" onClick={() => setShowEffects(!showEffects)} />
         <ActionBtn icon={Sticker} label="贴纸" />
       </div>}
+
+      {/* Scene effects panel */}
+      {!collapsed && showEffects && (
+        <SceneEffectsPanel
+          group={group}
+          onUpdate={(partial) => updateShotGroup(group.id, partial)}
+          onClose={() => setShowEffects(false)}
+        />
+      )}
     </div>
   );
 }
@@ -362,4 +372,103 @@ function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}:${String(Math.floor((seconds % 1) * 100)).padStart(2, '0')}`;
+}
+
+/* ========== Scene Effects Panel ========== */
+
+const SCENE_EFFECTS = [
+  { id: 'shake', label: '抖动', description: '画面轻微抖动' },
+  { id: 'zoom_in', label: '放大', description: '镜头缓慢推进' },
+  { id: 'zoom_out', label: '缩小', description: '镜头缓慢拉远' },
+  { id: 'rotate', label: '旋转', description: '画面旋转效果' },
+  { id: 'blur_in', label: '模糊进入', description: '从模糊到清晰' },
+  { id: 'blur_out', label: '模糊退出', description: '从清晰到模糊' },
+  { id: 'flash', label: '闪白', description: '白色闪烁效果' },
+  { id: 'glitch', label: '故障', description: '数字故障风' },
+  { id: 'vignette', label: '暗角', description: '边缘暗角效果' },
+  { id: 'film_grain', label: '胶片颗粒', description: '复古胶片质感' },
+  { id: 'light_leak', label: '漏光', description: '光晕漏光效果' },
+  { id: 'slow_motion', label: '慢动作', description: '画面减速播放' },
+];
+
+function SceneEffectsPanel({
+  group,
+  onUpdate,
+  onClose,
+}: {
+  group: ShotGroup;
+  onUpdate: (partial: Partial<ShotGroup>) => void;
+  onClose: () => void;
+}) {
+  const toggleEffect = (effectId: string) => {
+    const current = group.effectList || [];
+    const next = current.includes(effectId)
+      ? current.filter((e) => e !== effectId)
+      : [...current, effectId];
+    onUpdate({ effectList: next, effectEnabled: next.length > 0 });
+  };
+
+  const handleSmartMatch = () => {
+    const shuffled = [...SCENE_EFFECTS].sort(() => Math.random() - 0.5);
+    const picked = shuffled.slice(0, 2 + Math.floor(Math.random() * 3)).map((e) => e.id);
+    onUpdate({ effectList: picked, effectEnabled: true });
+  };
+
+  const handleClearAll = () => {
+    onUpdate({ effectList: [], effectEnabled: false });
+  };
+
+  return (
+    <div className="border-t px-4 py-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[12px] font-medium">场景特效</span>
+        <div className="flex gap-1.5">
+          <button
+            onClick={handleSmartMatch}
+            className="rounded border px-2 py-0.5 text-[10px] text-primary hover:bg-primary/5 transition-colors"
+          >
+            <Sparkles size={10} className="inline mr-0.5" /> 智能匹配
+          </button>
+          {(group.effectList?.length || 0) > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="rounded border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent transition-colors"
+            >
+              清空
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {SCENE_EFFECTS.map((effect) => {
+          const active = group.effectList?.includes(effect.id);
+          return (
+            <button
+              key={effect.id}
+              onClick={() => toggleEffect(effect.id)}
+              title={effect.description}
+              className={`rounded-md border px-2.5 py-1.5 text-[11px] transition-all ${
+                active
+                  ? 'border-primary bg-primary/10 text-primary font-medium'
+                  : 'border-input hover:bg-accent text-muted-foreground'
+              }`}
+            >
+              {effect.label}
+            </button>
+          );
+        })}
+      </div>
+      {(group.effectList?.length || 0) > 0 && (
+        <p className="mt-1.5 text-[10px] text-muted-foreground">
+          已选 {group.effectList.length} 个特效，将随机应用到该镜头组的视频片段
+        </p>
+      )}
+    </div>
+  );
 }

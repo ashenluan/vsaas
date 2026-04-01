@@ -180,6 +180,8 @@ function SubtitleContent({
   const [rewriteResults, setRewriteResults] = useState<{ index: number; variants: string[] } | null>(null);
   const [riskLoading, setRiskLoading] = useState<number | null>(null);
   const [riskResults, setRiskResults] = useState<{ index: number; safe: boolean; risks: { word: string; reason: string }[] } | null>(null);
+  const [showCopyLib, setShowCopyLib] = useState(false);
+  const [copyLibCategory, setCopyLibCategory] = useState('促销');
 
   const handleRewrite = async (index: number) => {
     const text = subtitles[index]?.text;
@@ -216,12 +218,38 @@ function SubtitleContent({
           <button className="rounded border px-2.5 py-1 text-[11px] text-primary border-primary/30 bg-primary/5">手动设置字幕</button>
           <button className="rounded border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-accent">音频生成字幕</button>
           <button className="rounded border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-accent">重点词管理</button>
-          <button className="rounded border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-accent">文案库选择</button>
+          <button
+            onClick={() => setShowCopyLib(!showCopyLib)}
+            className={`rounded border px-2.5 py-1 text-[11px] transition-colors ${showCopyLib ? 'border-primary/30 bg-primary/5 text-primary' : 'text-muted-foreground hover:bg-accent'}`}
+          >
+            文案库选择
+          </button>
           <button className="rounded border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-accent">
             <Wand2 size={10} className="inline mr-0.5" /> 文案仿写
           </button>
         </div>
       </div>
+
+      {/* Copy library panel */}
+      {showCopyLib && (
+        <CopywritingLibrary
+          category={copyLibCategory}
+          onCategoryChange={setCopyLibCategory}
+          onSelect={(text) => {
+            onAdd();
+            // Delay to allow new subtitle to be created, then update it
+            setTimeout(() => {
+              const store = useMixcutStore.getState();
+              const shot = store.project.shotGroups.find((g) => g.id === shotId);
+              if (shot) {
+                const lastIdx = shot.subtitles.length - 1;
+                if (lastIdx >= 0) store.updateSubtitleInShot(shotId, lastIdx, { text });
+              }
+            }, 50);
+          }}
+          onClose={() => setShowCopyLib(false)}
+        />
+      )}
 
       {/* Subtitles list */}
       <div className="space-y-3">
@@ -429,6 +457,74 @@ function SubtitleStyleTab({
         </div>
       )}
 
+      {/* 气泡字开关 */}
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-medium">气泡字随机</span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => onUpdate({ bubbleStyleId: '' })}
+            className={`rounded px-2 py-0.5 text-[11px] ${!style.bubbleStyleId ? 'bg-primary text-primary-foreground' : 'border'}`}
+          >
+            关
+          </button>
+          <button
+            onClick={() => onUpdate({ bubbleStyleId: bubbleStyles[0] || 'random' })}
+            className={`rounded px-2 py-0.5 text-[11px] ${style.bubbleStyleId ? 'bg-primary text-primary-foreground' : 'border'}`}
+          >
+            开
+          </button>
+        </div>
+      </div>
+
+      {/* Bubble text styles */}
+      {style.bubbleStyleId && bubbleStyles.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] text-muted-foreground">选择气泡字样式</div>
+          <div className="flex flex-wrap gap-1.5">
+            {bubbleStyles.map((id: string) => (
+              <button
+                key={id}
+                onClick={() => onUpdate({ bubbleStyleId: id })}
+                className={`rounded-md border px-2 py-1 text-[10px] transition-all ${
+                  style.bubbleStyleId === id
+                    ? 'border-primary bg-primary/10 text-primary font-medium'
+                    : 'border-input hover:bg-accent'
+                }`}
+              >
+                {id.replace('BS000', '气泡')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Outline settings */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-[10px] text-muted-foreground">描边宽度</label>
+          <input
+            type="number"
+            min={0}
+            max={10}
+            value={style.outline}
+            onChange={(e) => onUpdate({ outline: Number(e.target.value) })}
+            className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-[11px]"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[10px] text-muted-foreground">描边颜色</label>
+          <div className="flex gap-1.5">
+            <input
+              type="color"
+              value={style.outlineColour}
+              onChange={(e) => onUpdate({ outlineColour: e.target.value })}
+              className="h-8 w-10 cursor-pointer rounded border p-0.5"
+            />
+            <span className="flex items-center text-[10px] font-mono text-muted-foreground">{style.outlineColour}</span>
+          </div>
+        </div>
+      </div>
+
       {/* Font settings */}
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -583,6 +679,109 @@ function TitleTab({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/* ========== Copywriting Template Library ========== */
+
+const COPY_TEMPLATES: Record<string, { title: string; text: string }[]> = {
+  '促销': [
+    { title: '限时优惠', text: '限时特惠来啦！原价XXX，现在只要XXX！数量有限，先到先得，手慢无！' },
+    { title: '新品上市', text: '全新升级，重磅来袭！我们精心打磨了这款新品，只为给你最好的体验。' },
+    { title: '买一送一', text: '买一送一！没有套路，就是实实在在的福利！快来抢购吧，错过再等一年！' },
+    { title: '清仓甩卖', text: '清仓大甩卖！全场低至X折，库存见底，卖完即止！赶紧来捡漏！' },
+    { title: '满减活动', text: '满XXX减XXX，越买越划算！凑单攻略已经帮你整理好了，闭眼入不踩雷！' },
+  ],
+  '种草': [
+    { title: '好物推荐', text: '用了一个月，真的回购了三次！这个宝藏好物必须安利给你们！' },
+    { title: '测评分享', text: '全网最火的XXX，到底值不值得买？今天给大家做一个真实测评！' },
+    { title: '平替推荐', text: '大牌平替来了！只要十分之一的价格，效果却不输大牌！' },
+    { title: '合集推荐', text: '这几款神器我真的离不开了！每一个都是精挑细选，闭眼入！' },
+  ],
+  '知识': [
+    { title: '科普讲解', text: '你知道吗？其实很多人都不了解这个小知识，今天就来给大家科普一下！' },
+    { title: '干货分享', text: '整理了X个超实用的技巧，每一个都能帮你省时省力，建议收藏！' },
+    { title: '误区纠正', text: '注意！这个你一直以为对的做法，其实是错的！正确的方法应该是……' },
+    { title: '行业揭秘', text: '行业内部人员告诉你，这些不为人知的内幕，看完你就明白了！' },
+  ],
+  '情感': [
+    { title: '励志鸡汤', text: '生活总会有不如意的时候，但请相信，所有的努力都不会白费。' },
+    { title: '情感共鸣', text: '有没有那么一瞬间，你突然觉得自己很累？其实你不必那么坚强。' },
+    { title: '人生感悟', text: '走过了这么多路，才明白最珍贵的不是沿途的风景，而是陪你看风景的人。' },
+  ],
+  '生活': [
+    { title: '日常分享', text: '今天的一日三餐分享！简单又美味的家常菜，跟着做就行！' },
+    { title: '收纳整理', text: '换季收纳小技巧！学会这几招，再小的房间也能井井有条！' },
+    { title: '出行攻略', text: '去XXX旅游一定要看这篇攻略！帮你避开所有坑，省钱又省心！' },
+  ],
+  'Vlog': [
+    { title: '日常Vlog', text: '记录今天的生活，平凡却幸福的一天。来看看我的日常吧！' },
+    { title: '挑战Vlog', text: '挑战XXX！这真的太难了，但我决定试一试，最后的结果连我自己都没想到！' },
+    { title: '探店Vlog', text: '打卡了一家超火的XXX店！到底是名不虚传还是言过其实？跟我来看看！' },
+  ],
+};
+
+function CopywritingLibrary({
+  category,
+  onCategoryChange,
+  onSelect,
+  onClose,
+}: {
+  category: string;
+  onCategoryChange: (c: string) => void;
+  onSelect: (text: string) => void;
+  onClose: () => void;
+}) {
+  const categories = Object.keys(COPY_TEMPLATES);
+  const templates = COPY_TEMPLATES[category] || [];
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[12px] font-medium">文案库</span>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <X size={14} />
+        </button>
+      </div>
+
+      {/* Category tabs */}
+      <div className="mb-2.5 flex flex-wrap gap-1.5">
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => onCategoryChange(cat)}
+            className={`rounded-md border px-2.5 py-1 text-[11px] transition-all ${
+              category === cat
+                ? 'border-primary bg-primary/10 text-primary font-medium'
+                : 'border-input hover:bg-accent'
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* Templates */}
+      <div className="max-h-48 space-y-1.5 overflow-y-auto">
+        {templates.map((tpl, i) => (
+          <div
+            key={i}
+            className="group flex items-start gap-2 rounded-md border bg-card p-2 hover:border-primary/30 transition-colors"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-medium text-foreground mb-0.5">{tpl.title}</p>
+              <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">{tpl.text}</p>
+            </div>
+            <button
+              onClick={() => onSelect(tpl.text)}
+              className="shrink-0 rounded border px-2 py-1 text-[10px] text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              使用
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
