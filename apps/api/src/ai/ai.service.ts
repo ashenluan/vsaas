@@ -250,6 +250,100 @@ export class AiService {
     }
   }
 
+  async transcribeAudio(audioUrl: string): Promise<{ texts: string[] }> {
+    if (!this.apiKey) {
+      return { texts: ['未配置 API Key'] };
+    }
+
+    try {
+      // Step 1: Submit transcription task
+      const submitRes = await fetch(
+        'https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+            'X-DashScope-Async': 'enable',
+          },
+          body: JSON.stringify({
+            model: 'paraformer-v2',
+            input: { file_urls: [audioUrl] },
+            parameters: {
+              language_hints: ['zh', 'en'],
+              disfluency_removal_enabled: true,
+            },
+          }),
+        },
+      );
+
+      if (!submitRes.ok) {
+        const err = await submitRes.text();
+        this.logger.error(`ASR submit error: ${submitRes.status} ${err}`);
+        return { texts: ['语音识别提交失败'] };
+      }
+
+      const submitData: any = await submitRes.json();
+      const taskId = submitData.output?.task_id;
+      if (!taskId) {
+        this.logger.error('ASR submit returned no task_id');
+        return { texts: ['语音识别提交失败'] };
+      }
+
+      // Step 2: Poll for result (max 120s)
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+
+        const queryRes = await fetch(
+          `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`,
+          {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${this.apiKey}` },
+          },
+        );
+
+        if (!queryRes.ok) continue;
+
+        const queryData: any = await queryRes.json();
+        const status = queryData.output?.task_status;
+
+        if (status === 'SUCCEEDED') {
+          // Extract transcribed text from results
+          const results = queryData.output?.results || [];
+          const texts: string[] = [];
+          for (const result of results) {
+            const transcriptionUrl = result.transcription_url;
+            if (!transcriptionUrl) continue;
+            try {
+              const transRes = await fetch(transcriptionUrl);
+              const transData: any = await transRes.json();
+              const transcripts = transData.transcripts || [];
+              for (const t of transcripts) {
+                const sentences = t.sentences || [];
+                for (const s of sentences) {
+                  if (s.text) texts.push(s.text);
+                }
+              }
+            } catch (e) {
+              this.logger.error(`Failed to fetch transcription result: ${e}`);
+            }
+          }
+          return { texts: texts.length > 0 ? texts : ['识别完成但未获取到文字'] };
+        }
+
+        if (status === 'FAILED') {
+          this.logger.error(`ASR task failed: ${JSON.stringify(queryData.output)}`);
+          return { texts: ['语音识别失败'] };
+        }
+      }
+
+      return { texts: ['语音识别超时'] };
+    } catch (err) {
+      this.logger.error(`transcribeAudio failed: ${err}`);
+      return { texts: ['语音识别失败'] };
+    }
+  }
+
   async polishPrompt(
     prompt: string,
     type: 'image' | 'video' = 'image',

@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useMixcutStore, type ShotGroup, type ShotMaterial } from '../_store/use-mixcut-store';
 import { materialApi } from '@/lib/api';
 import { uploadToOSS } from '@/lib/upload';
 import {
   ImagePlus, Film, Image as ImageIcon, X, GripVertical,
   Type, Wand2, Sparkles, Sticker, Volume2, VolumeX, Trash2,
-  Copy, ChevronDown, ChevronRight,
+  Copy, ChevronDown, ChevronRight, Loader2,
 } from 'lucide-react';
 import {
   DndContext,
@@ -171,7 +171,7 @@ export function ShotGroupCard({
             onClick={() => setShowHotMaterials(!showHotMaterials)}
             className={`rounded-md border px-2.5 py-1.5 text-[11px] transition-colors ${showHotMaterials ? 'border-primary/30 bg-primary/5 text-primary' : 'text-muted-foreground hover:bg-accent'}`}
           >
-            热门素材
+            素材库
           </button>
           <button
             onClick={() => setShowMaterialPicker(!showMaterialPicker)}
@@ -305,7 +305,7 @@ export function ShotGroupCard({
       {/* Action buttons */}
       {!collapsed && <div className="flex border-t">
         <ActionBtn icon={Type} label="字幕配音&标题" onClick={() => openDrawer('subtitle', group.id)} />
-        <ActionBtn icon={Wand2} label="智能混剪" sublabel="随音频，视频智能截取" />
+        <ActionBtn icon={Wand2} label="智能混剪" sublabel={group.smartTrim ? '已开启' : '随音频，视频智能截取'} onClick={() => updateShotGroup(group.id, { smartTrim: !group.smartTrim })} active={group.smartTrim} />
         <ActionBtn icon={Sparkles} label="场景特效" onClick={() => setShowEffects(!showEffects)} />
         <ActionBtn icon={Sticker} label="贴纸" onClick={() => setShowStickers(!showStickers)} />
       </div>}
@@ -381,11 +381,13 @@ function SortableMaterialThumb({ material, onRemove, onPreview, selected, onTogg
   );
 }
 
-function ActionBtn({ icon: Icon, label, sublabel, onClick }: { icon: any; label: string; sublabel?: string; onClick?: () => void }) {
+function ActionBtn({ icon: Icon, label, sublabel, onClick, active }: { icon: any; label: string; sublabel?: string; onClick?: () => void; active?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-1 items-center justify-center gap-1.5 border-r py-2.5 text-[11px] text-muted-foreground last:border-r-0 hover:bg-accent hover:text-foreground transition-colors"
+      className={`flex flex-1 items-center justify-center gap-1.5 border-r py-2.5 text-[11px] last:border-r-0 hover:bg-accent hover:text-foreground transition-colors ${
+        active ? 'text-primary bg-primary/5 font-medium' : 'text-muted-foreground'
+      }`}
     >
       <Icon size={12} />
       <span>{label}</span>
@@ -401,68 +403,11 @@ function formatDuration(seconds: number) {
 
 /* ========== Hot Materials Panel ========== */
 
-const HOT_CATEGORIES = [
-  { id: 'scenery', label: '风景', emoji: '🏔️' },
-  { id: 'food', label: '美食', emoji: '🍜' },
-  { id: 'people', label: '人物', emoji: '👤' },
-  { id: 'city', label: '城市', emoji: '🏙️' },
-  { id: 'nature', label: '自然', emoji: '🌿' },
-  { id: 'tech', label: '科技', emoji: '💻' },
-  { id: 'sport', label: '运动', emoji: '⚽' },
-  { id: 'abstract', label: '抽象', emoji: '🎨' },
+const MATERIAL_FILTERS = [
+  { id: 'all', label: '全部', emoji: '📁' },
+  { id: 'VIDEO', label: '视频', emoji: '🎬' },
+  { id: 'IMAGE', label: '图片', emoji: '🖼️' },
 ];
-
-const HOT_MATERIALS: Record<string, { name: string; type: 'IMAGE' | 'VIDEO'; tag: string }[]> = {
-  scenery: [
-    { name: '日落海滩', type: 'VIDEO', tag: '热门' },
-    { name: '雪山云海', type: 'VIDEO', tag: '推荐' },
-    { name: '樱花小道', type: 'IMAGE', tag: '热门' },
-    { name: '星空延时', type: 'VIDEO', tag: '精选' },
-    { name: '草原风光', type: 'IMAGE', tag: '' },
-    { name: '瀑布飞流', type: 'VIDEO', tag: '推荐' },
-  ],
-  food: [
-    { name: '火锅特写', type: 'VIDEO', tag: '热门' },
-    { name: '咖啡拉花', type: 'VIDEO', tag: '推荐' },
-    { name: '日式料理', type: 'IMAGE', tag: '' },
-    { name: '烘焙过程', type: 'VIDEO', tag: '精选' },
-    { name: '水果摆盘', type: 'IMAGE', tag: '热门' },
-  ],
-  people: [
-    { name: '街头抓拍', type: 'IMAGE', tag: '推荐' },
-    { name: '舞蹈片段', type: 'VIDEO', tag: '热门' },
-    { name: '办公场景', type: 'VIDEO', tag: '' },
-    { name: '健身训练', type: 'VIDEO', tag: '精选' },
-  ],
-  city: [
-    { name: '霓虹夜景', type: 'VIDEO', tag: '热门' },
-    { name: '地铁人流', type: 'VIDEO', tag: '' },
-    { name: '航拍城市', type: 'VIDEO', tag: '推荐' },
-    { name: '建筑仰拍', type: 'IMAGE', tag: '精选' },
-  ],
-  nature: [
-    { name: '雨滴特写', type: 'VIDEO', tag: '推荐' },
-    { name: '花开延时', type: 'VIDEO', tag: '热门' },
-    { name: '海浪翻涌', type: 'VIDEO', tag: '' },
-    { name: '秋叶飘落', type: 'VIDEO', tag: '精选' },
-  ],
-  tech: [
-    { name: '代码滚动', type: 'VIDEO', tag: '推荐' },
-    { name: '芯片特写', type: 'IMAGE', tag: '热门' },
-    { name: '数据可视化', type: 'VIDEO', tag: '' },
-  ],
-  sport: [
-    { name: '篮球扣篮', type: 'VIDEO', tag: '热门' },
-    { name: '跑步慢动作', type: 'VIDEO', tag: '推荐' },
-    { name: '游泳入水', type: 'VIDEO', tag: '精选' },
-  ],
-  abstract: [
-    { name: '粒子动画', type: 'VIDEO', tag: '热门' },
-    { name: '渐变色彩', type: 'IMAGE', tag: '' },
-    { name: '几何图形', type: 'VIDEO', tag: '推荐' },
-    { name: '流体动画', type: 'VIDEO', tag: '精选' },
-  ],
-};
 
 function HotMaterialsPanel({
   onAdd,
@@ -471,70 +416,81 @@ function HotMaterialsPanel({
   onAdd: (mat: ShotMaterial) => void;
   onClose: () => void;
 }) {
-  const [category, setCategory] = useState('scenery');
-  const materials = HOT_MATERIALS[category] || [];
+  const [filter, setFilter] = useState('all');
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const type = filter === 'all' ? undefined : filter;
+    materialApi.list(type).then(setMaterials).catch(() => setMaterials([])).finally(() => setLoading(false));
+  }, [filter]);
 
   return (
     <div className="mb-3 rounded-lg border bg-muted/30 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[12px] font-medium">🔥 热门素材推荐</span>
+        <span className="text-[12px] font-medium">📂 素材库</span>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
           <X size={14} />
         </button>
       </div>
 
       <div className="mb-2 flex flex-wrap gap-1">
-        {HOT_CATEGORIES.map((cat) => (
+        {MATERIAL_FILTERS.map((f) => (
           <button
-            key={cat.id}
-            onClick={() => setCategory(cat.id)}
+            key={f.id}
+            onClick={() => setFilter(f.id)}
             className={`rounded-md border px-2 py-0.5 text-[10px] transition-all ${
-              category === cat.id
+              filter === f.id
                 ? 'border-primary bg-primary/10 text-primary font-medium'
                 : 'border-input hover:bg-accent'
             }`}
           >
-            {cat.emoji} {cat.label}
+            {f.emoji} {f.label}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-1.5">
-        {materials.map((mat, i) => (
-          <button
-            key={i}
-            onClick={() => onAdd({
-              id: `hot_${category}_${i}_${Date.now()}`,
-              name: mat.name,
-              type: mat.type,
-              url: `/api/placeholder/${mat.type === 'VIDEO' ? 'video' : 'image'}/${category}/${i}`,
-              duration: mat.type === 'VIDEO' ? 5 : 3,
-            })}
-            className="group relative overflow-hidden rounded-md border hover:border-primary/50 transition-colors"
-          >
-            <div className="flex aspect-video items-center justify-center bg-muted">
-              {mat.type === 'VIDEO' ? (
-                <Film size={14} className="text-muted-foreground/50" />
-              ) : (
-                <ImageIcon size={14} className="text-muted-foreground/50" />
-              )}
-            </div>
-            <div className="px-1.5 py-1">
-              <p className="truncate text-[9px] font-medium">{mat.name}</p>
-              <div className="flex items-center gap-1">
-                <span className="text-[8px] text-muted-foreground">{mat.type === 'VIDEO' ? '视频' : '图片'}</span>
-                {mat.tag && (
-                  <span className="rounded bg-red-50 px-1 text-[8px] text-red-500">{mat.tag}</span>
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 size={16} className="animate-spin text-muted-foreground" />
+        </div>
+      ) : materials.length === 0 ? (
+        <div className="py-6 text-center text-[11px] text-muted-foreground">
+          暂无素材，请先在素材管理中上传
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-1.5 max-h-[240px] overflow-y-auto">
+          {materials.map((mat) => (
+            <button
+              key={mat.id}
+              onClick={() => onAdd({
+                id: `lib_${mat.id}_${Date.now()}`,
+                name: mat.name,
+                type: mat.type,
+                url: mat.url,
+                thumbnailUrl: mat.thumbnailUrl,
+                duration: mat.duration || (mat.type === 'VIDEO' ? 5 : 3),
+              })}
+              className="group relative overflow-hidden rounded-md border hover:border-primary/50 transition-colors"
+            >
+              <div className="flex aspect-video items-center justify-center bg-muted overflow-hidden">
+                {mat.thumbnailUrl ? (
+                  <img src={mat.thumbnailUrl} alt={mat.name} className="h-full w-full object-cover" />
+                ) : mat.type === 'VIDEO' ? (
+                  <Film size={14} className="text-muted-foreground/50" />
+                ) : (
+                  <ImageIcon size={14} className="text-muted-foreground/50" />
                 )}
               </div>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <p className="mt-2 text-center text-[9px] text-muted-foreground">
-        提示：热门素材需要先上传到素材库才能用于正式混剪
-      </p>
+              <div className="px-1.5 py-1">
+                <p className="truncate text-[9px] font-medium">{mat.name}</p>
+                <span className="text-[8px] text-muted-foreground">{mat.type === 'VIDEO' ? '视频' : '图片'}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

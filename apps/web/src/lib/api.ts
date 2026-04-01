@@ -148,6 +148,11 @@ export const aiApi = {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
+  transcribeAudio: (audioUrl: string) =>
+    apiFetch<{ texts: string[] }>('/ai/transcribe-audio', {
+      method: 'POST',
+      body: JSON.stringify({ audioUrl }),
+    }),
 };
 
 // Storage

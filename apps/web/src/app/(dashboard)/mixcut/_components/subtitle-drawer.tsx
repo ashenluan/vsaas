@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { aiApi } from '@/lib/api';
+import { uploadToOSS } from '@/lib/upload';
 import { X, ChevronLeft, ChevronRight, Plus, Trash2, Wand2, Loader2, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 
 const FONTS = [
@@ -182,6 +183,24 @@ function SubtitleContent({
   const [riskResults, setRiskResults] = useState<{ index: number; safe: boolean; risks: { word: string; reason: string }[] } | null>(null);
   const [showCopyLib, setShowCopyLib] = useState(false);
   const [copyLibCategory, setCopyLibCategory] = useState('促销');
+  const [asrLoading, setAsrLoading] = useState(false);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAsrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAsrLoading(true);
+    try {
+      const { url } = await uploadToOSS(file);
+      const res = await aiApi.transcribeAudio(url);
+      const store = useMixcutStore.getState();
+      for (const text of res.texts) {
+        store.addSubtitleToShot(shotId, { text });
+      }
+    } catch { /* ignore */ }
+    setAsrLoading(false);
+    if (audioInputRef.current) audioInputRef.current.value = '';
+  };
 
   const handleRewrite = async (index: number) => {
     const text = subtitles[index]?.text;
@@ -216,7 +235,14 @@ function SubtitleContent({
 
         <div className="mb-2 flex gap-2">
           <button className="rounded border px-2.5 py-1 text-[11px] text-primary border-primary/30 bg-primary/5">手动设置字幕</button>
-          <button className="rounded border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-accent">音频生成字幕</button>
+          <button
+            onClick={() => audioInputRef.current?.click()}
+            disabled={asrLoading}
+            className="rounded border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-accent disabled:opacity-50"
+          >
+            {asrLoading ? <><Loader2 size={10} className="inline animate-spin mr-0.5" />识别中...</> : '音频生成字幕'}
+          </button>
+          <input ref={audioInputRef} type="file" accept="audio/*,video/*" className="hidden" onChange={handleAsrUpload} />
           <button className="rounded border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-accent">重点词管理</button>
           <button
             onClick={() => setShowCopyLib(!showCopyLib)}

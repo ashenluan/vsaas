@@ -50,6 +50,13 @@ class RewriteCopyDto {
   count?: number;
 }
 
+class TranscribeAudioDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  audioUrl!: string;
+}
+
 class DetectRiskWordsDto {
   @IsString()
   @MinLength(1)
@@ -85,5 +92,10 @@ export class AiController {
   @Post('detect-risk-words')
   detectRiskWords(@Body() body: DetectRiskWordsDto) {
     return this.aiService.detectRiskWords(body.text);
+  }
+
+  @Post('transcribe-audio')
+  transcribeAudio(@Body() body: TranscribeAudioDto) {
+    return this.aiService.transcribeAudio(body.audioUrl);
   }
 }

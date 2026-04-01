@@ -60,6 +60,7 @@ export function PreviewPanel() {
             speechTexts: g.subtitles.map((s) => s.text).filter(Boolean),
           }),
           keepOriginalAudio: g.keepOriginalAudio,
+          ...(g.smartTrim && { splitMode: 'AverageSplit' as const }),
         })),
         speechMode: hasGroupSpeech ? 'group' as const : undefined,
         videoCount: estimatedCount,

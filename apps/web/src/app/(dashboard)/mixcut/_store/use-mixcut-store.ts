@@ -28,6 +28,7 @@ export interface ShotGroup {
   effectList: string[];
   stickerEnabled: boolean;
   stickers: { url: string; x: number; y: number; width: number; height: number }[];
+  smartTrim: boolean; // 智能混剪: auto-trim video to match audio duration
 }
 
 export interface SubtitleStyle {
@@ -156,6 +157,7 @@ export function createShotGroup(name?: string): ShotGroup {
     effectList: [],
     stickerEnabled: false,
     stickers: [],
+    smartTrim: false,
   };
 }
 

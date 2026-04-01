@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useMixcutStore, createShotGroup } from '../_store/use-mixcut-store';
 import { ScriptImportModal } from './script-import-modal';
 import { mixcutApi } from '@/lib/api';
-import { Plus, FileText, Trash2, Film, Clock, Layers, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, FileText, Trash2, Film, Clock, Layers, Loader2, RefreshCw, Download, Play, ExternalLink } from 'lucide-react';
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
   PENDING: { label: '等待中', className: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
@@ -181,6 +181,8 @@ export function ProjectList() {
                   shotCount={shotGroups.length}
                   createdAt={job.createdAt}
                   updatedAt={job.updatedAt}
+                  outputVideos={(job.output as any)?.outputVideos || []}
+                  videoCount={input.videoCount}
                   onOpen={() => handleOpenProject(job)}
                   onDelete={() => handleDelete(job.id)}
                 />
@@ -242,6 +244,8 @@ function ProjectCard({
   shotCount,
   createdAt,
   updatedAt,
+  outputVideos,
+  videoCount,
   onOpen,
   onDelete,
 }: {
@@ -253,12 +257,27 @@ function ProjectCard({
   shotCount: number;
   createdAt?: string;
   updatedAt?: string;
+  outputVideos: { mediaId: string; mediaURL: string; duration?: number }[];
+  videoCount?: number;
   onOpen: () => void;
   onDelete: () => void;
 }) {
   const badge = isDraft
     ? { label: '草稿', className: 'bg-gray-50 text-gray-600 border-gray-200' }
     : STATUS_BADGES[status] || STATUS_BADGES.PENDING;
+
+  const handleBatchDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    outputVideos.forEach((v, i) => {
+      const a = document.createElement('a');
+      a.href = v.mediaURL;
+      a.download = `${name}_${i + 1}.mp4`;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      setTimeout(() => { a.click(); document.body.removeChild(a); }, i * 500);
+    });
+  };
 
   return (
     <div
@@ -293,12 +312,59 @@ function ProjectCard({
         )}
         <div className="flex gap-4 pt-1">
           <span>分辨率：{resolution}</span>
+          {videoCount && <span>目标：{videoCount}条</span>}
         </div>
         <div className="flex gap-4">
           <span>素材：{materialCount}</span>
           <span>镜头：{shotCount}</span>
         </div>
       </div>
+
+      {/* Output videos for completed jobs */}
+      {status === 'COMPLETED' && outputVideos.length > 0 && (
+        <div className="mt-3 border-t pt-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-medium text-green-700">已生成 {outputVideos.length} 个视频</span>
+            <button
+              onClick={handleBatchDownload}
+              className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors"
+            >
+              <Download size={10} /> 批量下载
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {outputVideos.slice(0, 6).map((v, i) => (
+              <a
+                key={v.mediaId || i}
+                href={v.mediaURL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-1 rounded bg-muted px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              >
+                <Play size={8} /> 视频{i + 1}
+                {v.duration && <span className="text-[9px]">({Math.round(v.duration)}s)</span>}
+              </a>
+            ))}
+            {outputVideos.length > 6 && (
+              <span className="flex items-center px-2 py-1 text-[10px] text-muted-foreground">+{outputVideos.length - 6}更多</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Progress indicator for processing jobs */}
+      {status === 'PROCESSING' && (
+        <div className="mt-3 border-t pt-3">
+          <div className="flex items-center gap-2">
+            <Loader2 size={12} className="animate-spin text-blue-500" />
+            <span className="text-[11px] text-blue-600">视频生成中...</span>
+          </div>
+          <div className="mt-1.5 h-1.5 w-full rounded-full bg-blue-100">
+            <div className="h-full animate-pulse rounded-full bg-blue-400" style={{ width: '60%' }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
