@@ -46,12 +46,14 @@ export class GenerationController {
     @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @Query('provider') provider?: string,
   ) {
     return this.generationService.listByUser(req.user.sub, {
       type,
       status,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      provider,
     });
   }
 

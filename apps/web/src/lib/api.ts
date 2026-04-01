@@ -94,11 +94,12 @@ export const generationApi = {
     apiFetch('/generations/image', { method: 'POST', body: JSON.stringify(data) }),
   createVideo: (data: any) =>
     apiFetch('/generations/video', { method: 'POST', body: JSON.stringify(data) }),
-  list: (params?: { type?: string; status?: string; page?: number }) => {
+  list: (params?: { type?: string; status?: string; page?: number; provider?: string }) => {
     const qs = new URLSearchParams();
     if (params?.type) qs.set('type', params.type);
     if (params?.status) qs.set('status', params.status);
     if (params?.page) qs.set('page', String(params.page));
+    if (params?.provider) qs.set('provider', params.provider);
     return apiFetch(`/generations?${qs}`);
   },
   get: (id: string) => apiFetch(`/generations/${id}`),

@@ -96,7 +96,7 @@ export default function VideoReversePage() {
 
   const handleUsePrompt = (target: 'image' | 'video') => {
     if (!result) return;
-    const path = target === 'video' ? '/generate/text-to-video' : '/generate/text-to-image';
+    const path = target === 'video' ? '/generate/grok-video' : '/generate/grok-image';
     router.push(`${path}?prompt=${encodeURIComponent(result)}`);
   };
 

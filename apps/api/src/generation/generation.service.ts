@@ -211,8 +211,9 @@ export class GenerationService {
     status?: string;
     page?: number;
     pageSize?: number;
+    provider?: string;
   }) {
-    const { type, status, page = 1, pageSize = 20 } = query;
+    const { type, status, page = 1, pageSize = 20, provider } = query;
     const where: any = { userId };
     // Map frontend shorthand types to valid JobType enum values
     if (type) {
@@ -230,6 +231,7 @@ export class GenerationService {
       }
     }
     if (status) where.status = status;
+    if (provider) where.provider = provider;
 
     const [items, total] = await Promise.all([
       this.prisma.generation.findMany({

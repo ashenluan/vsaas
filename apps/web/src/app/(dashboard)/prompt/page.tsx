@@ -80,9 +80,9 @@ export default function PromptLibraryPage() {
     const prompt = template.config?.prompt || template.description || '';
     const type = template.type;
     if (type === 'TEXT_TO_VIDEO' || type === 'IMAGE_TO_VIDEO') {
-      router.push(`/generate/text-to-video?prompt=${encodeURIComponent(prompt)}`);
+      router.push(`/generate/grok-video?prompt=${encodeURIComponent(prompt)}`);
     } else {
-      router.push(`/generate/text-to-image?prompt=${encodeURIComponent(prompt)}`);
+      router.push(`/generate/grok-image?prompt=${encodeURIComponent(prompt)}`);
     }
   };
 

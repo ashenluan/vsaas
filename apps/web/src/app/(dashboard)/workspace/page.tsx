@@ -39,18 +39,18 @@ import {
 // ==================== Quick Tool Cards ====================
 const quickTools = [
   {
-    title: 'AI 文生图',
-    desc: '高质量图片生成',
-    href: '/generate/text-to-image',
+    title: 'Grok 图片',
+    desc: '高质量AI图片生成',
+    href: '/generate/grok-image',
     icon: ImageIcon,
     gradient: 'from-blue-500 to-indigo-600',
     badge: '爆火',
     badgeColor: 'bg-orange-500',
   },
   {
-    title: 'AI 文生视频',
-    desc: '创意视频生成',
-    href: '/generate/text-to-video',
+    title: 'Grok 视频',
+    desc: '创意AI视频生成',
+    href: '/generate/grok-video',
     icon: Video,
     gradient: 'from-emerald-500 to-teal-600',
     badge: '热门',
