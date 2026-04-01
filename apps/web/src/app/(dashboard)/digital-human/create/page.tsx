@@ -85,6 +85,32 @@ function CreateContent() {
     });
   }, [subscribe, result?.id]);
 
+  // HTTP polling fallback (in case WebSocket is disconnected)
+  useEffect(() => {
+    if (!result?.id) return;
+    const status = (result.status || '').toUpperCase();
+    if (status === 'COMPLETED' || status === 'SUCCEEDED' || status === 'FAILED') return;
+
+    const poll = async () => {
+      try {
+        const job = await apiFetch(`/digital-human/video/${result.id}`);
+        if (job && job.status !== result.status) {
+          setResult((prev: any) => ({
+            ...prev,
+            status: job.status,
+            progress: job.output?.videoUrl ? 100 : (prev.progress || 0),
+            output: job.output || prev.output,
+            errorMsg: job.errorMsg || prev.errorMsg,
+          }));
+        }
+      } catch {}
+    };
+
+    const timer = setInterval(poll, 5000);
+    poll(); // immediate first check
+    return () => clearInterval(timer);
+  }, [result?.id, result?.status]);
+
   // Load data
   useEffect(() => {
     Promise.allSettled([

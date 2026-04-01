@@ -68,6 +68,11 @@ export interface GlobalConfig {
   useUniformTransition: boolean;
   filterEnabled: boolean;
   filterList: string[];
+  // VFX effects
+  vfxEffectEnabled: boolean;
+  vfxEffectProbability: number; // 0-100
+  vfxFirstClipEffectList: string[];
+  vfxNotFirstClipEffectList: string[];
   bgType: 'none' | 'color' | 'blur';
   bgColor: string;
   aspectRatio: '9:16' | '16:9' | '1:1';
@@ -78,6 +83,9 @@ export interface GlobalConfig {
   watermarkText: string;
   watermarkPosition: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
   watermarkOpacity: number;
+  // Video quality
+  maxDuration: number; // 0 = no limit
+  crf: number; // 0 = default
 }
 
 export type MixcutView = 'list' | 'editor';
@@ -90,6 +98,7 @@ export interface MixcutProject {
   titleStyle: TitleStyle;
   globalConfig: GlobalConfig;
   highlightWords: { word: string; fontColor: string; bold: boolean }[];
+  scheduledAt?: string; // ISO date string for scheduled publishing
   createdAt?: string;
   updatedAt?: string;
 }
@@ -133,6 +142,10 @@ const defaultGlobalConfig: GlobalConfig = {
   useUniformTransition: true,
   filterEnabled: false,
   filterList: [],
+  vfxEffectEnabled: false,
+  vfxEffectProbability: 50,
+  vfxFirstClipEffectList: [],
+  vfxNotFirstClipEffectList: [],
   bgType: 'none',
   bgColor: '#000000',
   aspectRatio: '9:16',
@@ -142,6 +155,8 @@ const defaultGlobalConfig: GlobalConfig = {
   watermarkText: '',
   watermarkPosition: 'bottomRight',
   watermarkOpacity: 0.5,
+  maxDuration: 0,
+  crf: 0,
 };
 
 let shotIdCounter = 0;
@@ -171,6 +186,7 @@ interface MixcutState {
   project: MixcutProject;
   setProjectName: (name: string) => void;
   setProjectId: (id: string) => void;
+  setScheduledAt: (scheduledAt?: string) => void;
 
   // Shot groups
   addShotGroup: () => void;
@@ -231,6 +247,8 @@ export const useMixcutStore = create<MixcutState>()(
         set((s) => ({ project: { ...s.project, name } })),
       setProjectId: (id) =>
         set((s) => ({ project: { ...s.project, id } })),
+      setScheduledAt: (scheduledAt) =>
+        set((s) => ({ project: { ...s.project, scheduledAt } })),
 
       // Shot groups
       addShotGroup: () =>

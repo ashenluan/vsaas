@@ -471,10 +471,15 @@ export class DigitalHumanService {
       transitionList?: string[];
       filterEnabled?: boolean;
       filterList?: string[];
+      vfxEffectEnabled?: boolean;
+      vfxEffectProbability?: number;
+      vfxFirstClipEffectList?: string[];
+      vfxNotFirstClipEffectList?: string[];
       bgType?: string;
       bgColor?: string;
       maxDuration?: number;
       crf?: number;
+      scheduledAt?: string;
     },
   ) {
     // Validate: at least one shot group with materials
@@ -560,6 +565,11 @@ export class DigitalHumanService {
       transitionList: data.transitionList,
       allowFilter: data.filterEnabled ?? false,
       filterList: data.filterList,
+      // VFX effects
+      allowEffects: data.vfxEffectEnabled ?? false,
+      ...(data.vfxEffectProbability !== undefined && { vfxEffectProbability: data.vfxEffectProbability }),
+      ...(data.vfxFirstClipEffectList?.length && { vfxFirstClipEffectList: data.vfxFirstClipEffectList }),
+      ...(data.vfxNotFirstClipEffectList?.length && { vfxNotFirstClipEffectList: data.vfxNotFirstClipEffectList }),
       ...(data.bgType === 'blur' && { backgroundImageType: 'Blur' }),
       ...(data.bgType === 'color' && { backgroundImageType: 'Color' }),
     });
@@ -576,12 +586,22 @@ export class DigitalHumanService {
       ...(data.crf && { crf: data.crf }),
     });
 
+    // Compute delay for scheduled jobs
+    let delay: number | undefined;
+    if (data.scheduledAt) {
+      const scheduledTime = new Date(data.scheduledAt).getTime();
+      const now = Date.now();
+      if (scheduledTime > now) {
+        delay = scheduledTime - now;
+      }
+    }
+
     // Create generation record
     const job = await this.prisma.generation.create({
       data: {
         userId,
         type: 'BATCH_COMPOSE',
-        status: 'PENDING',
+        status: delay ? 'PENDING' : 'PENDING',
         provider: 'aliyun-ims',
         creditsUsed: totalCost,
         input: {
@@ -597,11 +617,13 @@ export class DigitalHumanService {
           subtitleConfig: data.subtitleConfig,
           titleConfig: data.titleConfig,
           highlightWords: data.highlightWords,
+          ...(data.scheduledAt && { scheduledAt: data.scheduledAt }),
         },
       },
     });
 
     // Dispatch to mixcut queue — goes directly to IMS (no TTS/S2V)
+    // If scheduled, use BullMQ delay to defer processing
     await this.mixcutQueue.add('mixcut', {
       jobId: job.id,
       userId,
@@ -612,6 +634,7 @@ export class DigitalHumanService {
     }, {
       attempts: 2,
       backoff: { type: 'exponential', delay: 10000 },
+      ...(delay && { delay }),
     });
 
     this.logger.log(`Mixcut job ${job.id} queued: ${data.videoCount} videos, ${data.shotGroups.length} shot groups`);

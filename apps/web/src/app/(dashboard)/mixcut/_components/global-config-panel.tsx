@@ -4,6 +4,7 @@ import { useMixcutStore } from '../_store/use-mixcut-store';
 import {
   Type, Music, ArrowRightLeft, Droplet, Palette, Mic2, Volume2,
   Image as ImageIcon, Film, Shield, MonitorSmartphone, Smartphone, Monitor, Square,
+  Sparkles, Settings2,
 } from 'lucide-react';
 import { VoiceSelectSection } from './voice-select-section';
 
@@ -34,6 +35,7 @@ export function GlobalConfigPanel({ options }: { options: any }) {
   const transitionsData = options?.transitions || [];
   const filtersData = options?.filters || {};
   const allFilters = Object.values(filtersData).flat() as string[];
+  const effectsData = options?.effects || {};
 
   const handleSmartMatchTransitions = () => {
     if (transitionsData.length === 0) return;
@@ -49,6 +51,14 @@ export function GlobalConfigPanel({ options }: { options: any }) {
     const count = Math.min(allFilters.length, Math.max(2, Math.floor(Math.random() * 3) + 2));
     const shuffled = [...allFilters].sort(() => Math.random() - 0.5);
     updateGlobalConfig({ filterEnabled: true, filterList: shuffled.slice(0, count) });
+  };
+
+  const allEffects = Object.values(effectsData).flat() as string[];
+  const handleSmartMatchEffects = () => {
+    if (allEffects.length === 0) return;
+    const first = allEffects.sort(() => Math.random() - 0.5).slice(0, 3);
+    const rest = allEffects.sort(() => Math.random() - 0.5).slice(0, 5);
+    updateGlobalConfig({ vfxEffectEnabled: true, vfxFirstClipEffectList: first, vfxNotFirstClipEffectList: rest, vfxEffectProbability: 50 });
   };
 
   const PRESET_MUSIC = [
@@ -330,6 +340,143 @@ export function GlobalConfigPanel({ options }: { options: any }) {
         <button onClick={handleSmartMatchFilters} className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
           智能匹配滤镜
         </button>
+      </ConfigSection>
+
+      {/* 特效设置 */}
+      <ConfigSection icon={Sparkles} label="特效设置">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] text-muted-foreground">启用特效</span>
+          <ToggleSwitch
+            checked={globalConfig.vfxEffectEnabled}
+            onChange={(v) => updateGlobalConfig({ vfxEffectEnabled: v })}
+          />
+        </div>
+        {globalConfig.vfxEffectEnabled && (
+          <>
+            <div className="mb-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] text-muted-foreground">特效出现概率</label>
+                <span className="text-[10px] tabular-nums text-muted-foreground">{globalConfig.vfxEffectProbability}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={globalConfig.vfxEffectProbability}
+                onChange={(e) => updateGlobalConfig({ vfxEffectProbability: Number(e.target.value) })}
+                className="w-full accent-primary"
+              />
+            </div>
+            <div className="mb-2">
+              <span className="mb-1 block text-[10px] font-medium text-purple-600">首片段特效</span>
+              <div className="text-[9px] text-muted-foreground mb-1">仅应用于第一个片段</div>
+            </div>
+            <div className="max-h-40 space-y-2 overflow-y-auto mb-3">
+              {Object.entries(effectsData).map(([category, items]) => (
+                <div key={category}>
+                  <span className="mb-0.5 block text-[9px] font-medium text-purple-600">{category}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {(items as string[]).map((eff) => (
+                      <button
+                        key={eff}
+                        onClick={() => {
+                          const list = globalConfig.vfxFirstClipEffectList.includes(eff)
+                            ? globalConfig.vfxFirstClipEffectList.filter((x) => x !== eff)
+                            : [...globalConfig.vfxFirstClipEffectList, eff];
+                          updateGlobalConfig({ vfxFirstClipEffectList: list });
+                        }}
+                        className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
+                          globalConfig.vfxFirstClipEffectList.includes(eff)
+                            ? 'border-purple-400 bg-purple-50 text-purple-700 font-medium'
+                            : 'border-input hover:bg-accent'
+                        }`}
+                      >
+                        {eff}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mb-2">
+              <span className="mb-1 block text-[10px] font-medium text-indigo-600">其余片段特效</span>
+              <div className="text-[9px] text-muted-foreground mb-1">应用于除首片段外的片段</div>
+            </div>
+            <div className="max-h-40 space-y-2 overflow-y-auto">
+              {Object.entries(effectsData).map(([category, items]) => (
+                <div key={category}>
+                  <span className="mb-0.5 block text-[9px] font-medium text-indigo-600">{category}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {(items as string[]).map((eff) => (
+                      <button
+                        key={eff}
+                        onClick={() => {
+                          const list = globalConfig.vfxNotFirstClipEffectList.includes(eff)
+                            ? globalConfig.vfxNotFirstClipEffectList.filter((x) => x !== eff)
+                            : [...globalConfig.vfxNotFirstClipEffectList, eff];
+                          updateGlobalConfig({ vfxNotFirstClipEffectList: list });
+                        }}
+                        className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
+                          globalConfig.vfxNotFirstClipEffectList.includes(eff)
+                            ? 'border-indigo-400 bg-indigo-50 text-indigo-700 font-medium'
+                            : 'border-input hover:bg-accent'
+                        }`}
+                      >
+                        {eff}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <button onClick={handleSmartMatchEffects} className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
+          智能匹配特效
+        </button>
+      </ConfigSection>
+
+      {/* 视频质量 */}
+      <ConfigSection icon={Settings2} label="视频质量">
+        <div className="space-y-2.5">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-muted-foreground">最大时长限制</label>
+              <span className="text-[10px] tabular-nums text-muted-foreground">{globalConfig.maxDuration === 0 ? '不限' : `${globalConfig.maxDuration}秒`}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={300}
+              step={5}
+              value={globalConfig.maxDuration}
+              onChange={(e) => updateGlobalConfig({ maxDuration: Number(e.target.value) })}
+              className="w-full accent-primary"
+            />
+            <div className="flex justify-between text-[9px] text-muted-foreground">
+              <span>不限</span><span>300秒</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-muted-foreground">视频质量 (CRF)</label>
+              <span className="text-[10px] tabular-nums text-muted-foreground">{globalConfig.crf === 0 ? '默认' : globalConfig.crf}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={35}
+              step={1}
+              value={globalConfig.crf}
+              onChange={(e) => updateGlobalConfig({ crf: Number(e.target.value) })}
+              className="w-full accent-primary"
+            />
+            <div className="flex justify-between text-[9px] text-muted-foreground">
+              <span>默认</span><span>18(高质量)</span><span>35(低质量)</span>
+            </div>
+          </div>
+        </div>
       </ConfigSection>
 
       {/* 背景设置 */}

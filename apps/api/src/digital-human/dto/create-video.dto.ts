@@ -2,6 +2,7 @@ import {
   IsString,
   IsOptional,
   IsEnum,
+  IsNumber,
   ValidateIf,
   IsNotEmpty,
 } from 'class-validator';
@@ -35,6 +36,10 @@ export class CreateVideoDto {
   @IsString()
   @IsNotEmpty({ message: '请输入台词文案' })
   text?: string;
+
+  @IsOptional()
+  @IsNumber()
+  speechRate?: number;
 
   // Audio drive fields
   @ValidateIf((o) => o.driveMode === DriveMode.AUDIO)

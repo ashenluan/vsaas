@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useMixcutStore, createShotGroup } from '../_store/use-mixcut-store';
 import { ScriptImportModal } from './script-import-modal';
 import { mixcutApi } from '@/lib/api';
-import { Plus, FileText, Trash2, Film, Clock, Layers, Loader2, RefreshCw, Download, Play, ExternalLink } from 'lucide-react';
+import { Plus, FileText, Trash2, Film, Clock, Layers, Loader2, RefreshCw, Download, Play, ExternalLink, CheckCircle } from 'lucide-react';
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
   PENDING: { label: '等待中', className: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
@@ -183,6 +183,7 @@ export function ProjectList() {
                   updatedAt={job.updatedAt}
                   outputVideos={(job.output as any)?.outputVideos || []}
                   videoCount={input.videoCount}
+                  scheduledAt={input.scheduledAt}
                   onOpen={() => handleOpenProject(job)}
                   onDelete={() => handleDelete(job.id)}
                 />
@@ -246,6 +247,7 @@ function ProjectCard({
   updatedAt,
   outputVideos,
   videoCount,
+  scheduledAt,
   onOpen,
   onDelete,
 }: {
@@ -259,6 +261,7 @@ function ProjectCard({
   updatedAt?: string;
   outputVideos: { mediaId: string; mediaURL: string; duration?: number }[];
   videoCount?: number;
+  scheduledAt?: string;
   onOpen: () => void;
   onDelete: () => void;
 }) {
@@ -266,17 +269,41 @@ function ProjectCard({
     ? { label: '草稿', className: 'bg-gray-50 text-gray-600 border-gray-200' }
     : STATUS_BADGES[status] || STATUS_BADGES.PENDING;
 
-  const handleBatchDownload = (e: React.MouseEvent) => {
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+
+  const handleBatchDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    outputVideos.forEach((v, i) => {
+    setDownloading(true);
+    setDownloadProgress(0);
+    for (let i = 0; i < outputVideos.length; i++) {
+      const v = outputVideos[i];
       const a = document.createElement('a');
       a.href = v.mediaURL;
       a.download = `${name}_${i + 1}.mp4`;
       a.target = '_blank';
       a.rel = 'noopener';
       document.body.appendChild(a);
-      setTimeout(() => { a.click(); document.body.removeChild(a); }, i * 500);
-    });
+      a.click();
+      document.body.removeChild(a);
+      setDownloadProgress(Math.round(((i + 1) / outputVideos.length) * 100));
+      if (i < outputVideos.length - 1) {
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
+    setDownloading(false);
+  };
+
+  const handleSingleDownload = (e: React.MouseEvent, v: { mediaURL: string }, idx: number) => {
+    e.stopPropagation();
+    const a = document.createElement('a');
+    a.href = v.mediaURL;
+    a.download = `${name}_${idx + 1}.mp4`;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   return (
@@ -310,6 +337,11 @@ function ProjectCard({
             <Clock size={10} /> 更新：{new Date(updatedAt).toLocaleString('zh-CN')}
           </div>
         )}
+        {scheduledAt && (
+          <div className="flex items-center gap-1.5 text-amber-600">
+            <Clock size={10} /> 定时：{new Date(scheduledAt).toLocaleString('zh-CN')}
+          </div>
+        )}
         <div className="flex gap-4 pt-1">
           <span>分辨率：{resolution}</span>
           {videoCount && <span>目标：{videoCount}条</span>}
@@ -324,30 +356,54 @@ function ProjectCard({
       {status === 'COMPLETED' && outputVideos.length > 0 && (
         <div className="mt-3 border-t pt-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-green-700">已生成 {outputVideos.length} 个视频</span>
+            <span className="text-[11px] font-medium text-green-700">
+              <CheckCircle size={10} className="inline mr-1" />
+              已生成 {outputVideos.length} 个视频
+            </span>
             <button
               onClick={handleBatchDownload}
-              className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors"
+              disabled={downloading}
+              className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50 transition-colors"
             >
-              <Download size={10} /> 批量下载
+              {downloading ? (
+                <><Loader2 size={10} className="animate-spin" /> {downloadProgress}%</>
+              ) : (
+                <><Download size={10} /> 批量下载 ({outputVideos.length})</>
+              )}
             </button>
           </div>
+          {downloading && (
+            <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-primary/10">
+              <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${downloadProgress}%` }} />
+            </div>
+          )}
           <div className="flex flex-wrap gap-1.5">
-            {outputVideos.slice(0, 6).map((v, i) => (
-              <a
+            {outputVideos.slice(0, 8).map((v, i) => (
+              <div
                 key={v.mediaId || i}
-                href={v.mediaURL}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1 rounded bg-muted px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                className="flex items-center gap-0.5 rounded bg-muted text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               >
-                <Play size={8} /> 视频{i + 1}
-                {v.duration && <span className="text-[9px]">({Math.round(v.duration)}s)</span>}
-              </a>
+                <a
+                  href={v.mediaURL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 px-1.5 py-1"
+                >
+                  <Play size={8} /> {i + 1}
+                  {v.duration && <span className="text-[9px]">({Math.round(v.duration)}s)</span>}
+                </a>
+                <button
+                  onClick={(e) => handleSingleDownload(e, v, i)}
+                  className="px-1 py-1 hover:text-primary transition-colors"
+                  title={`下载视频${i + 1}`}
+                >
+                  <Download size={8} />
+                </button>
+              </div>
             ))}
-            {outputVideos.length > 6 && (
-              <span className="flex items-center px-2 py-1 text-[10px] text-muted-foreground">+{outputVideos.length - 6}更多</span>
+            {outputVideos.length > 8 && (
+              <span className="flex items-center px-2 py-1 text-[10px] text-muted-foreground">+{outputVideos.length - 8}更多</span>
             )}
           </div>
         </div>

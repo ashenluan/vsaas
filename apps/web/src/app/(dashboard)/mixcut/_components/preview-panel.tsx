@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { useJobUpdates } from '@/components/ws-provider';
 import { mixcutApi } from '@/lib/api';
-import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw, Clock, CalendarClock } from 'lucide-react';
 
 export function PreviewPanel() {
-  const { project, subtitleStyle, titleStyle, globalConfig, highlightWords } = useMixcutStore();
+  const { project, subtitleStyle, titleStyle, globalConfig, highlightWords, setScheduledAt } = useMixcutStore();
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; jobId?: string; error?: string } | null>(null);
   const [progress, setProgress] = useState<{ status?: string; progress?: number; message?: string } | null>(null);
@@ -120,9 +120,21 @@ export function PreviewPanel() {
           filterEnabled: true,
           filterList: globalConfig.filterList,
         }),
+        // VFX Effects
+        ...(globalConfig.vfxEffectEnabled && {
+          vfxEffectEnabled: true,
+          vfxEffectProbability: globalConfig.vfxEffectProbability,
+          ...(globalConfig.vfxFirstClipEffectList.length > 0 && { vfxFirstClipEffectList: globalConfig.vfxFirstClipEffectList }),
+          ...(globalConfig.vfxNotFirstClipEffectList.length > 0 && { vfxNotFirstClipEffectList: globalConfig.vfxNotFirstClipEffectList }),
+        }),
+        // Video quality
+        ...(globalConfig.maxDuration > 0 && { maxDuration: globalConfig.maxDuration }),
+        ...(globalConfig.crf > 0 && { crf: globalConfig.crf }),
         // Background
         ...(globalConfig.bgType !== 'none' && { bgType: globalConfig.bgType }),
         ...(globalConfig.bgType === 'color' && { bgColor: globalConfig.bgColor }),
+        // Scheduled publishing
+        ...(project.scheduledAt && { scheduledAt: project.scheduledAt }),
       };
 
       const job = await mixcutApi.create(payload);
@@ -196,6 +208,34 @@ export function PreviewPanel() {
         <p className="text-[10px] text-muted-foreground">20 积分/条 × {estimatedCount} 条</p>
       </div>
 
+      {/* 定时发布 */}
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <CalendarClock size={13} className="text-muted-foreground" />
+            <span className="text-[12px] font-medium">定时发布</span>
+          </div>
+          <button
+            onClick={() => setScheduledAt(project.scheduledAt ? undefined : new Date(Date.now() + 3600000).toISOString().slice(0, 16))}
+            className={`relative h-5 w-9 rounded-full transition-colors ${project.scheduledAt ? 'bg-primary' : 'bg-muted'}`}
+          >
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${project.scheduledAt ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+        {project.scheduledAt && (
+          <div className="space-y-2">
+            <input
+              type="datetime-local"
+              value={project.scheduledAt.slice(0, 16)}
+              min={new Date().toISOString().slice(0, 16)}
+              onChange={(e) => setScheduledAt(e.target.value ? new Date(e.target.value).toISOString() : undefined)}
+              className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <p className="text-[9px] text-muted-foreground">视频生成完成后将在指定时间自动发布</p>
+          </div>
+        )}
+      </div>
+
       {/* Submit button */}
       <button
         onClick={handleSubmit}
@@ -205,6 +245,10 @@ export function PreviewPanel() {
         {submitting ? (
           <span className="inline-flex items-center gap-2">
             <Loader2 size={14} className="animate-spin" /> 提交中...
+          </span>
+        ) : project.scheduledAt ? (
+          <span className="inline-flex items-center gap-2">
+            <CalendarClock size={14} /> 定时混剪
           </span>
         ) : (
           <span className="inline-flex items-center gap-2">

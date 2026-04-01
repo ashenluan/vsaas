@@ -173,6 +173,27 @@ export class CreateMixcutDto {
   @IsString({ each: true })
   filterList?: string[];
 
+  // VFX Effects
+  @IsOptional()
+  @IsBoolean()
+  vfxEffectEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  vfxEffectProbability?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  vfxFirstClipEffectList?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  vfxNotFirstClipEffectList?: string[];
+
   // Background
   @IsOptional()
   @IsString()
@@ -181,6 +202,11 @@ export class CreateMixcutDto {
   @IsOptional()
   @IsString()
   bgColor?: string;
+
+  // Scheduled publishing
+  @IsOptional()
+  @IsString()
+  scheduledAt?: string;
 
   // Max duration per video
   @IsOptional()
