@@ -351,7 +351,64 @@ function SubtitleContent({
 
       {/* Highlight words */}
       <div className="border-t pt-3">
-        <h4 className="mb-2 text-[12px] font-medium">重点词管理</h4>
+        <div className="mb-2 flex items-center justify-between">
+          <h4 className="text-[12px] font-medium">重点词管理</h4>
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => {
+                // Extract common words from subtitles
+                const allText = subtitles.map((s) => s.text).join(' ');
+                const words = allText.match(/[\u4e00-\u9fa5]{2,4}/g) || [];
+                const freq: Record<string, number> = {};
+                words.forEach((w) => { freq[w] = (freq[w] || 0) + 1; });
+                const topWords = Object.entries(freq)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 5)
+                  .map(([w]) => w)
+                  .filter((w) => !highlightWords.some((hw) => hw.word === w));
+                if (topWords.length > 0) {
+                  const newWords = topWords.map((w) => ({ word: w, fontColor: '#FF6B35', bold: true }));
+                  setHighlightWords([...highlightWords, ...newWords]);
+                }
+              }}
+              className="text-[10px] text-primary hover:underline"
+            >
+              智能提取
+            </button>
+            <button
+              onClick={() => {
+                setHighlightWords(highlightWords.filter((hw) => hw.word.trim()));
+              }}
+              className="text-[10px] text-muted-foreground hover:text-foreground"
+            >
+              清除空项
+            </button>
+          </div>
+        </div>
+
+        {/* Batch import */}
+        <div className="mb-2">
+          <input
+            type="text"
+            placeholder="批量输入关键词，用逗号分隔（如：优惠,限时,爆款）"
+            className="flex h-7 w-full rounded border border-input bg-transparent px-2 text-[11px] placeholder:text-muted-foreground/50"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const input = (e.target as HTMLInputElement).value.trim();
+                if (!input) return;
+                const words = input.split(/[,，、\s]+/).filter(Boolean);
+                const newWords = words
+                  .filter((w) => !highlightWords.some((hw) => hw.word === w))
+                  .map((w) => ({ word: w, fontColor: '#FF6B35', bold: true }));
+                if (newWords.length > 0) {
+                  setHighlightWords([...highlightWords, ...newWords]);
+                }
+                (e.target as HTMLInputElement).value = '';
+              }
+            }}
+          />
+        </div>
+
         <div className="space-y-1.5">
           {highlightWords.map((hw, i) => (
             <div key={i} className="flex items-center gap-2">
@@ -377,6 +434,18 @@ function SubtitleContent({
                 className="h-7 w-7 cursor-pointer rounded border p-0.5"
               />
               <button
+                onClick={() => {
+                  const updated = [...highlightWords];
+                  updated[i] = { ...updated[i], bold: !updated[i].bold };
+                  setHighlightWords(updated);
+                }}
+                className={`flex h-7 w-7 items-center justify-center rounded border text-[11px] font-bold transition-colors ${
+                  hw.bold ? 'border-primary bg-primary/10 text-primary' : 'border-input hover:bg-accent'
+                }`}
+              >
+                B
+              </button>
+              <button
                 onClick={() => setHighlightWords(highlightWords.filter((_, j) => j !== i))}
                 className="text-muted-foreground hover:text-red-500"
               >
@@ -391,6 +460,30 @@ function SubtitleContent({
             + 添加关键词
           </button>
         </div>
+
+        {/* Preview */}
+        {highlightWords.filter((hw) => hw.word).length > 0 && subtitles.length > 0 && (
+          <div className="mt-2 rounded-md border bg-muted/30 p-2">
+            <p className="mb-1 text-[10px] text-muted-foreground">预览效果</p>
+            <p className="text-[11px] leading-relaxed">
+              {(() => {
+                const text = subtitles[0]?.text || '';
+                if (!text) return <span className="text-muted-foreground">暂无文案</span>;
+                const activeWords = highlightWords.filter((hw) => hw.word && text.includes(hw.word));
+                if (activeWords.length === 0) return text;
+                const regex = new RegExp(`(${activeWords.map((hw) => hw.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'g');
+                const parts = text.split(regex);
+                return parts.map((part, pi) => {
+                  const match = activeWords.find((hw) => hw.word === part);
+                  if (match) {
+                    return <span key={pi} style={{ color: match.fontColor, fontWeight: match.bold ? 'bold' : 'normal' }}>{part}</span>;
+                  }
+                  return <span key={pi}>{part}</span>;
+                });
+              })()}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
