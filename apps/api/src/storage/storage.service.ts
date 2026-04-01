@@ -87,6 +87,50 @@ export class StorageService {
     }
   }
 
+  /**
+   * Download content from an external URL and re-upload to our OSS bucket.
+   * Returns the unsigned OSS URL of the uploaded file.
+   */
+  async copyExternalToOss(sourceUrl: string, prefix: string, ext: string): Promise<string> {
+    const key = this.generateKey(prefix, `copy.${ext}`);
+    const contentType = ext === 'mp4' ? 'video/mp4' : ext === 'mp3' ? 'audio/mpeg' : 'application/octet-stream';
+
+    // Download from source
+    const response = await fetch(sourceUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download from source: ${response.status}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    this.logger.log(`Downloaded ${buffer.length} bytes from external URL for re-upload`);
+
+    // Upload to our OSS bucket
+    const host = `https://${this.bucket}.${this.region}.aliyuncs.com`;
+    const date = new Date().toUTCString();
+    const signature = crypto
+      .createHmac('sha1', this.accessKeySecret)
+      .update(`PUT\n\n${contentType}\n${date}\n/${this.bucket}/${key}`)
+      .digest('base64');
+
+    const uploadResp = await fetch(`${host}/${key}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType,
+        'Date': date,
+        'Authorization': `OSS ${this.accessKeyId}:${signature}`,
+      },
+      body: buffer,
+    });
+
+    if (!uploadResp.ok) {
+      const errText = await uploadResp.text();
+      throw new Error(`OSS re-upload failed: ${uploadResp.status} ${errText.slice(0, 200)}`);
+    }
+
+    const ossUrl = `${host}/${key}`;
+    this.logger.log(`Re-uploaded to OSS: ${ossUrl}`);
+    return ossUrl;
+  }
+
   /** Plain unsigned OSS URL — use for IMS output targets, not for user-facing display */
   getOssUrl(key: string): string {
     return `https://${this.bucket}.${this.region}.aliyuncs.com/${key}`;

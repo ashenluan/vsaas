@@ -193,6 +193,24 @@ export class BatchProductionProcessor extends WorkerHost {
         }
       }
 
+      // Phase 2.5: Re-upload cross-region S2V videos to our OSS bucket
+      // DashScope S2V outputs to oss-cn-hangzhou, but IMS requires same region (cn-shanghai)
+      this.sendProgress(userId, jobId, 'PROCESSING', 68, '正在转存数字人视频到同区域存储...');
+      for (const step of s2vSuccessful) {
+        const regionCheck = this.storage.validateOssRegion(step.s2vVideoUrl!);
+        if (!regionCheck.valid || step.s2vVideoUrl!.includes('dashscope-result')) {
+          try {
+            this.logger.log(`Re-uploading cross-region S2V video for ${step.scriptId}`);
+            const localUrl = await this.storage.copyExternalToOss(step.s2vVideoUrl!, 's2v', 'mp4');
+            step.s2vVideoUrl = localUrl;
+            this.logger.log(`Re-uploaded S2V video for ${step.scriptId}: ${localUrl}`);
+          } catch (err: any) {
+            this.logger.error(`Failed to re-upload S2V video for ${step.scriptId}: ${err.message}`);
+            // Keep original URL — IMS may still fail but at least we tried
+          }
+        }
+      }
+
       // Phase 3: IMS Batch Compose
       this.sendProgress(userId, jobId, 'PROCESSING', 70, '开始批量成片合成');
 

@@ -186,7 +186,16 @@ export class AliyunIMSProvider implements BatchComposeProvider {
       // Map IMS status to our status
       let status = 'PROCESSING';
       if (job.status === 'Finished') status = 'Finished';
-      else if (job.status === 'Init') status = 'PENDING';
+      else if (job.status === 'Failed') {
+        // Parse error from extend field
+        let errorDetail = '';
+        try {
+          const ext = JSON.parse(job.extend || '{}');
+          errorDetail = ext.ErrorMessage || ext.ErrorCode || '';
+        } catch { /* ignore */ }
+        this.logger.error(`IMS job ${jobId} failed: ${errorDetail || 'unknown error'}`);
+        status = 'Failed';
+      } else if (job.status === 'Init') status = 'PENDING';
 
       // Check if all sub-jobs failed
       const allFailed = subJobs.length > 0 && subJobs.every((sj: any) => sj.status === 'Failed');
