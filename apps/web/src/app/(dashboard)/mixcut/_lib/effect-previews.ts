@@ -7,9 +7,9 @@
 
 const BASE = 'https://help-static-aliyun-doc.aliyuncs.com/assets/img/zh-CN';
 
-/** Advanced effect (OV0001-*) preview thumbnails */
+/** Advanced effect (OV0001-*) preview thumbnails — all 71 from Aliyun docs */
 export const EFFECT_PREVIEWS: Record<string, string> = {
-  // 信号抖动
+  // 信号抖动 (7)
   'OV0001-bad_singal_1': `${BASE}/0249543371/p862140.webp`,
   'OV0001-bad_singal_2': `${BASE}/0249543371/p862142.webp`,
   'OV0001-bad_singal_3': `${BASE}/0249543371/p862145.webp`,
@@ -17,7 +17,7 @@ export const EFFECT_PREVIEWS: Record<string, string> = {
   'OV0001-bad_singal_5': `${BASE}/0249543371/p862147.webp`,
   'OV0001-singal_glitch_1': `${BASE}/0249543371/p862149.webp`,
   'OV0001-singal_glitch_2': `${BASE}/0249543371/p862151.webp`,
-  // 视角
+  // 视角 (8)
   'OV0001-camera_viewer': `${BASE}/0249543371/p862154.webp`,
   'OV0001-vertical_video': `${BASE}/0249543371/p862157.webp`,
   'OV0001-vertical_video2': `${BASE}/0249543371/p862159.webp`,
@@ -26,7 +26,7 @@ export const EFFECT_PREVIEWS: Record<string, string> = {
   'OV0001-tv_crt_3': `${BASE}/1249543371/p862220.webp`,
   'OV0001-tv_crt_4': `${BASE}/0249543371/p862221.webp`,
   'OV0001-tv_crt_old_1': `${BASE}/0249543371/p862222.webp`,
-  // 流光
+  // 流光 (13)
   'OV0001-flow_move_light_1': `${BASE}/1249543371/p862163.webp`,
   'OV0001-flow_move_light_2': `${BASE}/1249543371/p862165.webp`,
   'OV0001-flow_move_light_3': `${BASE}/0249543371/p862166.webp`,
@@ -34,6 +34,61 @@ export const EFFECT_PREVIEWS: Record<string, string> = {
   'OV0001-flow_move_light_5': `${BASE}/1249543371/p862168.webp`,
   'OV0001-flow_move_light_6': `${BASE}/0249543371/p862169.webp`,
   'OV0001-flow_move_light_7': `${BASE}/1249543371/p862170.webp`,
+  'OV0001-flow_move_light_8': `${BASE}/1249543371/p862171.webp`,
+  'OV0001-flow_move_light_9': `${BASE}/0249543371/p862172.webp`,
+  'OV0001-flow_move_light_10': `${BASE}/0249543371/p862174.webp`,
+  'OV0001-flow_move_light_11': `${BASE}/0249543371/p862175.webp`,
+  'OV0001-flow_move_light_12': `${BASE}/1249543371/p862176.webp`,
+  'OV0001-flow_move_light_13': `${BASE}/0249543371/p862177.webp`,
+  // 中心光 (9)
+  'OV0001-center_light_1': `${BASE}/0249543371/p862183.webp`,
+  'OV0001-center_light_2': `${BASE}/1249543371/p862184.webp`,
+  'OV0001-center_light_3': `${BASE}/0249543371/p862185.webp`,
+  'OV0001-center_light_4': `${BASE}/0249543371/p862186.webp`,
+  'OV0001-center_light_5': `${BASE}/1249543371/p862187.webp`,
+  'OV0001-center_light_6': `${BASE}/0249543371/p862188.webp`,
+  'OV0001-center_light_7': `${BASE}/0249543371/p862189.webp`,
+  'OV0001-center_light_8': `${BASE}/0249543371/p862190.webp`,
+  'OV0001-center_light_9': `${BASE}/0249543371/p862191.webp`,
+  // 文字特效 (3)
+  'OV0001-hacker_world_1': `${BASE}/0249543371/p862193.webp`,
+  'OV0001-hacker_world_2': `${BASE}/0249543371/p862194.webp`,
+  'OV0001-hacker_world_3': `${BASE}/1249543371/p862195.webp`,
+  // 粒子 (3)
+  'OV0001-particles_1': `${BASE}/0249543371/p862196.webp`,
+  'OV0001-particles_2': `${BASE}/0249543371/p862197.webp`,
+  'OV0001-particles_3': `${BASE}/1249543371/p862198.webp`,
+  // 彩色泡泡 (8)
+  'OV0001-pop_up_color_1': `${BASE}/0249543371/p862199.webp`,
+  'OV0001-pop_up_color_2': `${BASE}/0249543371/p862200.webp`,
+  'OV0001-pop_up_color_3': `${BASE}/0249543371/p862201.webp`,
+  'OV0001-pop_up_color_4': `${BASE}/0249543371/p862202.webp`,
+  'OV0001-pop_up_color_5': `${BASE}/0249543371/p862203.webp`,
+  'OV0001-pop_up_color_6': `${BASE}/0249543371/p862204.webp`,
+  'OV0001-pop_up_color_7': `${BASE}/0249543371/p862205.webp`,
+  'OV0001-pop_up_color_8': `${BASE}/0249543371/p862206.webp`,
+  // 天气自然 (11)
+  'OV0001-rain_1': `${BASE}/1249543371/p862207.webp`,
+  'OV0001-rain_2': `${BASE}/0249543371/p862208.webp`,
+  'OV0001-snow_1': `${BASE}/0249543371/p862213.webp`,
+  'OV0001-snow_2': `${BASE}/0249543371/p862214.webp`,
+  'OV0001-snow_3': `${BASE}/1249543371/p862215.webp`,
+  'OV0001-snow_4': `${BASE}/0249543371/p862216.webp`,
+  'OV0001-rain_glass_2': `${BASE}/0249543371/p862209.webp`,
+  'OV0001-rain_glass_3': `${BASE}/0249543371/p862210.webp`,
+  'OV0001-rain_glass_4': `${BASE}/0249543371/p862211.webp`,
+  'OV0001-rain_glass_5': `${BASE}/0249543371/p862212.webp`,
+  'OV0001-reflection_water': `${BASE}/0249543371/p862217.webp`,
+  // 动态形状 (9)
+  'OV0001-wave_1': `${BASE}/1249543371/p862223.webp`,
+  'OV0001-wave_2': `${BASE}/0249543371/p862224.webp`,
+  'OV0001-wave_3': `${BASE}/0249543371/p862225.webp`,
+  'OV0001-box_1': `${BASE}/1249543371/p862226.webp`,
+  'OV0001-box_2': `${BASE}/0249543371/p862227.webp`,
+  'OV0001-blur_1': `${BASE}/1249543371/p862228.webp`,
+  'OV0001-bottom_burn': `${BASE}/0249543371/p862229.webp`,
+  'OV0001-bottom_burn2': `${BASE}/0249543371/p862230.webp`,
+  'OV0001-smog_1': `${BASE}/1249543371/p862231.webp`,
 };
 
 /** Advanced transition (OT0001-atom_*) preview thumbnails */
