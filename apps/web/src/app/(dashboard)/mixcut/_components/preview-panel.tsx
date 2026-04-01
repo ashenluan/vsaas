@@ -69,6 +69,10 @@ export function PreviewPanel() {
         // Background music
         ...(globalConfig.bgMusic && { bgMusic: globalConfig.bgMusic }),
         ...(globalConfig.bgMusicVolume !== 0.2 && { bgMusicVolume: globalConfig.bgMusicVolume }),
+        // Audio volumes
+        ...(globalConfig.mediaVolume !== 1.0 && { mediaVolume: globalConfig.mediaVolume }),
+        ...(globalConfig.speechVolume !== 1.0 && { speechVolume: globalConfig.speechVolume }),
+        ...(globalConfig.speechRate !== 1.0 && { speechRate: globalConfig.speechRate }),
         // Subtitle
         subtitleConfig: {
           font: subtitleStyle.font,

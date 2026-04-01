@@ -181,7 +181,13 @@ export function MixcutEditor({
                 <p className="text-[10px] text-muted-foreground">为各个镜头配置素材、文案、时长等信息</p>
               </div>
               <div className="flex gap-1.5">
-                <button className="rounded-md border px-2.5 py-1 text-[11px] hover:bg-accent transition-colors">
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('mixcut-audio-settings');
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className="rounded-md border px-2.5 py-1 text-[11px] hover:bg-accent transition-colors"
+                >
                   镜头组音频设置
                 </button>
                 <button

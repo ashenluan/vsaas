@@ -2,7 +2,7 @@
 
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import {
-  Type, Music, ArrowRightLeft, Droplet, Palette, Mic2,
+  Type, Music, ArrowRightLeft, Droplet, Palette, Mic2, Volume2,
   Image as ImageIcon, Film, Shield, MonitorSmartphone, Smartphone, Monitor, Square,
 } from 'lucide-react';
 import { VoiceSelectSection } from './voice-select-section';
@@ -51,6 +51,20 @@ export function GlobalConfigPanel({ options }: { options: any }) {
     updateGlobalConfig({ filterEnabled: true, filterList: shuffled.slice(0, count) });
   };
 
+  const PRESET_MUSIC = [
+    { label: '轻快活力', url: 'https://ice-public-media.china.aliyuncs.com/music/happy_upbeat.mp3' },
+    { label: '抒情温馨', url: 'https://ice-public-media.china.aliyuncs.com/music/emotional_warm.mp3' },
+    { label: '科技未来', url: 'https://ice-public-media.china.aliyuncs.com/music/tech_future.mp3' },
+    { label: '古风国潮', url: 'https://ice-public-media.china.aliyuncs.com/music/chinese_style.mp3' },
+    { label: '商务大气', url: 'https://ice-public-media.china.aliyuncs.com/music/business_grand.mp3' },
+    { label: '运动激情', url: 'https://ice-public-media.china.aliyuncs.com/music/sport_energy.mp3' },
+  ];
+
+  const handleSmartMatchMusic = () => {
+    const pick = PRESET_MUSIC[Math.floor(Math.random() * PRESET_MUSIC.length)];
+    updateGlobalConfig({ bgMusic: pick.url });
+  };
+
   return (
     <div className="space-y-3">
       <div className="mb-2">
@@ -70,6 +84,72 @@ export function GlobalConfigPanel({ options }: { options: any }) {
         <VoiceSelectSection />
       </ConfigSection>
 
+      {/* 音频设置 */}
+      <ConfigSection id="mixcut-audio-settings" icon={Volume2} label="音频设置">
+        <div className="space-y-2.5">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-muted-foreground">素材音量</label>
+              <span className="text-[10px] tabular-nums text-muted-foreground">{Math.round(globalConfig.mediaVolume * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={globalConfig.mediaVolume}
+              onChange={(e) => updateGlobalConfig({ mediaVolume: Number(e.target.value) })}
+              className="w-full accent-primary"
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-muted-foreground">配音音量</label>
+              <span className="text-[10px] tabular-nums text-muted-foreground">{Math.round(globalConfig.speechVolume * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={globalConfig.speechVolume}
+              onChange={(e) => updateGlobalConfig({ speechVolume: Number(e.target.value) })}
+              className="w-full accent-primary"
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-muted-foreground">语速</label>
+              <span className="text-[10px] tabular-nums text-muted-foreground">{globalConfig.speechRate.toFixed(1)}x</span>
+            </div>
+            <input
+              type="range"
+              min={0.5}
+              max={2.0}
+              step={0.1}
+              value={globalConfig.speechRate}
+              onChange={(e) => updateGlobalConfig({ speechRate: Number(e.target.value) })}
+              className="w-full accent-primary"
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-muted-foreground">背景音乐音量</label>
+              <span className="text-[10px] tabular-nums text-muted-foreground">{Math.round(globalConfig.bgMusicVolume * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={globalConfig.bgMusicVolume}
+              onChange={(e) => updateGlobalConfig({ bgMusicVolume: Number(e.target.value) })}
+              className="w-full accent-primary"
+            />
+          </div>
+        </div>
+      </ConfigSection>
+
       {/* 背景音乐 */}
       <ConfigSection icon={Music} label="背景音乐">
         <input
@@ -79,7 +159,28 @@ export function GlobalConfigPanel({ options }: { options: any }) {
           placeholder="输入音乐 URL 或选择"
           className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-        <button className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
+        {globalConfig.bgMusic && (
+          <div className="mt-1.5 flex items-center gap-2">
+            <audio src={globalConfig.bgMusic} controls className="h-7 w-full" />
+            <button onClick={() => updateGlobalConfig({ bgMusic: '' })} className="shrink-0 text-[10px] text-red-500 hover:underline">清除</button>
+          </div>
+        )}
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {PRESET_MUSIC.map((m) => (
+            <button
+              key={m.label}
+              onClick={() => updateGlobalConfig({ bgMusic: m.url })}
+              className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
+                globalConfig.bgMusic === m.url
+                  ? 'border-primary bg-primary/10 text-primary font-medium'
+                  : 'border-input hover:bg-accent'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={handleSmartMatchMusic} className="mt-1.5 w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
           智能匹配音乐
         </button>
       </ConfigSection>
@@ -137,9 +238,55 @@ export function GlobalConfigPanel({ options }: { options: any }) {
 
       {/* 水印设置 */}
       <ConfigSection icon={Shield} label="水印设置">
-        <button className="w-full rounded-lg border border-dashed py-2 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
-          添加
-        </button>
+        <input
+          type="text"
+          value={globalConfig.watermarkText}
+          onChange={(e) => updateGlobalConfig({ watermarkText: e.target.value })}
+          placeholder="输入水印文字（留空则不添加）"
+          className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+        {globalConfig.watermarkText && (
+          <div className="mt-2 space-y-2">
+            <div>
+              <label className="mb-1 block text-[10px] text-muted-foreground">水印位置</label>
+              <div className="grid grid-cols-2 gap-1">
+                {[
+                  { value: 'topLeft' as const, label: '左上' },
+                  { value: 'topRight' as const, label: '右上' },
+                  { value: 'bottomLeft' as const, label: '左下' },
+                  { value: 'bottomRight' as const, label: '右下' },
+                ].map((pos) => (
+                  <button
+                    key={pos.value}
+                    onClick={() => updateGlobalConfig({ watermarkPosition: pos.value })}
+                    className={`rounded border py-1 text-[10px] transition-all ${
+                      globalConfig.watermarkPosition === pos.value
+                        ? 'border-primary bg-primary/5 text-primary font-medium'
+                        : 'border-input hover:bg-accent'
+                    }`}
+                  >
+                    {pos.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] text-muted-foreground">透明度</label>
+                <span className="text-[10px] tabular-nums text-muted-foreground">{Math.round(globalConfig.watermarkOpacity * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0.1}
+                max={1}
+                step={0.05}
+                value={globalConfig.watermarkOpacity}
+                onChange={(e) => updateGlobalConfig({ watermarkOpacity: Number(e.target.value) })}
+                className="w-full accent-primary"
+              />
+            </div>
+          </div>
+        )}
       </ConfigSection>
 
       {/* 滤镜设置 */}
@@ -217,9 +364,43 @@ export function GlobalConfigPanel({ options }: { options: any }) {
 
       {/* 视频封面 */}
       <ConfigSection icon={Film} label="视频封面">
-        <button className="w-full rounded-md border py-1.5 text-[11px] text-primary hover:bg-primary/5 transition-colors">
-          智能生成封面
-        </button>
+        <div className="flex gap-2 mb-2">
+          {(['auto', 'custom'] as const).map((type) => (
+            <button
+              key={type}
+              onClick={() => updateGlobalConfig({ coverType: type })}
+              className={`flex-1 rounded-lg border py-1.5 text-[11px] transition-all ${
+                globalConfig.coverType === type
+                  ? 'border-primary bg-primary/5 text-primary font-medium'
+                  : 'border-input hover:bg-accent'
+              }`}
+            >
+              {type === 'auto' ? '自动截取' : '自定义封面'}
+            </button>
+          ))}
+        </div>
+        {globalConfig.coverType === 'custom' && (
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={globalConfig.coverUrl}
+              onChange={(e) => updateGlobalConfig({ coverUrl: e.target.value })}
+              placeholder="输入封面图片 URL"
+              className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            {globalConfig.coverUrl && (
+              <div className="relative mx-auto w-32 overflow-hidden rounded-lg border">
+                <img src={globalConfig.coverUrl} alt="封面预览" className="w-full object-cover" style={{ aspectRatio: globalConfig.aspectRatio === '9:16' ? '9/16' : globalConfig.aspectRatio === '16:9' ? '16/9' : '1/1' }} />
+                <button
+                  onClick={() => updateGlobalConfig({ coverUrl: '' })}
+                  className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white text-[10px] hover:bg-black/80"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </ConfigSection>
 
       {/* 选择比例 */}
@@ -272,18 +453,20 @@ export function GlobalConfigPanel({ options }: { options: any }) {
 }
 
 function ConfigSection({
+  id,
   icon: Icon,
   label,
   badge,
   children,
 }: {
+  id?: string;
   icon: any;
   label: string;
   badge?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-3.5 shadow-sm">
+    <div id={id} className="rounded-xl border bg-card p-3.5 shadow-sm">
       <div className="mb-2.5 flex items-center gap-2">
         <Icon size={13} className="text-muted-foreground" />
         <span className="text-[12px] font-medium">{label}</span>

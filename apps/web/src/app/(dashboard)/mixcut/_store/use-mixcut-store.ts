@@ -58,6 +58,9 @@ export interface TitleStyle {
 export interface GlobalConfig {
   bgMusic: string;
   bgMusicVolume: number;
+  mediaVolume: number;
+  speechVolume: number;
+  speechRate: number;
   transitionEnabled: boolean;
   transitionDuration: number;
   transitionList: string[];
@@ -71,6 +74,9 @@ export interface GlobalConfig {
   coverType: 'auto' | 'custom';
   coverUrl: string;
   voiceId?: string;
+  watermarkText: string;
+  watermarkPosition: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
+  watermarkOpacity: number;
 }
 
 export type MixcutView = 'list' | 'editor';
@@ -117,6 +123,9 @@ const defaultTitleStyle: TitleStyle = {
 const defaultGlobalConfig: GlobalConfig = {
   bgMusic: '',
   bgMusicVolume: 0.2,
+  mediaVolume: 1.0,
+  speechVolume: 1.0,
+  speechRate: 1.0,
   transitionEnabled: false,
   transitionDuration: 0.5,
   transitionList: [],
@@ -129,6 +138,9 @@ const defaultGlobalConfig: GlobalConfig = {
   resolution: '1080x1920',
   coverType: 'auto',
   coverUrl: '',
+  watermarkText: '',
+  watermarkPosition: 'bottomRight',
+  watermarkOpacity: 0.5,
 };
 
 let shotIdCounter = 0;
