@@ -7,8 +7,8 @@ import { GlobalConfigPanel } from './global-config-panel';
 import { PreviewPanel } from './preview-panel';
 import { SubtitleDrawer } from './subtitle-drawer';
 import { ScriptImportModal } from './script-import-modal';
-import { mixcutApi } from '@/lib/api';
-import { ArrowLeft, Save, Play, Sparkles, Plus, Loader2, Check, Film } from 'lucide-react';
+import { mixcutApi, aiApi } from '@/lib/api';
+import { ArrowLeft, Save, Play, Sparkles, Plus, Loader2, Check, Film, Wand2, X } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -52,6 +52,9 @@ export function MixcutEditor({
   const [scriptModalOpen, setScriptModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [aiWriterOpen, setAiWriterOpen] = useState(false);
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -89,6 +92,37 @@ export function MixcutEditor({
       return { ...group, materials: deduped };
     });
     updated.forEach((g) => store.updateShotGroup(g.id, { materials: g.materials }));
+  };
+
+  const handleAiGenerate = async () => {
+    if (!aiTopic.trim()) return;
+    setAiGenerating(true);
+    try {
+      const res = await aiApi.generateScript(aiTopic.trim(), project.shotGroups.length || 5);
+      const store = useMixcutStore.getState();
+      // Create shot groups from script paragraphs
+      res.script.forEach((paragraph, idx) => {
+        // Extract first line as speech text
+        const lines = paragraph.split('\n').filter(Boolean);
+        const speechText = lines[0] || paragraph;
+        if (idx < store.project.shotGroups.length) {
+          // Update existing group
+          const group = store.project.shotGroups[idx];
+          store.addSubtitleToShot(group.id, { text: speechText });
+        } else {
+          // Add new group
+          store.addShotGroup();
+          const newGroups = useMixcutStore.getState().project.shotGroups;
+          const newGroup = newGroups[newGroups.length - 1];
+          if (newGroup) {
+            store.addSubtitleToShot(newGroup.id, { text: speechText });
+          }
+        }
+      });
+      setAiWriterOpen(false);
+      setAiTopic('');
+    } catch { /* ignore */ }
+    setAiGenerating(false);
   };
 
   return (
@@ -150,8 +184,11 @@ export function MixcutEditor({
                 <button className="rounded-md border px-2.5 py-1 text-[11px] hover:bg-accent transition-colors">
                   镜头组音频设置
                 </button>
-                <button className="rounded-md border px-2.5 py-1 text-[11px] text-primary hover:bg-primary/5 transition-colors">
-                  AI写作助手
+                <button
+                  onClick={() => setAiWriterOpen(true)}
+                  className="rounded-md border px-2.5 py-1 text-[11px] text-primary hover:bg-primary/5 transition-colors"
+                >
+                  <Wand2 size={10} className="inline mr-0.5" /> AI写作助手
                 </button>
                 <button
                   onClick={() => setScriptModalOpen(true)}
@@ -207,6 +244,56 @@ export function MixcutEditor({
           options={options}
           onClose={closeDrawer}
         />
+      )}
+
+      {/* AI Writer Modal */}
+      {aiWriterOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setAiWriterOpen(false)}>
+          <div className="w-[480px] rounded-xl bg-card p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <Wand2 size={14} className="text-primary" /> AI写作助手
+              </h3>
+              <button onClick={() => setAiWriterOpen(false)} className="rounded p-1 hover:bg-accent">
+                <X size={16} />
+              </button>
+            </div>
+            <p className="mb-3 text-[11px] text-muted-foreground">输入主题或关键词，AI 将自动生成短视频脚本并填充到镜头组文案中</p>
+            <textarea
+              value={aiTopic}
+              onChange={(e) => setAiTopic(e.target.value)}
+              placeholder="例如：夏日防晒小技巧、新品发布会开场、健身打卡vlog..."
+              rows={4}
+              className="mb-3 w-full resize-none rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <div className="mb-3 text-[10px] text-muted-foreground">
+              将生成 {project.shotGroups.length || 5} 段脚本，对应当前镜头组数量
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setAiWriterOpen(false)}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-accent transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleAiGenerate}
+                disabled={aiGenerating || !aiTopic.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {aiGenerating ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Loader2 size={12} className="animate-spin" /> 生成中...
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Wand2 size={12} /> 生成脚本
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

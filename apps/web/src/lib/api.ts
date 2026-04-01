@@ -133,6 +133,21 @@ export const aiApi = {
       method: 'POST',
       body: JSON.stringify({ url, type }),
     }),
+  generateScript: (topic: string, paragraphs?: number) =>
+    apiFetch<{ script: string[] }>('/ai/generate-script', {
+      method: 'POST',
+      body: JSON.stringify({ topic, paragraphs }),
+    }),
+  rewriteCopy: (text: string, count?: number) =>
+    apiFetch<{ variants: string[] }>('/ai/rewrite-copy', {
+      method: 'POST',
+      body: JSON.stringify({ text, count }),
+    }),
+  detectRiskWords: (text: string) =>
+    apiFetch<{ safe: boolean; risks: { word: string; reason: string }[] }>('/ai/detect-risk-words', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
 };
 
 // Storage

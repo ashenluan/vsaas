@@ -30,6 +30,33 @@ class PolishPromptDto {
   type?: 'image' | 'video';
 }
 
+class GenerateScriptDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  topic!: string;
+
+  @IsOptional()
+  paragraphs?: number;
+}
+
+class RewriteCopyDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  text!: string;
+
+  @IsOptional()
+  count?: number;
+}
+
+class DetectRiskWordsDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(5000)
+  text!: string;
+}
+
 @Controller('ai')
 @UseGuards(JwtAuthGuard)
 export class AiController {
@@ -43,5 +70,20 @@ export class AiController {
   @Post('reverse-prompt')
   reversePrompt(@Body() body: ReversePromptDto) {
     return this.aiService.reversePrompt(body.url, body.type || 'image');
+  }
+
+  @Post('generate-script')
+  generateScript(@Body() body: GenerateScriptDto) {
+    return this.aiService.generateScript(body.topic, body.paragraphs || 5);
+  }
+
+  @Post('rewrite-copy')
+  rewriteCopy(@Body() body: RewriteCopyDto) {
+    return this.aiService.rewriteCopy(body.text, body.count || 3);
+  }
+
+  @Post('detect-risk-words')
+  detectRiskWords(@Body() body: DetectRiskWordsDto) {
+    return this.aiService.detectRiskWords(body.text);
   }
 }

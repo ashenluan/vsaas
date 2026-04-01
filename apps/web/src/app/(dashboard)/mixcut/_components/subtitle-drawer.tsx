@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
-import { X, ChevronLeft, ChevronRight, Plus, Trash2, Wand2 } from 'lucide-react';
+import { aiApi } from '@/lib/api';
+import { X, ChevronLeft, ChevronRight, Plus, Trash2, Wand2, Loader2, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 
 const FONTS = [
   { value: 'Alibaba PuHuiTi 2.0 65 Medium', label: '阿里巴巴普惠体' },
@@ -175,6 +176,34 @@ function SubtitleContent({
   highlightWords: { word: string; fontColor: string; bold: boolean }[];
   setHighlightWords: (w: { word: string; fontColor: string; bold: boolean }[]) => void;
 }) {
+  const [rewriteLoading, setRewriteLoading] = useState<number | null>(null);
+  const [rewriteResults, setRewriteResults] = useState<{ index: number; variants: string[] } | null>(null);
+  const [riskLoading, setRiskLoading] = useState<number | null>(null);
+  const [riskResults, setRiskResults] = useState<{ index: number; safe: boolean; risks: { word: string; reason: string }[] } | null>(null);
+
+  const handleRewrite = async (index: number) => {
+    const text = subtitles[index]?.text;
+    if (!text) return;
+    setRewriteLoading(index);
+    setRewriteResults(null);
+    try {
+      const res = await aiApi.rewriteCopy(text, 3);
+      setRewriteResults({ index, variants: res.variants });
+    } catch { /* ignore */ }
+    setRewriteLoading(null);
+  };
+
+  const handleRiskDetect = async (index: number) => {
+    const text = subtitles[index]?.text;
+    if (!text) return;
+    setRiskLoading(index);
+    setRiskResults(null);
+    try {
+      const res = await aiApi.detectRiskWords(text);
+      setRiskResults({ index, safe: res.safe, risks: res.risks });
+    } catch { /* ignore */ }
+    setRiskLoading(null);
+  };
   return (
     <div className="space-y-4">
       <p className="text-[10px] text-muted-foreground">文字转语音消耗0.1个算力/100字</p>
@@ -203,7 +232,20 @@ function SubtitleContent({
               <div className="flex gap-1.5">
                 <button className="text-[10px] text-muted-foreground hover:text-primary">字幕特效设置</button>
                 <button className="text-[10px] text-muted-foreground hover:text-primary">文案库导入</button>
-                <button className="text-[10px] text-muted-foreground hover:text-primary">风险词检测</button>
+                <button
+                  onClick={() => handleRiskDetect(i)}
+                  disabled={riskLoading === i}
+                  className="text-[10px] text-muted-foreground hover:text-primary disabled:opacity-50"
+                >
+                  {riskLoading === i ? <><Loader2 size={10} className="inline animate-spin mr-0.5" />检测中...</> : '风险词检测'}
+                </button>
+                <button
+                  onClick={() => handleRewrite(i)}
+                  disabled={rewriteLoading === i || !sub.text}
+                  className="text-[10px] text-primary hover:underline disabled:opacity-50"
+                >
+                  {rewriteLoading === i ? <><Loader2 size={10} className="inline animate-spin mr-0.5" />仿写中...</> : <><Wand2 size={10} className="inline mr-0.5" />仿写</>}
+                </button>
                 <button
                   onClick={() => onRemove(i)}
                   className="text-[10px] text-muted-foreground hover:text-red-500"
@@ -223,6 +265,51 @@ function SubtitleContent({
               <span>预计时长: {Math.ceil((sub.text?.length || 0) / 5)}秒</span>
               <span>{sub.text?.length || 0} / 2000</span>
             </div>
+
+            {/* Risk detection results */}
+            {riskResults && riskResults.index === i && (
+              <div className={`mt-2 rounded-md border p-2 text-[11px] ${riskResults.safe ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+                {riskResults.safe ? (
+                  <div className="flex items-center gap-1 text-green-700">
+                    <CheckCircle size={12} /> 未检测到风险词
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-1 flex items-center gap-1 text-amber-700 font-medium">
+                      <AlertTriangle size={12} /> 检测到 {riskResults.risks.length} 个风险词
+                    </div>
+                    {riskResults.risks.map((r, ri) => (
+                      <div key={ri} className="ml-4 text-amber-600">
+                        <span className="font-medium text-red-600">{r.word}</span> — {r.reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Rewrite results */}
+            {rewriteResults && rewriteResults.index === i && (
+              <div className="mt-2 space-y-1.5 rounded-md border border-primary/20 bg-primary/5 p-2">
+                <div className="flex items-center justify-between text-[11px] font-medium text-primary">
+                  <span><Wand2 size={10} className="inline mr-0.5" /> 仿写结果</span>
+                  <button onClick={() => setRewriteResults(null)} className="text-muted-foreground hover:text-foreground">
+                    <X size={12} />
+                  </button>
+                </div>
+                {rewriteResults.variants.map((v, vi) => (
+                  <div key={vi} className="flex items-start gap-1.5">
+                    <p className="flex-1 text-[11px] leading-relaxed">{v}</p>
+                    <button
+                      onClick={() => { onUpdate(i, { text: v }); setRewriteResults(null); }}
+                      className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/10"
+                    >
+                      使用
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>

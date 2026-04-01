@@ -90,6 +90,166 @@ export class AiService {
     }
   }
 
+  async generateScript(
+    topic: string,
+    paragraphs: number = 5,
+  ): Promise<{ script: string[] }> {
+    if (!this.apiKey) {
+      return { script: ['未配置 LLM API Key'] };
+    }
+
+    const systemPrompt = `你是一个专业的短视频脚本写手。用户会给你一个主题或关键词，请你据此生成一个短视频混剪脚本。
+
+规则：
+1. 生成 ${paragraphs} 个段落（镜头组），每个段落是一个独立的画面描述+旁白文案
+2. 每个段落用 --- 分隔
+3. 每个段落格式为：第一行是旁白/字幕文案（口播内容），第二行开始是画面描述（给剪辑师参考）
+4. 文案要有吸引力，适合抖音/快手等短视频平台
+5. 控制每段旁白在30-60字
+6. 使用中文
+7. 只输出脚本内容，不要输出格式说明`;
+
+    try {
+      const res = await fetch(`${this.apiEndpoint}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `主题：${topic}` },
+          ],
+          temperature: 0.8,
+          max_tokens: 2000,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        this.logger.error(`LLM API error: ${res.status} ${err}`);
+        return { script: ['生成失败，请重试'] };
+      }
+
+      const data: any = await res.json();
+      const text = data.choices?.[0]?.message?.content?.trim() || '';
+      const parts = text.split(/---+/).map((p: string) => p.trim()).filter(Boolean);
+      return { script: parts.length > 0 ? parts : [text] };
+    } catch (err) {
+      this.logger.error(`generateScript failed: ${err}`);
+      return { script: ['生成失败，请重试'] };
+    }
+  }
+
+  async rewriteCopy(
+    text: string,
+    count: number = 3,
+  ): Promise<{ variants: string[] }> {
+    if (!this.apiKey) {
+      return { variants: [text] };
+    }
+
+    const systemPrompt = `你是一个专业的短视频文案改写助手。用户会给你一段文案，请你生成 ${count} 个改写变体。
+
+规则：
+1. 保持核心意思不变
+2. 每个变体用 --- 分隔
+3. 变换表达方式、句式、用词，使每个变体有明显差异
+4. 适合短视频平台风格（有吸引力、有节奏感）
+5. 只输出改写后的文案，不要编号，不要解释
+6. 每个变体长度与原文相近`;
+
+    try {
+      const res = await fetch(`${this.apiEndpoint}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: text },
+          ],
+          temperature: 0.9,
+          max_tokens: 2000,
+        }),
+      });
+
+      if (!res.ok) {
+        return { variants: [text] };
+      }
+
+      const data: any = await res.json();
+      const result = data.choices?.[0]?.message?.content?.trim() || '';
+      const variants = result.split(/---+/).map((v: string) => v.trim()).filter(Boolean);
+      return { variants: variants.length > 0 ? variants : [result] };
+    } catch (err) {
+      this.logger.error(`rewriteCopy failed: ${err}`);
+      return { variants: [text] };
+    }
+  }
+
+  async detectRiskWords(
+    text: string,
+  ): Promise<{ safe: boolean; risks: { word: string; reason: string }[] }> {
+    if (!this.apiKey) {
+      return { safe: true, risks: [] };
+    }
+
+    const systemPrompt = `你是一个短视频内容合规审核助手。请检查用户提供的文案中是否包含以下类型的风险词：
+
+1. 违禁词（极限用语如"最好"、"第一"、"国家级"等广告违禁词）
+2. 敏感词（政治敏感、暴力、色情、歧视等）
+3. 虚假宣传词（未经证实的功效声明等）
+4. 平台违规词（各短视频平台限流词）
+
+输出格式（JSON 数组）：
+[{"word": "风险词", "reason": "原因"}]
+
+如果没有风险词，输出空数组 []。
+只输出 JSON，不要其他内容。`;
+
+    try {
+      const res = await fetch(`${this.apiEndpoint}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: text },
+          ],
+          temperature: 0.1,
+          max_tokens: 1000,
+        }),
+      });
+
+      if (!res.ok) {
+        return { safe: true, risks: [] };
+      }
+
+      const data: any = await res.json();
+      const content = data.choices?.[0]?.message?.content?.trim() || '[]';
+      try {
+        const jsonMatch = content.match(/\[.*\]/s);
+        const risks = JSON.parse(jsonMatch ? jsonMatch[0] : '[]');
+        return { safe: risks.length === 0, risks };
+      } catch {
+        return { safe: true, risks: [] };
+      }
+    } catch (err) {
+      this.logger.error(`detectRiskWords failed: ${err}`);
+      return { safe: true, risks: [] };
+    }
+  }
+
   async polishPrompt(
     prompt: string,
     type: 'image' | 'video' = 'image',
