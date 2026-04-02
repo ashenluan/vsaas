@@ -5,7 +5,7 @@ import { useMixcutStore } from '../_store/use-mixcut-store';
 import { useJobUpdates } from '@/components/ws-provider';
 import { mixcutApi } from '@/lib/api';
 import { toast } from 'sonner';
-import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw, Clock, CalendarClock, Shield, Share2, Zap } from 'lucide-react';
+import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw, Clock, CalendarClock, Shield, Share2, Zap, Download, ExternalLink } from 'lucide-react';
 
 const PUBLISH_PLATFORMS = [
   { id: 'douyin', label: '抖音', icon: '🎵', color: 'bg-black text-white' },
@@ -17,7 +17,7 @@ const PUBLISH_PLATFORMS = [
 ];
 
 export function PreviewPanel() {
-  const { project, subtitleStyle, titleStyle, globalConfig, highlightWords, forbiddenWords, setScheduledAt, setPublishPlatforms } = useMixcutStore();
+  const { project, subtitleStyle, titleStyle, globalConfig, highlightWords, forbiddenWords, setScheduledAt, setPublishPlatforms, outputVideos, jobStatus, setOutputVideos, setJobStatus } = useMixcutStore();
 
   // Watermark position mapping
   const watermarkPositionStyle: Record<string, React.CSSProperties> = {
@@ -30,6 +30,10 @@ export function PreviewPanel() {
   const [result, setResult] = useState<{ success: boolean; jobId?: string; error?: string } | null>(null);
   const [progress, setProgress] = useState<{ status?: string; progress?: number; message?: string } | null>(null);
 
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [playingIdx, setPlayingIdx] = useState<number | null>(null);
+
   // Real-time progress via WebSocket
   useJobUpdates(result?.jobId || null, (data: any) => {
     setProgress({
@@ -37,7 +41,32 @@ export function PreviewPanel() {
       progress: data.progress,
       message: data.message || '',
     });
+    if (data.status === 'COMPLETED' && data.outputVideos?.length) {
+      setOutputVideos(data.outputVideos);
+      setJobStatus('COMPLETED');
+    }
   });
+
+  const handleBatchDownload = async () => {
+    setDownloading(true);
+    setDownloadProgress(0);
+    for (let i = 0; i < outputVideos.length; i++) {
+      const v = outputVideos[i];
+      const a = document.createElement('a');
+      a.href = v.mediaURL;
+      a.download = `${project.name}_${i + 1}.mp4`;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setDownloadProgress(Math.round(((i + 1) / outputVideos.length) * 100));
+      if (i < outputVideos.length - 1) {
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
+    setDownloading(false);
+  };
 
   // Estimate total combinations (only enabled groups)
   const enabledGroups = project.shotGroups.filter((g) => g.enabled !== false);
@@ -241,6 +270,107 @@ export function PreviewPanel() {
 
   return (
     <div id="mixcut-preview-panel" className="space-y-4">
+      {/* Output videos for completed jobs */}
+      {(jobStatus === 'COMPLETED' || outputVideos.length > 0) && (
+        <div className="rounded-xl border-2 border-green-200 bg-green-50/50 p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-green-700">
+              <CheckCircle size={14} /> 混剪完成 · {outputVideos.length} 个视频
+            </h3>
+            {outputVideos.length > 1 && (
+              <button
+                onClick={handleBatchDownload}
+                disabled={downloading}
+                className="flex items-center gap-1.5 rounded-lg border border-green-300 bg-white px-3 py-1.5 text-[11px] font-medium text-green-700 hover:bg-green-50 disabled:opacity-50 transition-colors"
+              >
+                {downloading ? (
+                  <><Loader2 size={10} className="animate-spin" /> {downloadProgress}%</>
+                ) : (
+                  <><Download size={10} /> 批量下载</>
+                )}
+              </button>
+            )}
+          </div>
+          {downloading && (
+            <div className="mb-3 h-1 w-full overflow-hidden rounded-full bg-green-200">
+              <div className="h-full rounded-full bg-green-500 transition-all duration-300" style={{ width: `${downloadProgress}%` }} />
+            </div>
+          )}
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {outputVideos.map((v, i) => (
+              <div
+                key={v.mediaId || i}
+                className="rounded-lg border bg-white p-2"
+              >
+                {playingIdx === i ? (
+                  <video
+                    src={v.mediaURL}
+                    controls
+                    autoPlay
+                    className="w-full rounded-md"
+                    style={{ maxHeight: 300 }}
+                    onEnded={() => setPlayingIdx(null)}
+                  />
+                ) : (
+                  <div
+                    className="flex items-center justify-between cursor-pointer hover:bg-muted/30 rounded-md px-2 py-1.5 transition-colors"
+                    onClick={() => setPlayingIdx(i)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 text-green-600">
+                        <Film size={14} />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium">视频 {i + 1}</p>
+                        {v.duration && (
+                          <p className="text-[10px] text-muted-foreground">{Math.round(v.duration)}秒</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setPlayingIdx(i); }}
+                        className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-green-100 text-green-600 transition-colors"
+                        title="播放"
+                      >
+                        <Play size={12} />
+                      </button>
+                      <a
+                        href={v.mediaURL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors"
+                        title="新窗口打开"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const a = document.createElement('a');
+                          a.href = v.mediaURL;
+                          a.download = `${project.name}_${i + 1}.mp4`;
+                          a.target = '_blank';
+                          a.rel = 'noopener';
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                        }}
+                        className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors"
+                        title="下载"
+                      >
+                        <Download size={12} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
         <h3 className="flex items-center gap-2 text-sm font-semibold">
           <Eye size={14} /> 配置预览

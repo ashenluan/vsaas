@@ -68,10 +68,20 @@ export class MixcutProductionProcessor extends WorkerHost {
       // Poll IMS status
       const imsStatus = await this.pollImsJob(imsResult.jobId, userId, jobId);
 
+      // Extract output videos from successful sub-jobs
+      const outputVideos = (imsStatus.subJobs || [])
+        .filter((sj: any) => sj.status === 'Success')
+        .map((sj: any) => ({
+          mediaId: sj.mediaId,
+          mediaURL: sj.mediaURL,
+          duration: sj.duration,
+        }));
+
       // Update final status
       const output = {
         imsJobId: imsResult.jobId,
         imsStatus,
+        outputVideos,
       };
 
       await this.prisma.generation.update({
@@ -83,7 +93,13 @@ export class MixcutProductionProcessor extends WorkerHost {
         },
       });
 
-      this.sendProgress(userId, jobId, 'COMPLETED', 100, '智能混剪完成');
+      this.ws.sendToUser(userId, 'mixcut:progress', {
+        jobId,
+        status: 'COMPLETED',
+        progress: 100,
+        message: `智能混剪完成，生成 ${outputVideos.length} 个视频`,
+        outputVideos,
+      });
       return output;
     } catch (error: any) {
       this.logger.error(`Mixcut job ${jobId} failed: ${error.message}`, error.stack);

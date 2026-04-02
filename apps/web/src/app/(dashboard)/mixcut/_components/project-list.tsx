@@ -45,18 +45,21 @@ export function ProjectList() {
 
   const handleOpenProject = (job: any) => {
     const input = job.input || {};
+    const store = useMixcutStore.getState();
     if (input.isDraft && input.projectData) {
       // Restore draft project
       loadProject({
         id: job.id,
         name: input.name || job.id,
         shotGroups: input.projectData.shotGroups || [createShotGroup('视频组_1')],
-        subtitleStyle: input.projectData.subtitleStyle || useMixcutStore.getState().subtitleStyle,
-        titleStyle: input.projectData.titleStyle || useMixcutStore.getState().titleStyle,
-        globalConfig: input.projectData.globalConfig || useMixcutStore.getState().globalConfig,
+        subtitleStyle: input.projectData.subtitleStyle || store.subtitleStyle,
+        titleStyle: input.projectData.titleStyle || store.titleStyle,
+        globalConfig: input.projectData.globalConfig || store.globalConfig,
         highlightWords: input.projectData.highlightWords || [],
         forbiddenWords: input.projectData.forbiddenWords || [],
       });
+      store.setOutputVideos([]);
+      store.setJobStatus('');
     } else {
       // Open completed/in-progress job as read-only view
       const shotGroups = (input.shotGroups || []).map((g: any, i: number) => {
@@ -77,12 +80,17 @@ export function ProjectList() {
         id: job.id,
         name: input.name || '混剪项目',
         shotGroups: shotGroups.length ? shotGroups : [createShotGroup('视频组_1')],
-        subtitleStyle: input.subtitleConfig || useMixcutStore.getState().subtitleStyle,
-        titleStyle: input.titleConfig || useMixcutStore.getState().titleStyle,
-        globalConfig: useMixcutStore.getState().globalConfig,
+        subtitleStyle: input.subtitleConfig || store.subtitleStyle,
+        titleStyle: input.titleConfig || store.titleStyle,
+        globalConfig: store.globalConfig,
         highlightWords: input.highlightWords || [],
         forbiddenWords: input.forbiddenWords || [],
       });
+
+      // Set output videos and job status for completed jobs
+      const outputVideos = (job.output as any)?.outputVideos || [];
+      store.setOutputVideos(outputVideos);
+      store.setJobStatus(job.status);
     }
   };
 

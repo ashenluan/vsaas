@@ -116,6 +116,12 @@ export interface GlobalConfig {
   dedupConfig: DedupConfig;
 }
 
+export interface OutputVideo {
+  mediaId: string;
+  mediaURL: string;
+  duration?: number;
+}
+
 export type MixcutView = 'list' | 'editor';
 
 export interface ForbiddenWord {
@@ -279,6 +285,12 @@ interface MixcutState {
   // Forbidden words
   forbiddenWords: ForbiddenWord[];
   setForbiddenWords: (words: ForbiddenWord[]) => void;
+
+  // Output videos (for completed jobs)
+  outputVideos: OutputVideo[];
+  setOutputVideos: (videos: OutputVideo[]) => void;
+  jobStatus: string;
+  setJobStatus: (status: string) => void;
 
   // Active drawer
   activeDrawer: null | { type: 'subtitle' | 'effect' | 'sticker'; shotId: string };
@@ -487,6 +499,12 @@ export const useMixcutStore = create<MixcutState>()(
           project: { ...s.project, forbiddenWords: words },
         })),
 
+      // Output videos
+      outputVideos: [],
+      setOutputVideos: (videos) => set({ outputVideos: videos }),
+      jobStatus: '',
+      setJobStatus: (status) => set({ jobStatus: status }),
+
       // Drawer
       activeDrawer: null,
       openDrawer: (type, shotId) => set({ activeDrawer: { type, shotId } }),
@@ -510,6 +528,8 @@ export const useMixcutStore = create<MixcutState>()(
           highlightWords: [],
           forbiddenWords: [],
           activeDrawer: null,
+          outputVideos: [],
+          jobStatus: '',
         }),
       loadProject: (project) =>
         set({
