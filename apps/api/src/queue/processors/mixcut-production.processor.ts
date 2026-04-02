@@ -135,7 +135,8 @@ export class MixcutProductionProcessor extends WorkerHost {
           return status;
         }
         if (status.status === 'Failed') {
-          throw new Error('IMS 智能混剪任务失败');
+          const detail = status.errorDetail || status.subJobs?.filter((s: any) => s.status === 'Failed').map((s: any) => `${s.errorCode}: ${s.errorMessage}`).join('; ') || 'unknown';
+          throw new Error(`IMS 智能混剪任务失败: ${detail}`);
         }
 
         const progress = 15 + Math.round((status.progress || 0) * 0.8);

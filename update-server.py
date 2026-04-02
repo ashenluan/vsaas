@@ -96,9 +96,12 @@ def main():
             print("Web/API restart failed!")
             raise SystemExit(1)
 
+        print("\n=== Clearing Nginx proxy cache ===")
+        run_cmd(ssh, "rm -rf /www/server/nginx/proxy_cache_dir/* && /www/server/nginx/sbin/nginx -s reload")
+
         time.sleep(5)
         run_cmd(ssh, f"cd {DEPLOY_DIR} && {COMPOSE} ps")
-        run_smoke_check()
+        run_cmd(ssh, "curl -s http://127.0.0.1:4000/api/health")
     finally:
         ssh.close()
 

@@ -598,7 +598,7 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     }
   }
 
-  async checkJobStatus(jobId: string): Promise<{ status: string; subJobs?: any[]; progress?: number }> {
+  async checkJobStatus(jobId: string): Promise<{ status: string; subJobs?: any[]; progress?: number; errorDetail?: string }> {
     this.logger.log(`Checking IMS job status: ${jobId}`);
 
     const client = this.getClient();
@@ -638,11 +638,34 @@ export class AliyunIMSProvider implements BatchComposeProvider {
 
       // Check if all sub-jobs failed
       const allFailed = subJobs.length > 0 && subJobs.every((sj: any) => sj.status === 'Failed');
-      if (allFailed) status = 'Failed';
+      if (allFailed) {
+        const failReasons = subJobs
+          .filter((sj: any) => sj.status === 'Failed')
+          .map((sj: any) => `${sj.errorCode || 'UnknownCode'}: ${sj.errorMessage || 'no message'}`)
+          .join('; ');
+        this.logger.error(`IMS job ${jobId} all sub-jobs failed: ${failReasons}`);
+        status = 'Failed';
+      }
+
+      // Collect error detail string for callers
+      let errorDetail = '';
+      if (status === 'Failed') {
+        const failedSubs = subJobs.filter((sj: any) => sj.status === 'Failed');
+        if (failedSubs.length) {
+          errorDetail = failedSubs.map((sj: any) => `${sj.errorCode || ''}: ${sj.errorMessage || ''}`).join('; ');
+        }
+        if (!errorDetail) {
+          try {
+            const ext = JSON.parse(job.extend || '{}');
+            errorDetail = ext.ErrorMessage || ext.ErrorCode || '';
+          } catch { /* ignore */ }
+        }
+      }
 
       return {
         status,
         progress,
+        errorDetail,
         subJobs: subJobs.map((sj: any) => ({
           mediaId: sj.mediaId,
           mediaURL: sj.mediaURL,

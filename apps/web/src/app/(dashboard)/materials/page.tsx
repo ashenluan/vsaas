@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { materialApi } from '@/lib/api';
 import { uploadToOSS } from '@/lib/upload';
+import { IMS_ALL_ACCEPT, validateImsFile, getImsFormatHint } from '@/lib/ims-formats';
 import {
   FolderOpen, Upload, Trash2, Search, Loader2, Film, Image as ImageIcon,
   Music, LayoutGrid, List, X, Eye, CheckSquare, Square, Filter,
@@ -68,10 +69,14 @@ export default function MaterialsPage() {
 
     try {
       for (const file of Array.from(files)) {
+        const formatError = validateImsFile(file, ['image', 'video', 'audio']);
+        if (formatError) {
+          console.warn(`Skipped ${file.name}: ${formatError}`);
+          continue;
+        }
         const isImage = file.type.startsWith('image/');
         const isVideo = file.type.startsWith('video/');
         const isAudio = file.type.startsWith('audio/');
-        if (!isImage && !isVideo && !isAudio) continue;
 
         const { url: fileUrl } = await uploadToOSS(file);
         await materialApi.upload({
@@ -208,7 +213,7 @@ export default function MaterialsPage() {
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*,video/*,audio/*"
+            accept={IMS_ALL_ACCEPT}
             onChange={(e) => handleUpload(e.target.files)}
             className="hidden"
           />

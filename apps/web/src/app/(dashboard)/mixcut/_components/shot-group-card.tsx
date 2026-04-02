@@ -5,6 +5,7 @@ import { useMixcutStore, type ShotGroup, type ShotMaterial } from '../_store/use
 import { materialApi } from '@/lib/api';
 import { uploadToOSS } from '@/lib/upload';
 import { toast } from 'sonner';
+import { IMS_MEDIA_ACCEPT, validateImsFile } from '@/lib/ims-formats';
 import {
   ImagePlus, Film, Image as ImageIcon, X, GripVertical,
   Type, Wand2, Sparkles, Sticker, Volume2, VolumeX, Trash2,
@@ -65,9 +66,13 @@ export function ShotGroupCard({
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
+        const formatError = validateImsFile(file, ['image', 'video']);
+        if (formatError) {
+          toast.error(`${file.name}: ${formatError}`);
+          continue;
+        }
         const isImage = file.type.startsWith('image/');
         const isVideo = file.type.startsWith('video/');
-        if (!isImage && !isVideo) continue;
 
         const { url: fileUrl } = await uploadToOSS(file);
         const created = await materialApi.upload({
@@ -173,7 +178,7 @@ export function ShotGroupCard({
             <input
               type="file"
               multiple
-              accept="image/*,video/*"
+              accept={IMS_MEDIA_ACCEPT}
               onChange={(e) => handleFileUpload(e.target.files)}
               className="hidden"
             />

@@ -184,13 +184,13 @@ export default function VideoSplitPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="video/*"
+            accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm,video/mpeg,video/x-ms-wmv,video/3gpp,video/x-flv,video/x-f4v,.rmvb,.rm"
             onChange={(e) => handleFileSelect(e.target.files)}
             className="hidden"
           />
           <Upload size={40} className="mb-4 text-muted-foreground/40" />
           <p className="text-sm font-medium text-muted-foreground">点击或拖拽上传视频文件</p>
-          <p className="mt-1 text-[11px] text-muted-foreground/70">支持 MP4, MOV, AVI 等常见格式</p>
+          <p className="mt-1 text-[11px] text-muted-foreground/70">支持 MP4, MOV, AVI, MKV, WebM, FLV, MPEG, RMVB, 3GP, WMV</p>
         </div>
       ) : (
         <>

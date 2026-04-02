@@ -6,6 +6,7 @@ import { StepContainer, Card } from './shared';
 import { materialApi } from '@/lib/api';
 import { uploadToOSS } from '@/lib/upload';
 import { ImagePlus, Music, Upload, X, Image as ImageIcon, Film } from 'lucide-react';
+import { IMS_MEDIA_ACCEPT, IMS_AUDIO_ACCEPT, validateImsFile, getImsFormatHint } from '@/lib/ims-formats';
 
 export function StepMaterials({ allMaterials, onMaterialAdd }: { allMaterials: any[]; onMaterialAdd: (m: any) => void }) {
   const { selectedMaterials, toggleMaterial, bgMusic, setBgMusic } = useComposeStore();
@@ -19,9 +20,13 @@ export function StepMaterials({ allMaterials, onMaterialAdd }: { allMaterials: a
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
+        const formatError = validateImsFile(file, ['image', 'video']);
+        if (formatError) {
+          console.warn(`Skipped ${file.name}: ${formatError}`);
+          continue;
+        }
         const isImage = file.type.startsWith('image/');
         const isVideo = file.type.startsWith('video/');
-        if (!isImage && !isVideo) continue;
 
         // 1. upload to OSS (handles presigned URL internally)
         const { url: fileUrl } = await uploadToOSS(file);
@@ -62,7 +67,7 @@ export function StepMaterials({ allMaterials, onMaterialAdd }: { allMaterials: a
             const input = document.createElement('input');
             input.type = 'file';
             input.multiple = true;
-            input.accept = 'image/*,video/*';
+            input.accept = IMS_MEDIA_ACCEPT;
             input.onchange = () => handleFileUpload(input.files);
             input.click();
           }}
@@ -76,7 +81,7 @@ export function StepMaterials({ allMaterials, onMaterialAdd }: { allMaterials: a
             <>
               <ImagePlus className="h-8 w-8 text-muted-foreground/50" />
               <p className="text-sm text-muted-foreground">拖拽或点击上传图片/视频素材</p>
-              <p className="text-[10px] text-muted-foreground/50">支持 JPG, PNG, MP4, MOV</p>
+              <p className="text-[10px] text-muted-foreground/50">支持 {getImsFormatHint('media')}</p>
             </>
           )}
         </div>
@@ -156,7 +161,7 @@ export function StepMaterials({ allMaterials, onMaterialAdd }: { allMaterials: a
             </button>
           )}
         </div>
-        <p className="mt-1 text-[10px] text-muted-foreground">支持 MP3、WAV 格式，音量可在输出配置中调整</p>
+        <p className="mt-1 text-[10px] text-muted-foreground">支持 {getImsFormatHint('audio')}，音量可在输出配置中调整</p>
       </Card>
     </StepContainer>
   );
