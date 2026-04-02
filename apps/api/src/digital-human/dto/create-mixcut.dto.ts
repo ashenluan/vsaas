@@ -64,6 +64,8 @@ class MixcutSubtitleConfigDto {
   @IsOptional() @IsBoolean() underline?: boolean;
   @IsOptional() @IsString() effectColorStyleId?: string;
   @IsOptional() @IsString() bubbleStyleId?: string;
+  @IsOptional() @IsString() adaptMode?: string;
+  @IsOptional() @IsNumber() textWidth?: number;
 }
 
 class MixcutTitleConfigDto {
@@ -191,6 +193,10 @@ export class CreateMixcutDto {
   @IsString({ each: true })
   transitionList?: string[];
 
+  @IsOptional()
+  @IsBoolean()
+  useUniformTransition?: boolean;
+
   // Filter
   @IsOptional()
   @IsBoolean()
@@ -234,6 +240,13 @@ export class CreateMixcutDto {
   @IsOptional()
   @IsString()
   bgImage?: string; // 自定义背景图 URL
+
+  // 模糊背景半径
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  @Max(1)
+  bgBlurRadius?: number;
 
   // Scheduled publishing
   @IsOptional()
@@ -312,6 +325,26 @@ export class CreateMixcutDto {
     coverTitleSize?: number;
     coverTitlePosition?: 'top' | 'center' | 'bottom';
   };
+
+  // 水印
+  @IsOptional()
+  @IsString()
+  watermarkText?: string;
+
+  @IsOptional()
+  @IsString()
+  watermarkPosition?: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  watermarkOpacity?: number;
+
+  // 贴纸
+  @IsOptional()
+  @IsArray()
+  stickers?: { url: string; x: number; y: number; width: number; height: number; opacity?: number; dyncFrames?: number }[];
 
   // 矩阵发布
   @IsOptional()

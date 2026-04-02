@@ -80,7 +80,7 @@ export function PreviewPanel() {
           }),
           ...(g.subHeadings?.length > 0 && { subHeadings: g.subHeadings }),
           keepOriginalAudio: g.keepOriginalAudio,
-          ...(g.volume !== 1 && { volume: g.volume }),
+          ...(!g.keepOriginalAudio ? { volume: 0 } : g.volume !== 1 ? { volume: g.volume } : {}),
           ...(g.smartTrim && { splitMode: 'AverageSplit' as const }),
         })),
         speechMode: hasGroupSpeech ? 'group' as const : undefined,
@@ -109,6 +109,8 @@ export function PreviewPanel() {
           bold: subtitleStyle.bold,
           italic: subtitleStyle.italic,
           underline: subtitleStyle.underline,
+          ...(subtitleStyle.adaptMode && { adaptMode: subtitleStyle.adaptMode }),
+          ...(subtitleStyle.textWidth && { textWidth: subtitleStyle.textWidth }),
           ...(subtitleStyle.effectColorStyleId && { effectColorStyleId: subtitleStyle.effectColorStyleId }),
           ...(subtitleStyle.bubbleStyleId && { bubbleStyleId: subtitleStyle.bubbleStyleId }),
         },
@@ -143,19 +145,27 @@ export function PreviewPanel() {
           transitionEnabled: true,
           transitionDuration: globalConfig.transitionDuration,
           transitionList: globalConfig.transitionList,
+          useUniformTransition: globalConfig.useUniformTransition,
         }),
         // Filter
         ...(globalConfig.filterEnabled && {
           filterEnabled: true,
           filterList: globalConfig.filterList,
         }),
-        // VFX Effects
-        ...(globalConfig.vfxEffectEnabled && {
-          vfxEffectEnabled: true,
-          vfxEffectProbability: globalConfig.vfxEffectProbability,
-          ...(globalConfig.vfxFirstClipEffectList.length > 0 && { vfxFirstClipEffectList: globalConfig.vfxFirstClipEffectList }),
-          ...(globalConfig.vfxNotFirstClipEffectList.length > 0 && { vfxNotFirstClipEffectList: globalConfig.vfxNotFirstClipEffectList }),
-        }),
+        // VFX Effects (merge per-group scene effects into global lists)
+        ...(() => {
+          const groupEffects = enabledGroups.flatMap((g) => g.effectList || []);
+          const hasGlobal = globalConfig.vfxEffectEnabled;
+          const hasGroup = groupEffects.length > 0;
+          if (!hasGlobal && !hasGroup) return {};
+          const mergedNotFirst = [...new Set([...globalConfig.vfxNotFirstClipEffectList, ...groupEffects])];
+          return {
+            vfxEffectEnabled: true,
+            vfxEffectProbability: globalConfig.vfxEffectProbability || 50,
+            ...(globalConfig.vfxFirstClipEffectList.length > 0 && { vfxFirstClipEffectList: globalConfig.vfxFirstClipEffectList }),
+            ...(mergedNotFirst.length > 0 && { vfxNotFirstClipEffectList: mergedNotFirst }),
+          };
+        })(),
         // Video quality
         ...(globalConfig.maxDuration > 0 && { maxDuration: globalConfig.maxDuration }),
         ...(globalConfig.fixedDuration > 0 && { fixedDuration: globalConfig.fixedDuration }),
@@ -169,6 +179,7 @@ export function PreviewPanel() {
         // Background
         ...(globalConfig.bgType !== 'none' && { bgType: globalConfig.bgType }),
         ...(globalConfig.bgType === 'color' && { bgColor: globalConfig.bgColor }),
+        ...(globalConfig.bgType === 'blur' && globalConfig.bgBlurRadius && { bgBlurRadius: globalConfig.bgBlurRadius }),
         ...(globalConfig.bgType === 'image' && globalConfig.bgImage && { bgImage: globalConfig.bgImage }),
         // 封面
         ...(globalConfig.coverType !== 'auto' && { coverType: globalConfig.coverType }),
@@ -182,6 +193,12 @@ export function PreviewPanel() {
             coverTitlePosition: globalConfig.coverTitlePosition,
           },
         }),
+        // 水印
+        ...(globalConfig.watermarkText && {
+          watermarkText: globalConfig.watermarkText,
+          watermarkPosition: globalConfig.watermarkPosition,
+          watermarkOpacity: globalConfig.watermarkOpacity,
+        }),
         // 二创去重
         ...(Object.values(globalConfig.dedupConfig).some(Boolean) && {
           dedupConfig: globalConfig.dedupConfig,
@@ -190,6 +207,25 @@ export function PreviewPanel() {
         ...(project.scheduledAt && { scheduledAt: project.scheduledAt }),
         // 矩阵发布
         ...(project.publishPlatforms?.length && { publishPlatforms: project.publishPlatforms }),
+        // 贴纸 (合并所有镜头组的贴纸，转换为像素坐标)
+        ...(() => {
+          const allStickers = enabledGroups.flatMap((g) => g.stickers || []).filter((s) => s.url?.startsWith('http'));
+          if (allStickers.length === 0) return {};
+          const [w, h] = globalConfig.resolution.split('x').map(Number);
+          const pw = w || 1080;
+          const ph = h || 1920;
+          return {
+            stickers: allStickers.map((s) => ({
+              url: s.url,
+              x: Math.round(s.x * pw),
+              y: Math.round(s.y * ph),
+              width: Math.round(s.width * pw),
+              height: Math.round(s.height * ph),
+              ...(s.opacity !== undefined && { opacity: s.opacity }),
+              ...(s.dyncFrames !== undefined && { dyncFrames: s.dyncFrames }),
+            })),
+          };
+        })(),
       };
 
       const job = await mixcutApi.create(payload);

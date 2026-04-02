@@ -789,6 +789,7 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     backgroundMusicStyle?: string;
     // 背景图
     backgroundImageType?: string;
+    backgroundImageColor?: string;
     backgroundImageRadius?: number;
     // 处理配置
     singleShotDuration?: number;
@@ -975,7 +976,8 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     // 背景图配置
     if (config.backgroundImageType || config.backgroundImageRadius) {
       editingConfig.BackgroundImageConfig = {
-        ...(config.backgroundImageType && { Type: config.backgroundImageType }),
+        ...(config.backgroundImageType && { SubType: config.backgroundImageType }),
+        ...(config.backgroundImageColor && { Color: config.backgroundImageColor }),
         ...(config.backgroundImageRadius && { Radius: config.backgroundImageRadius }),
       };
     }

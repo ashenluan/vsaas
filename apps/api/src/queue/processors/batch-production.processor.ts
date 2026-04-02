@@ -25,6 +25,15 @@ interface ComposeJobData {
     transitionConfig?: any;
     filterConfig?: any;
     highlightWords?: { word: string; fontColor?: string; outlineColour?: string; bold?: boolean }[];
+    forbiddenWords?: { word: string; soundReplaceMode?: string }[];
+    bgType?: string;
+    bgColor?: string;
+    bgImage?: string;
+    bgBlurRadius?: number;
+    stickers?: { url: string; x: number; y: number; width: number; height: number; opacity?: number; dyncFrames?: number }[];
+    dedupConfig?: { smartCrop?: boolean; smartZoom?: boolean; smartMirror?: boolean; transparentMask?: boolean; randomSpeed?: boolean };
+    coverType?: string;
+    coverConfig?: { coverTitle?: string; coverTitleFont?: string; coverTitleColor?: string; coverTitleSize?: number; coverTitlePosition?: 'top' | 'center' | 'bottom' };
     maxDuration?: number;
     crf?: number;
     speechRate?: number;
@@ -232,6 +241,8 @@ export class BatchProductionProcessor extends WorkerHost {
         }],
         ...(input.bgMusic && { backgroundMusic: [input.bgMusic] }),
         ...(input.titleConfig?.titles?.length && { titles: input.titleConfig.titles }),
+        ...(input.stickers?.length && { stickers: input.stickers }),
+        ...(input.bgType === 'image' && input.bgImage && { backgroundImages: [input.bgImage] }),
       });
 
       const { width, height } = this.parseResolutionWH(input.resolution);
@@ -245,16 +256,33 @@ export class BatchProductionProcessor extends WorkerHost {
         subtitleConfig: input.subtitleConfig,
         // 关键词高亮 → IMS SpecialWordsConfig
         ...(input.highlightWords?.length && {
-          specialWordsConfig: input.highlightWords
-            .filter((hw) => hw.word)
-            .map((hw) => ({
-              type: 'Highlight' as const,
-              wordsList: [hw.word],
-              style: {
-                ...(hw.fontColor && { fontColor: hw.fontColor }),
-                ...(hw.outlineColour && { outlineColour: hw.outlineColour }),
-                ...(hw.bold && { bold: true }),
-              },
+          specialWordsConfig: [
+            ...input.highlightWords
+              .filter((hw) => hw.word)
+              .map((hw) => ({
+                type: 'Highlight' as const,
+                wordsList: [hw.word],
+                style: {
+                  ...(hw.fontColor && { fontColor: this.rgbToBgr(hw.fontColor) }),
+                  ...(hw.outlineColour && { outlineColour: this.rgbToBgr(hw.outlineColour) }),
+                  ...(hw.bold && { bold: true }),
+                },
+              })),
+            ...(input.forbiddenWords || []).filter((fw) => fw.word).map((fw) => ({
+              type: 'Forbidden' as const,
+              wordsList: [fw.word],
+              soundReplaceMode: fw.soundReplaceMode === 'beep' ? 'Beep' : 'None',
+            })),
+          ],
+        }),
+        // 如果只有 forbiddenWords 没有 highlightWords
+        ...(!input.highlightWords?.length && input.forbiddenWords?.length && {
+          specialWordsConfig: input.forbiddenWords
+            .filter((fw) => fw.word)
+            .map((fw) => ({
+              type: 'Forbidden' as const,
+              wordsList: [fw.word],
+              soundReplaceMode: fw.soundReplaceMode === 'beep' ? 'Beep' : 'None',
             })),
         }),
         titleConfig: input.titleConfig ? {
@@ -275,6 +303,22 @@ export class BatchProductionProcessor extends WorkerHost {
         useUniformTransition: input.transitionConfig?.useUniformTransition,
         allowFilter: input.filterConfig?.allowFilter,
         filterList: input.filterConfig?.filterList,
+        // Background
+        ...(input.bgType && input.bgType !== 'none' && {
+          backgroundImageType: input.bgType === 'blur' ? 'Blur' : input.bgType === 'color' ? 'Color' : 'Image',
+          ...(input.bgType === 'color' && input.bgColor && { backgroundImageColor: input.bgColor }),
+          ...(input.bgType === 'blur' && input.bgBlurRadius && { backgroundImageRadius: input.bgBlurRadius }),
+        }),
+        // Dedup
+        ...(input.dedupConfig && {
+          dedupSmartCrop: input.dedupConfig.smartCrop,
+          dedupSmartZoom: input.dedupConfig.smartZoom,
+          dedupSmartMirror: input.dedupConfig.smartMirror,
+          dedupTransparentMask: input.dedupConfig.transparentMask,
+          dedupRandomSpeed: input.dedupConfig.randomSpeed,
+        }),
+        // Cover
+        ...(input.coverConfig && { coverConfig: input.coverConfig }),
       });
 
       // IMS 要求 MediaURL 包含 {index} 占位符，会替换为 001, 002 等
@@ -458,6 +502,12 @@ export class BatchProductionProcessor extends WorkerHost {
     }
 
     throw new Error('IMS job timed out after 60 minutes');
+  }
+
+  /** Convert RGB hex (RRGGBB) to BGR hex (BBGGRR) for IMS SpecialWordsConfig */
+  private rgbToBgr(hex: string): string {
+    const h = hex.replace('#', '');
+    return h.length === 6 ? h.slice(4, 6) + h.slice(2, 4) + h.slice(0, 2) : h;
   }
 
   private parseResolution(resolution: string): string {

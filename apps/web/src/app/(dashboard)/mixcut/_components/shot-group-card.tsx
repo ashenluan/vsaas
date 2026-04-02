@@ -551,28 +551,7 @@ function HotMaterialsPanel({
   );
 }
 
-/* ========== Sticker Panel ========== */
-
-const PRESET_STICKERS = [
-  { id: 'arrow_up', label: '↑ 箭头', category: '指引' },
-  { id: 'arrow_down', label: '↓ 箭头', category: '指引' },
-  { id: 'circle', label: '○ 圆圈', category: '标注' },
-  { id: 'star', label: '★ 星标', category: '标注' },
-  { id: 'heart', label: '♥ 爱心', category: '表情' },
-  { id: 'fire', label: '🔥 火焰', category: '表情' },
-  { id: 'thumbsup', label: '👍 点赞', category: '表情' },
-  { id: 'sparkle', label: '✨ 闪烁', category: '装饰' },
-  { id: 'ribbon', label: '🎀 蝴蝶结', category: '装饰' },
-  { id: 'crown', label: '👑 皇冠', category: '装饰' },
-  { id: 'price_tag', label: '💰 价签', category: '促销' },
-  { id: 'sale', label: '🏷️ 折扣', category: '促销' },
-  { id: 'new', label: '🆕 新品', category: '促销' },
-  { id: 'hot', label: '🔥 热卖', category: '促销' },
-  { id: 'subscribe', label: '🔔 关注', category: '社交' },
-  { id: 'like', label: '❤️ 点赞', category: '社交' },
-];
-
-const STICKER_CATEGORIES = ['全部', '指引', '标注', '表情', '装饰', '促销', '社交'];
+/* ========== Sticker Panel (image-upload based, IMS compatible) ========== */
 
 const POSITION_PRESETS = [
   { label: '左上', x: 0.05, y: 0.05 },
@@ -591,21 +570,27 @@ function StickerPanel({
   onUpdate: (partial: Partial<ShotGroup>) => void;
   onClose: () => void;
 }) {
-  const [stickerCategory, setStickerCategory] = useState('全部');
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
 
-  const filteredStickers = stickerCategory === '全部'
-    ? PRESET_STICKERS
-    : PRESET_STICKERS.filter((s) => s.category === stickerCategory);
-
-  const addSticker = (stickerId: string) => {
-    const sticker = PRESET_STICKERS.find((s) => s.id === stickerId);
-    if (!sticker) return;
-    const current = group.stickers || [];
-    onUpdate({
-      stickers: [...current, { url: stickerId, x: 0.4, y: 0.4, width: 0.15, height: 0.15 }],
-      stickerEnabled: true,
-    });
+  const handleStickerUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith('image/')) continue;
+        const { url: fileUrl } = await uploadToOSS(file);
+        const current = group.stickers || [];
+        onUpdate({
+          stickers: [...current, { url: fileUrl, x: 0.4, y: 0.4, width: 0.15, height: 0.15 }],
+          stickerEnabled: true,
+        });
+      }
+    } catch (err: any) {
+      toast.error(err?.message || '贴纸上传失败');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const removeSticker = (index: number) => {
@@ -624,7 +609,7 @@ function StickerPanel({
   return (
     <div className="border-t px-4 py-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[12px] font-medium">贴纸</span>
+        <span className="text-[12px] font-medium">贴纸 / Logo / 水印图</span>
         <div className="flex gap-1.5">
           {(group.stickers?.length || 0) > 0 && (
             <button
@@ -640,135 +625,122 @@ function StickerPanel({
         </div>
       </div>
 
-      {/* Category filter */}
-      <div className="mb-2 flex flex-wrap gap-1">
-        {STICKER_CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setStickerCategory(cat)}
-            className={`rounded-md border px-2 py-0.5 text-[10px] transition-all ${
-              stickerCategory === cat
-                ? 'border-primary bg-primary/10 text-primary font-medium'
-                : 'border-input hover:bg-accent'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
+      <p className="mb-2 text-[10px] text-muted-foreground">上传 PNG/SVG 图片作为贴纸覆盖在视频上（支持透明背景）</p>
 
-      {/* Sticker grid */}
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {filteredStickers.map((sticker) => (
-          <button
-            key={sticker.id}
-            onClick={() => addSticker(sticker.id)}
-            className="rounded-md border px-2 py-1.5 text-[11px] hover:border-primary/50 hover:bg-accent transition-colors"
-          >
-            {sticker.label}
-          </button>
-        ))}
-      </div>
+      {/* Upload area */}
+      <label className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/30 px-4 py-4 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
+        {uploading ? (
+          <><Loader2 size={14} className="animate-spin" /> 上传中...</>
+        ) : (
+          <><Sticker size={14} /> 点击上传贴纸图片（PNG/SVG/GIF）</>
+        )}
+        <input
+          type="file"
+          multiple
+          accept="image/png,image/svg+xml,image/gif,image/webp"
+          onChange={(e) => handleStickerUpload(e.target.files)}
+          className="hidden"
+          disabled={uploading}
+        />
+      </label>
 
       {/* Active stickers list */}
       {(group.stickers?.length || 0) > 0 && (
         <div className="space-y-2">
           <p className="text-[10px] text-muted-foreground">已添加的贴纸 ({group.stickers.length})</p>
-          {group.stickers.map((sticker, i) => {
-            const preset = PRESET_STICKERS.find((s) => s.id === sticker.url);
-            return (
-              <div key={i} className="rounded-md border bg-card p-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium">
-                    {preset?.label || sticker.url}
-                  </span>
+          {group.stickers.map((sticker, i) => (
+            <div key={i} className="rounded-md border bg-card p-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <img src={sticker.url} alt={`贴纸${i + 1}`} className="h-8 w-8 rounded object-contain border bg-muted" />
+                  <span className="text-[11px] font-medium">贴纸 {i + 1}</span>
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setEditingIdx(editingIdx === i ? null : i)}
+                    className="rounded border px-1.5 py-0.5 text-[9px] text-primary hover:bg-primary/10"
+                  >
+                    {editingIdx === i ? '收起' : '调整'}
+                  </button>
+                  <button
+                    onClick={() => removeSticker(i)}
+                    className="text-muted-foreground hover:text-red-500"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+              </div>
+
+              {editingIdx === i && (
+                <div className="mt-2 space-y-2">
+                  {/* Quick position presets */}
                   <div className="flex gap-1">
-                    <button
-                      onClick={() => setEditingIdx(editingIdx === i ? null : i)}
-                      className="rounded border px-1.5 py-0.5 text-[9px] text-primary hover:bg-primary/10"
-                    >
-                      {editingIdx === i ? '收起' : '调整'}
-                    </button>
-                    <button
-                      onClick={() => removeSticker(i)}
-                      className="text-muted-foreground hover:text-red-500"
-                    >
-                      <Trash2 size={10} />
-                    </button>
+                    {POSITION_PRESETS.map((pos) => (
+                      <button
+                        key={pos.label}
+                        onClick={() => updateSticker(i, { x: pos.x, y: pos.y })}
+                        className="rounded border px-1.5 py-0.5 text-[9px] hover:bg-accent transition-colors"
+                      >
+                        {pos.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Position sliders */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+                        <span>X 位置</span>
+                        <span>{(sticker.x * 100).toFixed(0)}%</span>
+                      </div>
+                      <input
+                        type="range" min={0} max={1} step={0.01}
+                        value={sticker.x}
+                        onChange={(e) => updateSticker(i, { x: Number(e.target.value) })}
+                        className="w-full accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+                        <span>Y 位置</span>
+                        <span>{(sticker.y * 100).toFixed(0)}%</span>
+                      </div>
+                      <input
+                        type="range" min={0} max={1} step={0.01}
+                        value={sticker.y}
+                        onChange={(e) => updateSticker(i, { y: Number(e.target.value) })}
+                        className="w-full accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+                        <span>宽度</span>
+                        <span>{(sticker.width * 100).toFixed(0)}%</span>
+                      </div>
+                      <input
+                        type="range" min={0.05} max={0.5} step={0.01}
+                        value={sticker.width}
+                        onChange={(e) => updateSticker(i, { width: Number(e.target.value) })}
+                        className="w-full accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+                        <span>高度</span>
+                        <span>{(sticker.height * 100).toFixed(0)}%</span>
+                      </div>
+                      <input
+                        type="range" min={0.05} max={0.5} step={0.01}
+                        value={sticker.height}
+                        onChange={(e) => updateSticker(i, { height: Number(e.target.value) })}
+                        className="w-full accent-primary"
+                      />
+                    </div>
                   </div>
                 </div>
-
-                {editingIdx === i && (
-                  <div className="mt-2 space-y-2">
-                    {/* Quick position presets */}
-                    <div className="flex gap-1">
-                      {POSITION_PRESETS.map((pos) => (
-                        <button
-                          key={pos.label}
-                          onClick={() => updateSticker(i, { x: pos.x, y: pos.y })}
-                          className="rounded border px-1.5 py-0.5 text-[9px] hover:bg-accent transition-colors"
-                        >
-                          {pos.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Position sliders */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <div className="flex items-center justify-between text-[9px] text-muted-foreground">
-                          <span>X 位置</span>
-                          <span>{(sticker.x * 100).toFixed(0)}%</span>
-                        </div>
-                        <input
-                          type="range" min={0} max={1} step={0.01}
-                          value={sticker.x}
-                          onChange={(e) => updateSticker(i, { x: Number(e.target.value) })}
-                          className="w-full accent-primary"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between text-[9px] text-muted-foreground">
-                          <span>Y 位置</span>
-                          <span>{(sticker.y * 100).toFixed(0)}%</span>
-                        </div>
-                        <input
-                          type="range" min={0} max={1} step={0.01}
-                          value={sticker.y}
-                          onChange={(e) => updateSticker(i, { y: Number(e.target.value) })}
-                          className="w-full accent-primary"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between text-[9px] text-muted-foreground">
-                          <span>宽度</span>
-                          <span>{(sticker.width * 100).toFixed(0)}%</span>
-                        </div>
-                        <input
-                          type="range" min={0.05} max={0.5} step={0.01}
-                          value={sticker.width}
-                          onChange={(e) => updateSticker(i, { width: Number(e.target.value) })}
-                          className="w-full accent-primary"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between text-[9px] text-muted-foreground">
-                          <span>高度</span>
-                          <span>{(sticker.height * 100).toFixed(0)}%</span>
-                        </div>
-                        <input
-                          type="range" min={0.05} max={0.5} step={0.01}
-                          value={sticker.height}
-                          onChange={(e) => updateSticker(i, { height: Number(e.target.value) })}
-                          className="w-full accent-primary"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -777,19 +749,20 @@ function StickerPanel({
 
 /* ========== Scene Effects Panel ========== */
 
+// IDs match real IMS VFX effect SubType values
 const SCENE_EFFECTS = [
-  { id: 'shake', label: '抖动', description: '画面轻微抖动' },
-  { id: 'zoom_in', label: '放大', description: '镜头缓慢推进' },
-  { id: 'zoom_out', label: '缩小', description: '镜头缓慢拉远' },
-  { id: 'rotate', label: '旋转', description: '画面旋转效果' },
-  { id: 'blur_in', label: '模糊进入', description: '从模糊到清晰' },
-  { id: 'blur_out', label: '模糊退出', description: '从清晰到模糊' },
-  { id: 'flash', label: '闪白', description: '白色闪烁效果' },
-  { id: 'glitch', label: '故障', description: '数字故障风' },
-  { id: 'vignette', label: '暗角', description: '边缘暗角效果' },
-  { id: 'film_grain', label: '胶片颗粒', description: '复古胶片质感' },
-  { id: 'light_leak', label: '漏光', description: '光晕漏光效果' },
-  { id: 'slow_motion', label: '慢动作', description: '画面减速播放' },
+  { id: 'slightshake', label: '抖动', description: '画面轻微抖动' },
+  { id: 'zoomslight', label: '放大', description: '镜头缓慢推进' },
+  { id: 'zoominout', label: '镜头变焦', description: '镜头推拉效果' },
+  { id: 'movie', label: '电影感', description: '电影质感效果' },
+  { id: 'bluropen', label: '模糊开幕', description: '从模糊到清晰' },
+  { id: 'blurclose', label: '模糊闭幕', description: '从清晰到模糊' },
+  { id: 'white', label: '闪白', description: '白色闪烁效果' },
+  { id: 'smalljitter', label: '毛刺', description: '数字故障风' },
+  { id: 'photograph', label: '咔嚓', description: '拍照快门效果' },
+  { id: 'color_to_grey', label: '彩色转黑白', description: '彩色渐变黑白' },
+  { id: 'lightsweep', label: '阳光经过', description: '光晕漏光效果' },
+  { id: 'soulout', label: '灵魂出窍', description: '灵魂出窍特效' },
 ];
 
 function SceneEffectsPanel({

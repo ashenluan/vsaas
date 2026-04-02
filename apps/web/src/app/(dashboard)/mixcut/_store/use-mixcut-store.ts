@@ -30,7 +30,7 @@ export interface ShotGroup {
   effectEnabled: boolean;
   effectList: string[];
   stickerEnabled: boolean;
-  stickers: { url: string; x: number; y: number; width: number; height: number }[];
+  stickers: { url: string; x: number; y: number; width: number; height: number; opacity?: number; dyncFrames?: number }[];
   smartTrim: boolean; // 智能混剪: auto-trim video to match audio duration
 }
 
@@ -48,6 +48,8 @@ export interface SubtitleStyle {
   underline: boolean;
   effectColorStyleId: string; // 花字
   bubbleStyleId: string; // 气泡字
+  adaptMode: string; // AutoWrap
+  textWidth: number; // 0-1, 字幕文本宽度占比
 }
 
 export interface TitleStyle {
@@ -87,6 +89,7 @@ export interface GlobalConfig {
   bgType: 'none' | 'color' | 'blur' | 'image';
   bgColor: string;
   bgImage: string; // 自定义背景图 URL
+  bgBlurRadius: number; // 模糊背景半径 0.01-1, 默认 0.1
   aspectRatio: string; // '9:16' | '16:9' | '1:1' | '4:3' | '3:4' | custom
   resolution: string; // e.g. '1080x1920'
   coverType: 'auto' | 'custom' | 'smart';
@@ -151,6 +154,8 @@ const defaultSubtitleStyle: SubtitleStyle = {
   underline: false,
   effectColorStyleId: '',
   bubbleStyleId: '',
+  adaptMode: 'AutoWrap',
+  textWidth: 0.8,
 };
 
 const defaultTitleStyle: TitleStyle = {
@@ -181,6 +186,7 @@ const defaultGlobalConfig: GlobalConfig = {
   bgType: 'none',
   bgColor: '#000000',
   bgImage: '',
+  bgBlurRadius: 0.1,
   aspectRatio: '9:16',
   resolution: '1080x1920',
   coverType: 'auto',

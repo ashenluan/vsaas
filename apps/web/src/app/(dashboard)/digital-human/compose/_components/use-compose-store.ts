@@ -41,6 +41,7 @@ export interface SubtitleConfig {
   underline: boolean;
   effectColorStyleId: string;
   bubbleStyleId: string;
+  textWidth: number;
 }
 
 /* ---------- title (overlay) ---------- */
@@ -83,6 +84,12 @@ export interface HighlightWord {
   fontColor: string;
   outlineColour: string;
   bold: boolean;
+}
+
+/* ---------- forbidden words ---------- */
+export interface ForbiddenWord {
+  word: string;
+  soundReplaceMode: 'mute' | 'beep';
 }
 
 /* ---------- background ---------- */
@@ -156,6 +163,10 @@ interface ComposeState {
   highlightWords: HighlightWord[];
   setHighlightWords: (words: HighlightWord[]) => void;
 
+  /* forbidden words */
+  forbiddenWords: ForbiddenWord[];
+  setForbiddenWords: (words: ForbiddenWord[]) => void;
+
   /* background */
   background: BackgroundConfig;
   updateBackground: (partial: Partial<BackgroundConfig>) => void;
@@ -188,6 +199,7 @@ const defaultSubtitle: SubtitleConfig = {
   underline: false,
   effectColorStyleId: '',
   bubbleStyleId: '',
+  textWidth: 0.8,
 };
 
 const defaultTitle: TitleConfig = {
@@ -288,6 +300,9 @@ export const useComposeStore = create<ComposeState>()(
       highlightWords: [],
       setHighlightWords: (words) => set({ highlightWords: words }),
 
+      forbiddenWords: [],
+      setForbiddenWords: (words) => set({ forbiddenWords: words }),
+
       background: { ...defaultBackground },
       updateBackground: (p) => set((s) => ({ background: { ...s.background, ...p } })),
       stickers: [],
@@ -310,6 +325,7 @@ export const useComposeStore = create<ComposeState>()(
           transition: { ...defaultTransition },
           filter: { ...defaultFilter },
           highlightWords: [],
+          forbiddenWords: [],
           background: { ...defaultBackground },
           stickers: [],
           output: { ...defaultOutput },
@@ -329,6 +345,7 @@ export const useComposeStore = create<ComposeState>()(
         transition: state.transition,
         filter: state.filter,
         highlightWords: state.highlightWords,
+        forbiddenWords: state.forbiddenWords,
         background: state.background,
         stickers: state.stickers,
         output: state.output,

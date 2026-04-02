@@ -280,6 +280,15 @@ export class DigitalHumanService {
       transitionConfig?: any;
       filterConfig?: any;
       highlightWords?: { word: string; fontColor?: string; outlineColour?: string; bold?: boolean }[];
+      forbiddenWords?: { word: string; soundReplaceMode?: string }[];
+      bgType?: string;
+      bgColor?: string;
+      bgImage?: string;
+      bgBlurRadius?: number;
+      stickers?: { url: string; x: number; y: number; width: number; height: number; opacity?: number; dyncFrames?: number }[];
+      dedupConfig?: { smartCrop?: boolean; smartZoom?: boolean; smartMirror?: boolean; transparentMask?: boolean; randomSpeed?: boolean };
+      coverType?: string;
+      coverConfig?: { coverTitle?: string; coverTitleFont?: string; coverTitleColor?: string; coverTitleSize?: number; coverTitlePosition?: 'top' | 'center' | 'bottom' };
       maxDuration?: number;
       crf?: number;
       speechRate?: number;
@@ -363,6 +372,15 @@ export class DigitalHumanService {
           transitionConfig: data.transitionConfig,
           filterConfig: data.filterConfig,
           highlightWords: data.highlightWords,
+          forbiddenWords: data.forbiddenWords,
+          bgType: data.bgType,
+          bgColor: data.bgColor,
+          bgImage: data.bgImage,
+          bgBlurRadius: data.bgBlurRadius,
+          stickers: data.stickers,
+          dedupConfig: data.dedupConfig,
+          coverType: data.coverType,
+          coverConfig: data.coverConfig,
           maxDuration: data.maxDuration,
           crf: data.crf,
           speechRate: data.speechRate,
@@ -484,6 +502,7 @@ export class DigitalHumanService {
       transitionEnabled?: boolean;
       transitionDuration?: number;
       transitionList?: string[];
+      useUniformTransition?: boolean;
       filterEnabled?: boolean;
       filterList?: string[];
       vfxEffectEnabled?: boolean;
@@ -493,6 +512,7 @@ export class DigitalHumanService {
       bgType?: string;
       bgColor?: string;
       bgImage?: string;
+      bgBlurRadius?: number;
       maxDuration?: number;
       fixedDuration?: number;
       crf?: number;
@@ -519,6 +539,10 @@ export class DigitalHumanService {
         coverTitlePosition?: 'top' | 'center' | 'bottom';
       };
       publishPlatforms?: string[];
+      watermarkText?: string;
+      watermarkPosition?: string;
+      watermarkOpacity?: number;
+      stickers?: { url: string; x: number; y: number; width: number; height: number; opacity?: number; dyncFrames?: number }[];
     },
   ) {
     // Validate: at least one shot group with materials
@@ -575,11 +599,24 @@ export class DigitalHumanService {
       ...(data.titleConfig?.titles?.length && { titles: data.titleConfig.titles }),
       ...(data.bgMusic && { backgroundMusic: [data.bgMusic] }),
       ...(data.bgType === 'image' && data.bgImage && { backgroundImages: [data.bgImage] }),
+      ...(data.stickers?.length && { stickers: data.stickers }),
+      ...(() => {
+        const subHeadings = data.shotGroups
+          .map((g, i) => g.subHeadings?.length ? { level: i + 1, titles: g.subHeadings } : null)
+          .filter((x): x is { level: number; titles: string[] } => x !== null);
+        return subHeadings.length ? { subHeadings } : {};
+      })(),
     });
 
     const { width, height } = this.parseResolutionWH(data.resolution);
 
     // Build specialWordsConfig from both highlight and forbidden words
+    // IMS SpecialWordsConfig uses BGR color format (BBGGRR without #)
+    const rgbToBgr = (hex: string) => {
+      const h = hex.replace('#', '');
+      return h.length === 6 ? h.slice(4, 6) + h.slice(2, 4) + h.slice(0, 2) : h;
+    };
+
     const specialWordsConfig: { type: 'Highlight' | 'Forbidden'; wordsList: string[]; style?: any; soundReplaceMode?: string }[] = [];
     if (data.highlightWords?.length) {
       for (const hw of data.highlightWords.filter((h) => h.word)) {
@@ -587,8 +624,8 @@ export class DigitalHumanService {
           type: 'Highlight',
           wordsList: [hw.word],
           style: {
-            ...(hw.fontColor && { fontColor: hw.fontColor }),
-            ...(hw.outlineColour && { outlineColour: hw.outlineColour }),
+            ...(hw.fontColor && { fontColor: rgbToBgr(hw.fontColor) }),
+            ...(hw.outlineColour && { outlineColour: rgbToBgr(hw.outlineColour) }),
             ...(hw.bold && { bold: true }),
           },
         });
@@ -599,7 +636,7 @@ export class DigitalHumanService {
         specialWordsConfig.push({
           type: 'Forbidden',
           wordsList: [fw.word],
-          soundReplaceMode: fw.soundReplaceMode || 'mute',
+          soundReplaceMode: fw.soundReplaceMode === 'beep' ? 'Beep' : 'None',
         });
       }
     }
@@ -607,14 +644,22 @@ export class DigitalHumanService {
     const editingConfig = imsProvider.buildEditingConfig({
       mediaVolume: data.mediaVolume ?? 1,
       speechVolume: data.speechVolume ?? 1,
-      speechRate: data.speechRate ?? 0,
+      speechRate: (() => {
+        const rate = data.speechRate;
+        if (!rate || rate === 1) return 0;
+        // IMS SpeechRate: -500~500, formula from docs
+        const imsRate = rate > 1
+          ? Math.round((1 - 1 / rate) / 0.001)
+          : Math.round((1 - 1 / rate) / 0.002);
+        return Math.max(-500, Math.min(500, imsRate));
+      })(),
       ...(data.voiceId && data.voiceType === 'builtin' && { voice: data.voiceId }),
       ...(data.voiceId && data.voiceType !== 'builtin' && { customizedVoice: data.voiceId }),
       backgroundMusicVolume: data.bgMusicVolume ?? 0.2,
       subtitleConfig: data.subtitleConfig,
       ...(specialWordsConfig.length && { specialWordsConfig }),
       // 新增处理配置
-      ...(data.singleShotDuration && { singleShotDuration: data.singleShotDuration }),
+      ...(data.singleShotDuration && { singleShotDuration: data.singleShotDuration, enableClipSplit: true }),
       ...(data.imageDuration && { imageDuration: data.imageDuration }),
       ...(data.alignmentMode && { alignmentMode: data.alignmentMode }),
       titleConfig: data.titleConfig?.enabled ? {
@@ -623,20 +668,22 @@ export class DigitalHumanService {
         fontColor: data.titleConfig.fontColor,
         alignment: data.titleConfig.alignment,
         y: data.titleConfig.y,
+        adaptMode: 'AutoWrap',
         effectColorStyleId: data.titleConfig.effectColorStyleId,
       } : undefined,
       allowTransition: data.transitionEnabled ?? false,
       transitionDuration: data.transitionDuration,
       transitionList: data.transitionList,
+      ...(data.useUniformTransition !== undefined && { useUniformTransition: data.useUniformTransition }),
       allowFilter: data.filterEnabled ?? false,
       filterList: data.filterList,
       // VFX effects
       allowEffects: data.vfxEffectEnabled ?? false,
-      ...(data.vfxEffectProbability !== undefined && { vfxEffectProbability: data.vfxEffectProbability }),
+      ...(data.vfxEffectProbability !== undefined && { vfxEffectProbability: data.vfxEffectProbability / 100 }),
       ...(data.vfxFirstClipEffectList?.length && { vfxFirstClipEffectList: data.vfxFirstClipEffectList }),
       ...(data.vfxNotFirstClipEffectList?.length && { vfxNotFirstClipEffectList: data.vfxNotFirstClipEffectList }),
-      ...(data.bgType === 'blur' && { backgroundImageType: 'Blur' }),
-      ...(data.bgType === 'color' && { backgroundImageType: 'Color' }),
+      ...(data.bgType === 'blur' && { backgroundImageType: 'Blur', ...(data.bgBlurRadius && { backgroundImageRadius: data.bgBlurRadius }) }),
+      ...(data.bgType === 'color' && { backgroundImageType: 'Color', backgroundImageColor: data.bgColor }),
       // 二创去重
       ...(data.dedupConfig && {
         dedupSmartCrop: data.dedupConfig.smartCrop ?? false,
@@ -645,6 +692,17 @@ export class DigitalHumanService {
         dedupTransparentMask: data.dedupConfig.transparentMask ?? false,
         dedupRandomSpeed: data.dedupConfig.randomSpeed ?? false,
       }),
+      // 副标题样式
+      ...(() => {
+        const groups = data.shotGroups.filter((g) => g.subHeadings?.length);
+        if (!groups.length) return {};
+        const subHeadingConfig: Record<string, { y?: number; fontSize?: number }> = {};
+        groups.forEach((g, i) => {
+          const level = String(i + 1);
+          subHeadingConfig[level] = { y: 0.2 + i * 0.1, fontSize: 36 };
+        });
+        return { subHeadingConfig };
+      })(),
       // 封面
       ...(data.coverType === 'smart' && data.coverConfig && {
         coverConfig: {
@@ -706,6 +764,11 @@ export class DigitalHumanService {
           ...(data.publishPlatforms?.length && { publishPlatforms: data.publishPlatforms }),
           ...(data.coverType && { coverType: data.coverType, coverUrl: data.coverUrl, coverConfig: data.coverConfig }),
           ...(data.dedupConfig && { dedupConfig: data.dedupConfig }),
+          ...(data.watermarkText && {
+            watermarkText: data.watermarkText,
+            watermarkPosition: data.watermarkPosition,
+            watermarkOpacity: data.watermarkOpacity,
+          }),
         },
       },
     });

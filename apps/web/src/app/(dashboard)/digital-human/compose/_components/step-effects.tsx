@@ -151,24 +151,28 @@ export function StepEffects({ options }: { options: any }) {
                   选择转场效果（留空则随机 · 共 {transitionsData.length} 种）
                 </label>
                 <div className="flex flex-wrap gap-1 max-h-48 overflow-y-auto rounded-lg border p-3">
-                  {transitionsData.map((t: string) => (
-                    <button
-                      key={t}
-                      onClick={() => {
-                        const list = transition.transitionList.includes(t)
-                          ? transition.transitionList.filter((x) => x !== t)
-                          : [...transition.transitionList, t];
-                        updateTransition({ transitionList: list });
-                      }}
-                      className={`rounded-md border px-2 py-0.5 text-[11px] transition-all ${
-                        transition.transitionList.includes(t)
-                          ? 'border-blue-400 bg-blue-50 text-blue-700 font-medium'
-                          : 'border-input hover:bg-accent'
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
+                  {transitionsData.map((t: any) => {
+                    const tid = typeof t === 'string' ? t : t.id;
+                    const tlabel = typeof t === 'string' ? t : (t.label || t.id);
+                    return (
+                      <button
+                        key={tid}
+                        onClick={() => {
+                          const list = transition.transitionList.includes(tid)
+                            ? transition.transitionList.filter((x: string) => x !== tid)
+                            : [...transition.transitionList, tid];
+                          updateTransition({ transitionList: list });
+                        }}
+                        className={`rounded-md border px-2 py-0.5 text-[11px] transition-all ${
+                          transition.transitionList.includes(tid)
+                            ? 'border-blue-400 bg-blue-50 text-blue-700 font-medium'
+                            : 'border-input hover:bg-accent'
+                        }`}
+                      >
+                        {tlabel}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

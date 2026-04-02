@@ -58,6 +58,7 @@ export function StepSubmit({
           ...(store.subtitle.underline && { underline: true }),
           ...(store.subtitle.effectColorStyleId && { effectColorStyleId: store.subtitle.effectColorStyleId }),
           ...(store.subtitle.bubbleStyleId && { bubbleStyleId: store.subtitle.bubbleStyleId }),
+          ...(store.subtitle.textWidth && { textWidth: store.subtitle.textWidth }),
         };
       }
 
@@ -106,6 +107,30 @@ export function StepSubmit({
       const validHighlightWords = store.highlightWords.filter((hw) => hw.word.trim());
       if (validHighlightWords.length > 0) {
         payload.highlightWords = validHighlightWords;
+      }
+
+      // 违禁词消音
+      const validForbiddenWords = store.forbiddenWords.filter((fw: any) => fw.word.trim());
+      if (validForbiddenWords.length > 0) {
+        payload.forbiddenWords = validForbiddenWords;
+      }
+
+      // 背景配置
+      if (store.background.type !== 'none') {
+        payload.bgType = store.background.type;
+        if (store.background.type === 'color') payload.bgColor = store.background.color;
+        if (store.background.type === 'blur') payload.bgBlurRadius = store.background.blurRadius;
+        if (store.background.type === 'image' && store.background.imageUrls.length > 0) {
+          payload.bgImage = store.background.imageUrls[0];
+        }
+      }
+
+      // 贴纸
+      if (store.stickers.length > 0) {
+        payload.stickers = store.stickers.map((s: any) => ({
+          url: s.url, x: s.x, y: s.y, width: s.width, height: s.height,
+          ...(s.opacity !== undefined && s.opacity !== 1 && { opacity: s.opacity }),
+        }));
       }
 
       // 高级输出参数

@@ -67,6 +67,11 @@ class HighlightWordDto {
   @IsOptional() @IsBoolean() bold?: boolean;
 }
 
+class ForbiddenWordDto {
+  @IsString() word!: string;
+  @IsOptional() @IsString() soundReplaceMode?: string;
+}
+
 export class CreateComposeDto {
   @IsString()
   voiceId!: string;
@@ -126,6 +131,60 @@ export class CreateComposeDto {
   @ValidateNested({ each: true })
   @Type(() => HighlightWordDto)
   highlightWords?: HighlightWordDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ForbiddenWordDto)
+  forbiddenWords?: ForbiddenWordDto[];
+
+  // Background
+  @IsOptional()
+  @IsString()
+  bgType?: 'none' | 'color' | 'blur' | 'image';
+
+  @IsOptional()
+  @IsString()
+  bgColor?: string;
+
+  @IsOptional()
+  @IsString()
+  bgImage?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  @Max(1)
+  bgBlurRadius?: number;
+
+  // Stickers
+  @IsOptional()
+  @IsArray()
+  stickers?: { url: string; x: number; y: number; width: number; height: number; opacity?: number; dyncFrames?: number }[];
+
+  // Dedup
+  @IsOptional()
+  dedupConfig?: {
+    smartCrop?: boolean;
+    smartZoom?: boolean;
+    smartMirror?: boolean;
+    transparentMask?: boolean;
+    randomSpeed?: boolean;
+  };
+
+  // Cover
+  @IsOptional()
+  @IsString()
+  coverType?: 'auto' | 'custom' | 'smart';
+
+  @IsOptional()
+  coverConfig?: {
+    coverTitle?: string;
+    coverTitleFont?: string;
+    coverTitleColor?: string;
+    coverTitleSize?: number;
+    coverTitlePosition?: 'top' | 'center' | 'bottom';
+  };
 
   @IsOptional()
   @IsInt()

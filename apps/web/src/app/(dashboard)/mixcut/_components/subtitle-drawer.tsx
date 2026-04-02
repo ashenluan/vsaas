@@ -48,6 +48,7 @@ export function SubtitleDrawer({
     titleStyle, updateTitleStyle,
     highlightWords, setHighlightWords,
     forbiddenWords, setForbiddenWords,
+    openDrawer,
   } = useMixcutStore();
 
   const [activeTab, setActiveTab] = useState<'content' | 'style' | 'title'>('content');
@@ -137,12 +138,18 @@ export function SubtitleDrawer({
             </div>
             <div className="flex items-center gap-2">
               {currentIdx > 0 && (
-                <button className="rounded border px-2 py-1 text-[11px] hover:bg-accent transition-colors">
+                <button
+                  onClick={() => openDrawer('subtitle', project.shotGroups[currentIdx - 1].id)}
+                  className="rounded border px-2 py-1 text-[11px] hover:bg-accent transition-colors flex items-center gap-0.5"
+                >
                   <ChevronLeft size={12} /> 上一个
                 </button>
               )}
               {currentIdx < project.shotGroups.length - 1 && (
-                <button className="rounded border px-2 py-1 text-[11px] hover:bg-accent transition-colors">
+                <button
+                  onClick={() => openDrawer('subtitle', project.shotGroups[currentIdx + 1].id)}
+                  className="rounded border px-2 py-1 text-[11px] hover:bg-accent transition-colors flex items-center gap-0.5"
+                >
                   下一个 <ChevronRight size={12} />
                 </button>
               )}
