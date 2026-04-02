@@ -8,6 +8,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DigitalHumanService } from './digital-human.service';
 import { CloneVoiceDto } from './dto/clone-voice.dto';
@@ -24,11 +25,13 @@ export class VoiceController {
   }
 
   @Post('clone')
+  @Throttle({ short: { ttl: 60000, limit: 3 }, medium: { ttl: 3600000, limit: 10 } })
   clone(@Req() req: any, @Body() body: CloneVoiceDto) {
     return this.service.cloneVoice(req.user.sub, body.name, body.sampleUrl);
   }
 
   @Post('preview')
+  @Throttle({ short: { ttl: 5000, limit: 2 }, medium: { ttl: 60000, limit: 20 } })
   preview(@Req() req: any, @Body() body: PreviewVoiceDto) {
     return this.service.previewVoice(req.user.sub, body.voiceId, body.text, body.voiceType);
   }

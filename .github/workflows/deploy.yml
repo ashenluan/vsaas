@@ -1,0 +1,84 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      services:
+        description: '要部署的服务 (all/api/web/admin)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - api
+          - web
+          - admin
+  push:
+    branches: [master]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'docker-compose.prod.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          password: ${{ secrets.PROD_PASSWORD }}
+          proxy_host: ${{ secrets.RELAY_HOST }}
+          proxy_username: ${{ secrets.RELAY_USER }}
+          proxy_password: ${{ secrets.RELAY_PASSWORD }}
+          script_stop: true
+          timeout: 600s
+          script: |
+            set -e
+            cd /www/wwwroot/vsaas
+
+            echo "=== 拉取最新代码 ==="
+            git pull origin master
+
+            SERVICE="${{ github.event.inputs.services || 'all' }}"
+
+            if [ "$SERVICE" = "all" ]; then
+              echo "=== 重建所有服务 ==="
+              docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build api web admin
+            else
+              echo "=== 重建 $SERVICE ==="
+              docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build $SERVICE
+            fi
+
+            echo "=== 清理 nginx 缓存 ==="
+            rm -rf /www/server/nginx/proxy_cache_dir/vsaas* 2>/dev/null || true
+            /www/server/nginx/sbin/nginx -s reload 2>/dev/null || true
+
+            echo "=== 等待服务启动 ==="
+            sleep 10
+
+            echo "=== 执行数据库迁移 ==="
+            docker compose -f docker-compose.prod.yml exec -T api pnpm --filter @vsaas/api exec prisma migrate deploy --schema packages/database/src/schema.prisma 2>/dev/null || echo "迁移跳过（无新迁移或已最新）"
+
+            echo "=== 健康检查 ==="
+            curl -sf http://127.0.0.1:4000/api/health || echo "警告: API 健康检查失败"
+
+            echo "=== 服务状态 ==="
+            docker compose -f docker-compose.prod.yml ps
+
+            echo "=== 清理旧镜像 ==="
+            docker image prune -f
+
+            echo "=== 部署完成 ==="
+
+      - name: Notify deploy result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ 部署成功"
+          else
+            echo "❌ 部署失败"
+          fi

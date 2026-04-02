@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import WebSocket from 'ws';
 import * as crypto from 'crypto';
+import { retryFetch } from '../retry-fetch';
 
 export interface VoiceProvider {
   readonly providerId: string;
@@ -42,7 +43,7 @@ export class QwenVoiceProvider implements VoiceProvider {
     const headers = this.getHeaders();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
-    const response = await fetch(
+    const response = await retryFetch(
       'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization',
       {
         method: 'POST',

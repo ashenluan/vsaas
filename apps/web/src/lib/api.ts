@@ -119,6 +119,8 @@ export const templateApi = {
   },
   categories: () => apiFetch<{ name: string; count: number }[]>('/templates/categories'),
   get: (id: string) => apiFetch(`/templates/${id}`),
+  create: (data: { name: string; category: string; config: any; thumbnail?: string; isPublic?: boolean }) =>
+    apiFetch('/templates', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // AI
@@ -177,7 +179,7 @@ export const materialApi = {
     const qs = type ? `?type=${type}` : '';
     return apiFetch<any[]>(`/materials${qs}`);
   },
-  upload: (data: { name: string; type: string; url: string; thumbnailUrl?: string; size?: number; mimeType?: string }) =>
+  upload: (data: { name: string; type: string; url: string; thumbnailUrl?: string; size?: number; mimeType?: string; metadata?: Record<string, any> }) =>
     apiFetch('/materials', { method: 'POST', body: JSON.stringify(data) }),
   delete: (id: string) => apiFetch(`/materials/${id}`, { method: 'DELETE' }),
   detectFace: (imageUrl: string, materialId?: string) =>

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ImageProvider } from '../provider.registry';
+import { retryFetch } from '../retry-fetch';
 
 @Injectable()
 export class QwenImageProvider implements ImageProvider {
@@ -46,7 +47,7 @@ export class QwenImageProvider implements ImageProvider {
   }
 
   private async generateSync(apiKey: string, baseUrl: string, model: string, request: any) {
-    const response = await fetch(
+    const response = await retryFetch(
       `${baseUrl}/services/aigc/multimodal-generation/generation`,
       {
         method: 'POST',
@@ -99,7 +100,7 @@ export class QwenImageProvider implements ImageProvider {
   }
 
   private async generateAsync(apiKey: string, baseUrl: string, model: string, request: any) {
-    const response = await fetch(
+    const response = await retryFetch(
       `${baseUrl}/services/aigc/image-generation/generation`,
       {
         method: 'POST',
@@ -224,7 +225,7 @@ export class QwenImageProvider implements ImageProvider {
 
     const inputData = mapping.buildInput();
 
-    const response = await fetch(
+    const response = await retryFetch(
       `${baseUrl}/services/aigc/image2image/image-synthesis`,
       {
         method: 'POST',
@@ -266,7 +267,7 @@ export class QwenImageProvider implements ImageProvider {
       'https://dashscope.aliyuncs.com/api/v1',
     ) || 'https://dashscope.aliyuncs.com/api/v1';
 
-    const response = await fetch(`${baseUrl}/tasks/${taskId}`, {
+    const response = await retryFetch(`${baseUrl}/tasks/${taskId}`, {
       headers: { 'Authorization': `Bearer ${apiKey}` },
     });
 

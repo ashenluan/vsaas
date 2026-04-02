@@ -7,8 +7,10 @@ import { GlobalConfigPanel } from './global-config-panel';
 import { PreviewPanel } from './preview-panel';
 import { SubtitleDrawer } from './subtitle-drawer';
 import { ScriptImportModal } from './script-import-modal';
-import { mixcutApi, aiApi } from '@/lib/api';
-import { ArrowLeft, Save, Play, Sparkles, Plus, Loader2, Check, Film, Wand2, X } from 'lucide-react';
+import { TemplateModal } from './template-modal';
+import { mixcutApi, aiApi, templateApi } from '@/lib/api';
+import { toast } from 'sonner';
+import { ArrowLeft, Save, Play, Sparkles, Plus, Loader2, Check, Film, Wand2, X, LayoutTemplate, BookmarkPlus } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -58,6 +60,9 @@ export function MixcutEditor({
   const [aiTone, setAiTone] = useState('neutral');
   const [aiLength, setAiLength] = useState('medium');
   const [aiAudience, setAiAudience] = useState('general');
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateSaved, setTemplateSaved] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -79,8 +84,32 @@ export function MixcutEditor({
       }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch { /* ignore */ }
+      toast.success('项目已保存');
+    } catch (err: any) {
+      toast.error(err?.message || '保存失败，请重试');
+    }
     setSaving(false);
+  };
+
+  const handleSaveAsTemplate = async () => {
+    const name = prompt('模板名称', project.name + ' - 模板');
+    if (!name) return;
+    const category = prompt('模板分类 (如: 美食, 电商, 旅游, 教育)', '通用') || '通用';
+    setSavingTemplate(true);
+    try {
+      await templateApi.create({
+        name,
+        category,
+        config: { globalConfig, subtitleStyle, titleStyle, highlightWords },
+        isPublic: true,
+      });
+      setTemplateSaved(true);
+      setTimeout(() => setTemplateSaved(false), 2000);
+      toast.success('模板已保存');
+    } catch (err: any) {
+      toast.error(err?.message || '保存模板失败');
+    }
+    setSavingTemplate(false);
   };
 
   const handleDedup = () => {
@@ -127,7 +156,10 @@ export function MixcutEditor({
       });
       setAiWriterOpen(false);
       setAiTopic('');
-    } catch { /* ignore */ }
+      toast.success('脚本生成完成');
+    } catch (err: any) {
+      toast.error(err?.message || 'AI脚本生成失败');
+    }
     setAiGenerating(false);
   };
 
@@ -150,6 +182,20 @@ export function MixcutEditor({
           />
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setTemplateModalOpen(true)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium hover:bg-accent transition-colors"
+          >
+            <LayoutTemplate size={12} /> 应用模板
+          </button>
+          <button
+            onClick={handleSaveAsTemplate}
+            disabled={savingTemplate}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium hover:bg-accent disabled:opacity-50 transition-colors"
+          >
+            {savingTemplate ? <Loader2 size={12} className="animate-spin" /> : templateSaved ? <Check size={12} className="text-green-600" /> : <BookmarkPlus size={12} />}
+            {savingTemplate ? '保存中...' : templateSaved ? '已保存' : '存为模板'}
+          </button>
           <button
             onClick={handleDedup}
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium hover:bg-accent transition-colors"
@@ -241,6 +287,9 @@ export function MixcutEditor({
           <PreviewPanel />
         </div>
       </div>
+
+      {/* Template Modal */}
+      <TemplateModal open={templateModalOpen} onClose={() => setTemplateModalOpen(false)} />
 
       {/* Script Import Modal */}
       <ScriptImportModal

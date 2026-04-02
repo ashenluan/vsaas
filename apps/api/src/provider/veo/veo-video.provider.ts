@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { VideoProvider } from '../provider.registry';
+import { retryFetch } from '../retry-fetch';
 
 @Injectable()
 export class VeoVideoProvider implements VideoProvider {
@@ -45,7 +46,7 @@ export class VeoVideoProvider implements VideoProvider {
       };
     }
 
-    const response = await fetch(
+    const response = await retryFetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
       {
         method: 'POST',
@@ -75,7 +76,7 @@ export class VeoVideoProvider implements VideoProvider {
     const apiKey = this.config.get<string>('GOOGLE_API_KEY');
 
     // Poll the long-running operation
-    const response = await fetch(
+    const response = await retryFetch(
       `https://generativelanguage.googleapis.com/v1beta/${taskId}?key=${apiKey}`,
     );
 

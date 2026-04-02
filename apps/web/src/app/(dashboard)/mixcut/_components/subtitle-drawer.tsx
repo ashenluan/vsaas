@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { aiApi, voiceApi } from '@/lib/api';
 import { uploadToOSS } from '@/lib/upload';
-import { X, ChevronLeft, ChevronRight, Plus, Trash2, Wand2, Loader2, AlertTriangle, CheckCircle, RefreshCw, Volume2, Mic2, Check } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Plus, Trash2, Wand2, Loader2, AlertTriangle, CheckCircle, RefreshCw, Volume2, Mic2, Check, Ban } from 'lucide-react';
 import { getPreviewUrl } from '../_lib/effect-previews';
 
 const FONTS = [
@@ -47,6 +47,7 @@ export function SubtitleDrawer({
     subtitleStyle, updateSubtitleStyle,
     titleStyle, updateTitleStyle,
     highlightWords, setHighlightWords,
+    forbiddenWords, setForbiddenWords,
   } = useMixcutStore();
 
   const [activeTab, setActiveTab] = useState<'content' | 'style' | 'title'>('content');
@@ -183,6 +184,8 @@ export function SubtitleDrawer({
                 onRemove={(i) => removeSubtitleFromShot(shotId, i)}
                 highlightWords={highlightWords}
                 setHighlightWords={setHighlightWords}
+                forbiddenWords={forbiddenWords}
+                setForbiddenWords={setForbiddenWords}
               />
             )}
             {activeTab === 'style' && (
@@ -224,6 +227,8 @@ function SubtitleContent({
   onRemove,
   highlightWords,
   setHighlightWords,
+  forbiddenWords,
+  setForbiddenWords,
 }: {
   shotId: string;
   subtitles: { text: string; voiceId?: string }[];
@@ -232,6 +237,8 @@ function SubtitleContent({
   onRemove: (i: number) => void;
   highlightWords: { word: string; fontColor: string; bold: boolean }[];
   setHighlightWords: (w: { word: string; fontColor: string; bold: boolean }[]) => void;
+  forbiddenWords: { word: string; soundReplaceMode: 'mute' | 'beep' }[];
+  setForbiddenWords: (w: { word: string; soundReplaceMode: 'mute' | 'beep' }[]) => void;
 }) {
   const [rewriteLoading, setRewriteLoading] = useState<number | null>(null);
   const [rewriteResults, setRewriteResults] = useState<{ index: number; variants: string[] } | null>(null);
@@ -604,6 +611,105 @@ function SubtitleContent({
           </div>
         )}
       </div>
+
+      {/* Forbidden words / 屏蔽词 */}
+      <div className="border-t pt-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h4 className="text-[12px] font-medium flex items-center gap-1">
+            <Ban size={12} /> 屏蔽词管理
+          </h4>
+          <button
+            onClick={() => setForbiddenWords(forbiddenWords.filter((fw) => fw.word.trim()))}
+            className="text-[10px] text-muted-foreground hover:text-foreground"
+          >
+            清除空项
+          </button>
+        </div>
+        <p className="mb-2 text-[10px] text-muted-foreground">配音遇到屏蔽词时自动静音或用"嘀"声替代</p>
+
+        {/* Batch import */}
+        <div className="mb-2">
+          <input
+            type="text"
+            placeholder="批量输入屏蔽词，用逗号分隔"
+            className="flex h-7 w-full rounded border border-input bg-transparent px-2 text-[11px] placeholder:text-muted-foreground/50"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const input = (e.target as HTMLInputElement).value.trim();
+                if (!input) return;
+                const words = input.split(/[,，、\s]+/).filter(Boolean);
+                const newWords = words
+                  .filter((w) => !forbiddenWords.some((fw) => fw.word === w))
+                  .map((w) => ({ word: w, soundReplaceMode: 'mute' as const }));
+                if (newWords.length > 0) {
+                  setForbiddenWords([...forbiddenWords, ...newWords]);
+                }
+                (e.target as HTMLInputElement).value = '';
+              }
+            }}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          {forbiddenWords.map((fw, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={fw.word}
+                onChange={(e) => {
+                  const updated = [...forbiddenWords];
+                  updated[i] = { ...updated[i], word: e.target.value };
+                  setForbiddenWords(updated);
+                }}
+                placeholder="屏蔽词"
+                className="flex h-7 w-28 rounded border border-input bg-transparent px-2 text-[11px]"
+              />
+              <div className="flex rounded border overflow-hidden">
+                <button
+                  onClick={() => {
+                    const updated = [...forbiddenWords];
+                    updated[i] = { ...updated[i], soundReplaceMode: 'mute' };
+                    setForbiddenWords(updated);
+                  }}
+                  className={`px-2 py-0.5 text-[10px] transition-colors ${
+                    fw.soundReplaceMode === 'mute'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'hover:bg-accent'
+                  }`}
+                >
+                  静音
+                </button>
+                <button
+                  onClick={() => {
+                    const updated = [...forbiddenWords];
+                    updated[i] = { ...updated[i], soundReplaceMode: 'beep' };
+                    setForbiddenWords(updated);
+                  }}
+                  className={`px-2 py-0.5 text-[10px] transition-colors ${
+                    fw.soundReplaceMode === 'beep'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'hover:bg-accent'
+                  }`}
+                >
+                  嘀声
+                </button>
+              </div>
+              <button
+                onClick={() => setForbiddenWords(forbiddenWords.filter((_, j) => j !== i))}
+                className="text-muted-foreground hover:text-red-500"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => setForbiddenWords([...forbiddenWords, { word: '', soundReplaceMode: 'mute' }])}
+            className="text-[11px] text-primary hover:underline"
+          >
+            + 添加屏蔽词
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -855,6 +961,17 @@ function SubtitleStyleTab({
   );
 }
 
+const TITLE_PRESETS = [
+  { name: '经典白字', font: 'Alibaba PuHuiTi 2.0 95 ExtraBold', fontSize: 56, fontColor: '#ffffff', y: 0.08 },
+  { name: '金色大标题', font: 'Source Han Sans CN', fontSize: 72, fontColor: '#FFD700', y: 0.06 },
+  { name: '红色醒目', font: 'Source Han Sans CN', fontSize: 64, fontColor: '#FF4444', y: 0.08 },
+  { name: '清新绿', font: 'Alibaba PuHuiTi', fontSize: 48, fontColor: '#00E676', y: 0.10 },
+  { name: '科技蓝', font: 'Roboto Bold', fontSize: 52, fontColor: '#00B0FF', y: 0.08 },
+  { name: '温暖橙', font: 'Yuanti SC', fontSize: 56, fontColor: '#FF9800', y: 0.08 },
+  { name: '优雅楷体', font: 'FZKai-Z03S', fontSize: 52, fontColor: '#ffffff', y: 0.10 },
+  { name: '中央大字', font: 'Alibaba PuHuiTi 2.0 95 ExtraBold', fontSize: 80, fontColor: '#ffffff', y: 0.40 },
+];
+
 function TitleTab({
   titleStyle,
   onUpdate,
@@ -878,6 +995,40 @@ function TitleTab({
 
       {titleStyle.enabled && (
         <>
+          {/* Title style presets */}
+          <div>
+            <label className="mb-1.5 block text-[10px] font-medium text-muted-foreground">标题模板 (一键应用)</label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {TITLE_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  onClick={() => onUpdate({
+                    font: preset.font,
+                    fontSize: preset.fontSize,
+                    fontColor: preset.fontColor,
+                    y: preset.y,
+                  })}
+                  className="group relative overflow-hidden rounded-lg border p-2 text-center transition-all hover:border-primary/50 hover:shadow-sm"
+                >
+                  <div
+                    className="mb-1 flex h-8 items-center justify-center rounded bg-black/80"
+                  >
+                    <span
+                      className="font-bold drop-shadow"
+                      style={{
+                        fontSize: Math.max(8, preset.fontSize / 7),
+                        color: preset.fontColor,
+                      }}
+                    >
+                      Aa
+                    </span>
+                  </div>
+                  <span className="text-[9px] text-muted-foreground group-hover:text-foreground">{preset.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className="mb-1 block text-[10px] text-muted-foreground">标题文字</label>
             <input

@@ -5,6 +5,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorageService } from './storage.service';
 
@@ -14,6 +15,7 @@ export class StorageController {
   constructor(private readonly storage: StorageService) {}
 
   @Post('upload-url')
+  @Throttle({ short: { ttl: 1000, limit: 5 }, medium: { ttl: 60000, limit: 60 } })
   getUploadUrl(
     @Req() req: any,
     @Body() body: { filename: string; contentType: string },

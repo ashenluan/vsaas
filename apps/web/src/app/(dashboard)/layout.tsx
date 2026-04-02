@@ -32,6 +32,7 @@ import {
   Blend,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Toaster } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -66,6 +67,8 @@ const navItems: NavItem[] = [
   { label: '多图融合', desc: '多张图片AI智能融合', href: '/generate/multi-fusion', icon: Blend },
   { label: '数字人', desc: '克隆声音，生成数字人视频', href: '/digital-human', icon: UserCircle, badge: 'new', badgeColor: 'bg-emerald-500' },
   { label: '批量混剪', desc: '批量合成数字人视频', href: '/digital-human/compose', icon: Clapperboard },
+  { label: '素材中心', desc: '管理图片视频音频素材', href: '/materials', icon: FolderOpen },
+  { label: '视频拆分', desc: '长视频拆分为短片段', href: '/video-split', icon: Scissors },
   { label: '智能混剪', desc: '素材智能组合批量出片', href: '/mixcut', icon: Scissors, badge: 'new', badgeColor: 'bg-violet-500' },
   { label: '模板广场', desc: '浏览和使用创作模板', href: '/templates', icon: Layers },
   { label: '提示词广场', desc: '探索AI创作提示词', href: '/prompt', icon: BookOpen },
@@ -135,6 +138,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <WsProvider>
+      <Toaster position="top-center" richColors />
       <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
         {/* Sidebar - Modern minimalist flat design */}
         <aside

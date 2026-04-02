@@ -20,9 +20,12 @@ export interface ShotSubtitle {
 export interface ShotGroup {
   id: string;
   name: string;
+  enabled: boolean; // 是否参与混剪
   materials: ShotMaterial[];
   subtitles: ShotSubtitle[];
+  subHeadings: string[]; // 副标题
   keepOriginalAudio: boolean;
+  volume: number; // 分组素材音量 0-2, 默认1
   // per-shot config overrides
   effectEnabled: boolean;
   effectList: string[];
@@ -56,6 +59,14 @@ export interface TitleStyle {
   y: number;
 }
 
+export interface DedupConfig {
+  smartCrop: boolean;    // 智能截取: 随机截取不同片段
+  smartZoom: boolean;    // 智能缩放: 随机缩放裁剪画面
+  smartMirror: boolean;  // 智能镜像: 左右镜像处理
+  transparentMask: boolean; // 透明蒙版: 抽取部分区域作蒙版
+  randomSpeed: boolean;  // 随机变速: 轻微变速
+}
+
 export interface GlobalConfig {
   bgMusic: string;
   bgMusicVolume: number;
@@ -73,12 +84,18 @@ export interface GlobalConfig {
   vfxEffectProbability: number; // 0-100
   vfxFirstClipEffectList: string[];
   vfxNotFirstClipEffectList: string[];
-  bgType: 'none' | 'color' | 'blur';
+  bgType: 'none' | 'color' | 'blur' | 'image';
   bgColor: string;
-  aspectRatio: '9:16' | '16:9' | '1:1';
-  resolution: '1080x1920' | '720x1280' | '1920x1080' | '1280x720' | '1080x1080' | '720x720';
-  coverType: 'auto' | 'custom';
+  bgImage: string; // 自定义背景图 URL
+  aspectRatio: string; // '9:16' | '16:9' | '1:1' | '4:3' | '3:4' | custom
+  resolution: string; // e.g. '1080x1920'
+  coverType: 'auto' | 'custom' | 'smart';
   coverUrl: string;
+  coverTitle: string;
+  coverTitleFont: string;
+  coverTitleColor: string;
+  coverTitleSize: number;
+  coverTitlePosition: 'top' | 'center' | 'bottom';
   voiceId?: string;
   voiceType?: 'builtin' | 'cloned';
   watermarkText: string;
@@ -86,10 +103,22 @@ export interface GlobalConfig {
   watermarkOpacity: number;
   // Video quality
   maxDuration: number; // 0 = no limit
+  fixedDuration: number; // 0 = not used, 与 maxDuration 互斥
   crf: number; // 0 = default
+  // 素材处理
+  singleShotDuration: number; // 0 = default(3s), 镜头切片时长
+  imageDuration: number; // 0 = default(3s), 图片展示时长
+  alignmentMode: string; // '' | 'AutoSpeed' | 'Cut', 对齐模式
+  // 二创去重
+  dedupConfig: DedupConfig;
 }
 
 export type MixcutView = 'list' | 'editor';
+
+export interface ForbiddenWord {
+  word: string;
+  soundReplaceMode: 'mute' | 'beep';
+}
 
 export interface MixcutProject {
   id?: string;
@@ -99,7 +128,9 @@ export interface MixcutProject {
   titleStyle: TitleStyle;
   globalConfig: GlobalConfig;
   highlightWords: { word: string; fontColor: string; bold: boolean }[];
+  forbiddenWords: ForbiddenWord[];
   scheduledAt?: string; // ISO date string for scheduled publishing
+  publishPlatforms?: string[]; // 矩阵发布目标平台
   createdAt?: string;
   updatedAt?: string;
 }
@@ -149,26 +180,46 @@ const defaultGlobalConfig: GlobalConfig = {
   vfxNotFirstClipEffectList: [],
   bgType: 'none',
   bgColor: '#000000',
+  bgImage: '',
   aspectRatio: '9:16',
   resolution: '1080x1920',
   coverType: 'auto',
   coverUrl: '',
+  coverTitle: '',
+  coverTitleFont: 'Alibaba PuHuiTi 2.0 95 ExtraBold',
+  coverTitleColor: '#ffffff',
+  coverTitleSize: 64,
+  coverTitlePosition: 'center',
   watermarkText: '',
   watermarkPosition: 'bottomRight',
   watermarkOpacity: 0.5,
   maxDuration: 0,
+  fixedDuration: 0,
   crf: 0,
+  singleShotDuration: 0,
+  imageDuration: 0,
+  alignmentMode: '',
+  dedupConfig: {
+    smartCrop: false,
+    smartZoom: false,
+    smartMirror: false,
+    transparentMask: false,
+    randomSpeed: false,
+  },
 };
 
 let shotIdCounter = 0;
 export function createShotGroup(name?: string): ShotGroup {
   shotIdCounter++;
   return {
-    id: `shot_${Date.now()}_${shotIdCounter}`,
+    id: crypto.randomUUID(),
     name: name || `视频组_${shotIdCounter}`,
+    enabled: true,
     materials: [],
     subtitles: [],
+    subHeadings: [],
     keepOriginalAudio: false,
+    volume: 1,
     effectEnabled: false,
     effectList: [],
     stickerEnabled: false,
@@ -188,6 +239,7 @@ interface MixcutState {
   setProjectName: (name: string) => void;
   setProjectId: (id: string) => void;
   setScheduledAt: (scheduledAt?: string) => void;
+  setPublishPlatforms: (platforms: string[]) => void;
 
   // Shot groups
   addShotGroup: () => void;
@@ -218,6 +270,10 @@ interface MixcutState {
   highlightWords: { word: string; fontColor: string; bold: boolean }[];
   setHighlightWords: (words: { word: string; fontColor: string; bold: boolean }[]) => void;
 
+  // Forbidden words
+  forbiddenWords: ForbiddenWord[];
+  setForbiddenWords: (words: ForbiddenWord[]) => void;
+
   // Active drawer
   activeDrawer: null | { type: 'subtitle' | 'effect' | 'sticker'; shotId: string };
   openDrawer: (type: 'subtitle' | 'effect' | 'sticker', shotId: string) => void;
@@ -235,6 +291,7 @@ const initialProject: MixcutProject = {
   titleStyle: { ...defaultTitleStyle },
   globalConfig: { ...defaultGlobalConfig },
   highlightWords: [],
+  forbiddenWords: [],
 };
 
 export const useMixcutStore = create<MixcutState>()(
@@ -250,6 +307,8 @@ export const useMixcutStore = create<MixcutState>()(
         set((s) => ({ project: { ...s.project, id } })),
       setScheduledAt: (scheduledAt) =>
         set((s) => ({ project: { ...s.project, scheduledAt } })),
+      setPublishPlatforms: (platforms) =>
+        set((s) => ({ project: { ...s.project, publishPlatforms: platforms } })),
 
       // Shot groups
       addShotGroup: () =>
@@ -311,7 +370,7 @@ export const useMixcutStore = create<MixcutState>()(
           const orig = s.project.shotGroups[idx];
           const copy: ShotGroup = {
             ...orig,
-            id: `shot_${Date.now()}_dup`,
+            id: crypto.randomUUID(),
             name: `${orig.name}_副本`,
             materials: orig.materials.map((m) => ({ ...m })),
             subtitles: orig.subtitles.map((sub) => ({ ...sub })),
@@ -373,24 +432,54 @@ export const useMixcutStore = create<MixcutState>()(
           },
         })),
 
-      // Subtitle style
+      // Subtitle style (synced with project)
       subtitleStyle: { ...defaultSubtitleStyle },
       updateSubtitleStyle: (partial) =>
-        set((s) => ({ subtitleStyle: { ...s.subtitleStyle, ...partial } })),
+        set((s) => {
+          const updated = { ...s.subtitleStyle, ...partial };
+          return {
+            subtitleStyle: updated,
+            project: { ...s.project, subtitleStyle: updated },
+          };
+        }),
 
-      // Title style
+      // Title style (synced with project)
       titleStyle: { ...defaultTitleStyle },
       updateTitleStyle: (partial) =>
-        set((s) => ({ titleStyle: { ...s.titleStyle, ...partial } })),
+        set((s) => {
+          const updated = { ...s.titleStyle, ...partial };
+          return {
+            titleStyle: updated,
+            project: { ...s.project, titleStyle: updated },
+          };
+        }),
 
-      // Global config
+      // Global config (synced with project)
       globalConfig: { ...defaultGlobalConfig },
       updateGlobalConfig: (partial) =>
-        set((s) => ({ globalConfig: { ...s.globalConfig, ...partial } })),
+        set((s) => {
+          const updated = { ...s.globalConfig, ...partial };
+          return {
+            globalConfig: updated,
+            project: { ...s.project, globalConfig: updated },
+          };
+        }),
 
-      // Highlight words
+      // Highlight words (synced with project)
       highlightWords: [],
-      setHighlightWords: (words) => set({ highlightWords: words }),
+      setHighlightWords: (words) =>
+        set((s) => ({
+          highlightWords: words,
+          project: { ...s.project, highlightWords: words },
+        })),
+
+      // Forbidden words (synced with project)
+      forbiddenWords: [],
+      setForbiddenWords: (words) =>
+        set((s) => ({
+          forbiddenWords: words,
+          project: { ...s.project, forbiddenWords: words },
+        })),
 
       // Drawer
       activeDrawer: null,
@@ -407,11 +496,13 @@ export const useMixcutStore = create<MixcutState>()(
             titleStyle: { ...defaultTitleStyle },
             globalConfig: { ...defaultGlobalConfig },
             highlightWords: [],
+            forbiddenWords: [],
           },
           subtitleStyle: { ...defaultSubtitleStyle },
           titleStyle: { ...defaultTitleStyle },
           globalConfig: { ...defaultGlobalConfig },
           highlightWords: [],
+          forbiddenWords: [],
           activeDrawer: null,
         }),
       loadProject: (project) =>
@@ -421,6 +512,7 @@ export const useMixcutStore = create<MixcutState>()(
           titleStyle: project.titleStyle,
           globalConfig: project.globalConfig,
           highlightWords: project.highlightWords,
+          forbiddenWords: project.forbiddenWords || [],
           view: 'editor',
         }),
     }),
@@ -432,6 +524,7 @@ export const useMixcutStore = create<MixcutState>()(
         titleStyle: state.titleStyle,
         globalConfig: state.globalConfig,
         highlightWords: state.highlightWords,
+        forbiddenWords: state.forbiddenWords,
       }),
     },
   ),

@@ -7,6 +7,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DigitalHumanService } from './digital-human.service';
 import { CreateComposeDto } from './dto/create-compose.dto';
@@ -22,6 +23,7 @@ export class ComposeController {
   }
 
   @Post()
+  @Throttle({ short: { ttl: 10000, limit: 2 }, medium: { ttl: 60000, limit: 10 } })
   create(@Req() req: any, @Body() body: CreateComposeDto) {
     return this.service.createComposeJob(req.user.sub, body);
   }

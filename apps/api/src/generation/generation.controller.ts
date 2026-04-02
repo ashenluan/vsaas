@@ -8,6 +8,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { GenerationService } from './generation.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateImageDto } from './dto/create-image.dto';
@@ -20,6 +21,7 @@ export class GenerationController {
   constructor(private readonly generationService: GenerationService) {}
 
   @Post('image')
+  @Throttle({ short: { ttl: 10000, limit: 3 }, medium: { ttl: 60000, limit: 20 } })
   createImage(@Req() req: any, @Body() body: any) {
     // Route to advanced generation if body has an advanced type
     const advancedTypes = Object.values(AdvancedImageType) as string[];
@@ -30,6 +32,7 @@ export class GenerationController {
   }
 
   @Post('video')
+  @Throttle({ short: { ttl: 10000, limit: 2 }, medium: { ttl: 60000, limit: 10 } })
   createVideo(@Req() req: any, @Body() body: CreateVideoDto) {
     return this.generationService.createVideoGeneration(req.user.sub, body);
   }

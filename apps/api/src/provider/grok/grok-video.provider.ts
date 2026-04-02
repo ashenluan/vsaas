@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { VideoProvider } from '../provider.registry';
+import { retryFetch } from '../retry-fetch';
 
 @Injectable()
 export class GrokVideoProvider implements VideoProvider {
@@ -36,7 +37,7 @@ export class GrokVideoProvider implements VideoProvider {
       body.image = { url: request.referenceImage };
     }
 
-    const response = await fetch(`${baseUrl}/videos/generations`, {
+    const response = await retryFetch(`${baseUrl}/videos/generations`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -65,7 +66,7 @@ export class GrokVideoProvider implements VideoProvider {
     const apiKey = this.config.get<string>('GROK_API_KEY');
     const baseUrl = this.config.get<string>('GROK_BASE_URL', 'https://api.x.ai/v1');
 
-    const response = await fetch(`${baseUrl}/videos/generations/${taskId}`, {
+    const response = await retryFetch(`${baseUrl}/videos/generations/${taskId}`, {
       headers: { 'Authorization': `Bearer ${apiKey}` },
     });
 

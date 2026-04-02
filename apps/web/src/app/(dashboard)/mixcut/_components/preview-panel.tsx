@@ -4,10 +4,20 @@ import { useState } from 'react';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { useJobUpdates } from '@/components/ws-provider';
 import { mixcutApi } from '@/lib/api';
-import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw, Clock, CalendarClock, Shield } from 'lucide-react';
+import { toast } from 'sonner';
+import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw, Clock, CalendarClock, Shield, Share2, Zap } from 'lucide-react';
+
+const PUBLISH_PLATFORMS = [
+  { id: 'douyin', label: '抖音', icon: '🎵', color: 'bg-black text-white' },
+  { id: 'kuaishou', label: '快手', icon: '🎬', color: 'bg-orange-500 text-white' },
+  { id: 'xiaohongshu', label: '小红书', icon: '📕', color: 'bg-red-500 text-white' },
+  { id: 'wechat', label: '视频号', icon: '💬', color: 'bg-green-600 text-white' },
+  { id: 'bilibili', label: 'B站', icon: '📺', color: 'bg-sky-500 text-white' },
+  { id: 'weibo', label: '微博', icon: '📝', color: 'bg-red-600 text-white' },
+];
 
 export function PreviewPanel() {
-  const { project, subtitleStyle, titleStyle, globalConfig, highlightWords, setScheduledAt } = useMixcutStore();
+  const { project, subtitleStyle, titleStyle, globalConfig, highlightWords, forbiddenWords, setScheduledAt, setPublishPlatforms } = useMixcutStore();
 
   // Watermark position mapping
   const watermarkPositionStyle: Record<string, React.CSSProperties> = {
@@ -29,8 +39,9 @@ export function PreviewPanel() {
     });
   });
 
-  // Estimate total combinations
-  const shotCombinations = project.shotGroups.reduce((acc, group) => {
+  // Estimate total combinations (only enabled groups)
+  const enabledGroups = project.shotGroups.filter((g) => g.enabled !== false);
+  const shotCombinations = enabledGroups.reduce((acc, group) => {
     const materialCount = Math.max(group.materials.length, 1);
     return acc * materialCount;
   }, 1);
@@ -38,36 +49,38 @@ export function PreviewPanel() {
   const estimatedCount = Math.min(shotCombinations, 100);
 
   // Estimate per-video duration
-  const totalDuration = project.shotGroups.reduce((acc, group) => {
+  const totalDuration = enabledGroups.reduce((acc, group) => {
     const groupDuration = group.materials.reduce((sum, m) => sum + (m.duration || 3), 0);
     return acc + (groupDuration > 0 ? groupDuration / Math.max(group.materials.length, 1) : 3);
   }, 0);
 
   // Check if ready to submit
-  const hasEmptyGroups = project.shotGroups.some((g) => g.materials.length === 0);
-  const canSubmit = project.shotGroups.length > 0 && !hasEmptyGroups && !submitting;
+  const hasEmptyGroups = enabledGroups.some((g) => g.materials.length === 0);
+  const canSubmit = enabledGroups.length > 0 && !hasEmptyGroups && !submitting;
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (previewOnly = false) => {
     if (!canSubmit) return;
     setSubmitting(true);
     setResult(null);
 
     try {
       // Determine speech mode based on whether groups have individual speechTexts
-      const hasGroupSpeech = project.shotGroups.some((g) => g.subtitles.length > 0);
-      const globalSpeechTexts = project.shotGroups
+      const hasGroupSpeech = enabledGroups.some((g) => g.subtitles.length > 0);
+      const globalSpeechTexts = enabledGroups
         .flatMap((g) => g.subtitles.map((s) => s.text))
         .filter(Boolean);
 
       const payload = {
         name: project.name,
-        shotGroups: project.shotGroups.map((g) => ({
+        shotGroups: enabledGroups.map((g) => ({
           name: g.name,
           materialUrls: g.materials.map((m) => m.url),
           ...(g.subtitles.length > 0 && {
             speechTexts: g.subtitles.map((s) => s.text).filter(Boolean),
           }),
+          ...(g.subHeadings?.length > 0 && { subHeadings: g.subHeadings }),
           keepOriginalAudio: g.keepOriginalAudio,
+          ...(g.volume !== 1 && { volume: g.volume }),
           ...(g.smartTrim && { splitMode: 'AverageSplit' as const }),
         })),
         speechMode: hasGroupSpeech ? 'group' as const : undefined,
@@ -118,6 +131,13 @@ export function PreviewPanel() {
             bold: hw.bold,
           })),
         }),
+        // Forbidden words
+        ...(forbiddenWords.filter((fw) => fw.word).length > 0 && {
+          forbiddenWords: forbiddenWords.filter((fw) => fw.word).map((fw) => ({
+            word: fw.word,
+            soundReplaceMode: fw.soundReplaceMode,
+          })),
+        }),
         // Transition
         ...(globalConfig.transitionEnabled && {
           transitionEnabled: true,
@@ -138,18 +158,46 @@ export function PreviewPanel() {
         }),
         // Video quality
         ...(globalConfig.maxDuration > 0 && { maxDuration: globalConfig.maxDuration }),
+        ...(globalConfig.fixedDuration > 0 && { fixedDuration: globalConfig.fixedDuration }),
         ...(globalConfig.crf > 0 && { crf: globalConfig.crf }),
+        // 素材处理
+        ...(globalConfig.singleShotDuration > 0 && { singleShotDuration: globalConfig.singleShotDuration }),
+        ...(globalConfig.imageDuration > 0 && { imageDuration: globalConfig.imageDuration }),
+        ...(globalConfig.alignmentMode && { alignmentMode: globalConfig.alignmentMode }),
+        // 快速预览
+        ...(previewOnly && { generatePreviewOnly: true }),
         // Background
         ...(globalConfig.bgType !== 'none' && { bgType: globalConfig.bgType }),
         ...(globalConfig.bgType === 'color' && { bgColor: globalConfig.bgColor }),
+        ...(globalConfig.bgType === 'image' && globalConfig.bgImage && { bgImage: globalConfig.bgImage }),
+        // 封面
+        ...(globalConfig.coverType !== 'auto' && { coverType: globalConfig.coverType }),
+        ...(globalConfig.coverType === 'custom' && globalConfig.coverUrl && { coverUrl: globalConfig.coverUrl }),
+        ...(globalConfig.coverType === 'smart' && {
+          coverConfig: {
+            coverTitle: globalConfig.coverTitle || undefined,
+            coverTitleFont: globalConfig.coverTitleFont,
+            coverTitleColor: globalConfig.coverTitleColor,
+            coverTitleSize: globalConfig.coverTitleSize,
+            coverTitlePosition: globalConfig.coverTitlePosition,
+          },
+        }),
+        // 二创去重
+        ...(Object.values(globalConfig.dedupConfig).some(Boolean) && {
+          dedupConfig: globalConfig.dedupConfig,
+        }),
         // Scheduled publishing
         ...(project.scheduledAt && { scheduledAt: project.scheduledAt }),
+        // 矩阵发布
+        ...(project.publishPlatforms?.length && { publishPlatforms: project.publishPlatforms }),
       };
 
       const job = await mixcutApi.create(payload);
       setResult({ success: true, jobId: job.id });
+      toast.success(previewOnly ? '预览任务已提交' : '混剪任务已提交');
     } catch (err: any) {
       setResult({ success: false, error: err.message || '提交失败' });
+      toast.error(err?.message || '提交混剪任务失败');
     } finally {
       setSubmitting(false);
     }
@@ -165,11 +213,20 @@ export function PreviewPanel() {
       </div>
 
       {/* Phone preview frame */}
-      <div className="mx-auto" style={{ maxWidth: globalConfig.aspectRatio === '16:9' ? '100%' : globalConfig.aspectRatio === '1:1' ? '280px' : '200px' }}>
+      <div className="mx-auto" style={{ maxWidth: (() => {
+        const parts = globalConfig.aspectRatio.split(':').map(Number);
+        if (parts.length === 2 && parts[0] > parts[1]) return '100%';
+        if (parts.length === 2 && parts[0] === parts[1]) return '280px';
+        return '200px';
+      })() }}>
         <div
           className="relative overflow-hidden rounded-2xl border-2 border-border bg-black"
           style={{
-            aspectRatio: globalConfig.aspectRatio === '9:16' ? '9/16' : globalConfig.aspectRatio === '16:9' ? '16/9' : '1/1',
+            aspectRatio: (() => {
+              const parts = globalConfig.aspectRatio.split(':').map(Number);
+              if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) return `${parts[0]}/${parts[1]}`;
+              return '9/16';
+            })(),
           }}
         >
           {/* Preview placeholder */}
@@ -238,7 +295,7 @@ export function PreviewPanel() {
           )}
 
           {/* Active effects badges */}
-          {(globalConfig.transitionEnabled || globalConfig.filterEnabled || globalConfig.vfxEffectEnabled) && (
+          {(globalConfig.transitionEnabled || globalConfig.filterEnabled || globalConfig.vfxEffectEnabled || Object.values(globalConfig.dedupConfig).some(Boolean)) && (
             <div className="absolute top-2 left-2 flex flex-wrap gap-1">
               {globalConfig.transitionEnabled && (
                 <span className="rounded bg-blue-500/70 px-1 py-0.5 text-[8px] text-white">转场 {globalConfig.transitionList.length}</span>
@@ -248,6 +305,9 @@ export function PreviewPanel() {
               )}
               {globalConfig.vfxEffectEnabled && (
                 <span className="rounded bg-purple-500/70 px-1 py-0.5 text-[8px] text-white">特效</span>
+              )}
+              {Object.values(globalConfig.dedupConfig).some(Boolean) && (
+                <span className="rounded bg-green-500/70 px-1 py-0.5 text-[8px] text-white">去重 {Object.values(globalConfig.dedupConfig).filter(Boolean).length}</span>
               )}
             </div>
           )}
@@ -321,9 +381,76 @@ export function PreviewPanel() {
         )}
       </div>
 
+      {/* 矩阵发布 */}
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <Share2 size={13} className="text-muted-foreground" />
+            <span className="text-[12px] font-medium">矩阵发布</span>
+          </div>
+          {(project.publishPlatforms?.length || 0) > 0 && (
+            <span className="text-[10px] text-primary font-medium">
+              已选 {project.publishPlatforms?.length} 个平台
+            </span>
+          )}
+        </div>
+        <p className="mb-2 text-[9px] text-muted-foreground">选择目标平台，生成完成后一键分发到多个平台</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {PUBLISH_PLATFORMS.map((p) => {
+            const selected = project.publishPlatforms?.includes(p.id);
+            return (
+              <button
+                key={p.id}
+                onClick={() => {
+                  const current = project.publishPlatforms || [];
+                  if (selected) {
+                    setPublishPlatforms(current.filter((id) => id !== p.id));
+                  } else {
+                    setPublishPlatforms([...current, p.id]);
+                  }
+                }}
+                className={`flex items-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] transition-all ${
+                  selected
+                    ? 'border-primary bg-primary/5 text-primary font-medium'
+                    : 'border-input hover:bg-accent'
+                }`}
+              >
+                <span className="text-[14px]">{p.icon}</span>
+                <span>{p.label}</span>
+                {selected && (
+                  <CheckCircle size={10} className="ml-auto text-primary" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {(project.publishPlatforms?.length || 0) > 0 && (
+          <p className="mt-2 text-[9px] text-amber-600">
+            注意：需要先在「设置」中绑定对应平台账号
+          </p>
+        )}
+      </div>
+
+      {/* Quick preview button */}
+      <button
+        onClick={() => handleSubmit(true)}
+        disabled={!canSubmit}
+        className="w-full rounded-xl border-2 border-primary bg-primary/5 py-2.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mb-2"
+      >
+        {submitting ? (
+          <span className="inline-flex items-center gap-2">
+            <Loader2 size={14} className="animate-spin" /> 提交中...
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-2">
+            <Zap size={14} /> 快速预览（低消耗）
+          </span>
+        )}
+      </button>
+
       {/* Submit button */}
       <button
-        onClick={handleSubmit}
+        onClick={() => handleSubmit(false)}
         disabled={!canSubmit}
         className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >

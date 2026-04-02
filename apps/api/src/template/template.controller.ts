@@ -1,9 +1,13 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
   Query,
+  Body,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('templates')
@@ -54,6 +58,29 @@ export class TemplateController {
   async findOne(@Param('id') id: string) {
     return this.prisma.template.findFirst({
       where: { id, isPublic: true },
+    });
+  }
+
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  async create(
+    @Body()
+    body: {
+      name: string;
+      category: string;
+      thumbnail?: string;
+      config: any;
+      isPublic?: boolean;
+    },
+  ) {
+    return this.prisma.template.create({
+      data: {
+        name: body.name,
+        category: body.category || '通用',
+        thumbnail: body.thumbnail,
+        config: body.config || {},
+        isPublic: body.isPublic ?? true,
+      },
     });
   }
 }

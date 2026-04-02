@@ -27,6 +27,11 @@ class MixcutShotGroupDto {
   speechTexts?: string[];
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  subHeadings?: string[]; // 副标题文本
+
+  @IsOptional()
   @IsNumber()
   duration?: number;
 
@@ -37,6 +42,12 @@ class MixcutShotGroupDto {
   @IsOptional()
   @IsBoolean()
   keepOriginalAudio?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(2)
+  volume?: number; // 分组素材音量 0-2
 }
 
 class MixcutSubtitleConfigDto {
@@ -71,6 +82,11 @@ class MixcutHighlightWordDto {
   @IsOptional() @IsString() fontColor?: string;
   @IsOptional() @IsString() outlineColour?: string;
   @IsOptional() @IsBoolean() bold?: boolean;
+}
+
+class MixcutForbiddenWordDto {
+  @IsString() word!: string;
+  @IsOptional() @IsString() soundReplaceMode?: string; // 'mute' | 'beep'
 }
 
 export class CreateMixcutDto {
@@ -154,6 +170,13 @@ export class CreateMixcutDto {
   @Type(() => MixcutHighlightWordDto)
   highlightWords?: MixcutHighlightWordDto[];
 
+  // Forbidden words (违禁词消音)
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MixcutForbiddenWordDto)
+  forbiddenWords?: MixcutForbiddenWordDto[];
+
   // Transition
   @IsOptional()
   @IsBoolean()
@@ -202,11 +225,15 @@ export class CreateMixcutDto {
   // Background
   @IsOptional()
   @IsString()
-  bgType?: 'none' | 'color' | 'blur';
+  bgType?: 'none' | 'color' | 'blur' | 'image';
 
   @IsOptional()
   @IsString()
   bgColor?: string;
+
+  @IsOptional()
+  @IsString()
+  bgImage?: string; // 自定义背景图 URL
 
   // Scheduled publishing
   @IsOptional()
@@ -226,4 +253,69 @@ export class CreateMixcutDto {
   @Min(18)
   @Max(35)
   crf?: number;
+
+  // 快速预览模式（不消耗完整渲染资源）
+  @IsOptional()
+  @IsBoolean()
+  generatePreviewOnly?: boolean;
+
+  // 固定视频时长（与 maxDuration 互斥）
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(300)
+  fixedDuration?: number;
+
+  // 镜头切片时长（素材自动切片后每段时长）
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(30)
+  singleShotDuration?: number;
+
+  // 图片展示时长
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(60)
+  imageDuration?: number;
+
+  // 对齐模式: AutoSpeed(自动变速) | Cut(裁切)
+  @IsOptional()
+  @IsString()
+  alignmentMode?: string;
+
+  // 二创去重
+  @IsOptional()
+  dedupConfig?: {
+    smartCrop?: boolean;
+    smartZoom?: boolean;
+    smartMirror?: boolean;
+    transparentMask?: boolean;
+    randomSpeed?: boolean;
+  };
+
+  // 封面配置
+  @IsOptional()
+  @IsString()
+  coverType?: 'auto' | 'custom' | 'smart';
+
+  @IsOptional()
+  @IsString()
+  coverUrl?: string;
+
+  @IsOptional()
+  coverConfig?: {
+    coverTitle?: string;
+    coverTitleFont?: string;
+    coverTitleColor?: string;
+    coverTitleSize?: number;
+    coverTitlePosition?: 'top' | 'center' | 'bottom';
+  };
+
+  // 矩阵发布
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  publishPlatforms?: string[];
 }

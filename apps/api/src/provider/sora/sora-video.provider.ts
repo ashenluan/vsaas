@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { VideoProvider } from '../provider.registry';
+import { retryFetch } from '../retry-fetch';
 
 @Injectable()
 export class SoraVideoProvider implements VideoProvider {
@@ -27,7 +28,7 @@ export class SoraVideoProvider implements VideoProvider {
 
     // Sora API: POST /v1/videos to create, then poll GET /v1/videos/{id}
     // Docs: https://developers.openai.com/api/docs/guides/video-generation
-    const response = await fetch('https://api.openai.com/v1/videos', {
+    const response = await retryFetch('https://api.openai.com/v1/videos', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -59,7 +60,7 @@ export class SoraVideoProvider implements VideoProvider {
   async checkTaskStatus(taskId: string): Promise<any> {
     const apiKey = this.config.get<string>('OPENAI_API_KEY') || '';
 
-    const response = await fetch(`https://api.openai.com/v1/videos/${taskId}`, {
+    const response = await retryFetch(`https://api.openai.com/v1/videos/${taskId}`, {
       headers: { 'Authorization': `Bearer ${apiKey}` },
     });
 
@@ -86,7 +87,7 @@ export class SoraVideoProvider implements VideoProvider {
 
   private async getVideoUrl(apiKey: string, videoId: string): Promise<string | undefined> {
     try {
-      const response = await fetch(
+      const response = await retryFetch(
         `https://api.openai.com/v1/videos/${videoId}/content`,
         { headers: { 'Authorization': `Bearer ${apiKey}` } },
       );

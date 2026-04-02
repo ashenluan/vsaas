@@ -55,6 +55,7 @@ export function ProjectList() {
         titleStyle: input.projectData.titleStyle || useMixcutStore.getState().titleStyle,
         globalConfig: input.projectData.globalConfig || useMixcutStore.getState().globalConfig,
         highlightWords: input.projectData.highlightWords || [],
+        forbiddenWords: input.projectData.forbiddenWords || [],
       });
     } else {
       // Open completed/in-progress job as read-only view
@@ -80,6 +81,7 @@ export function ProjectList() {
         titleStyle: input.titleConfig || useMixcutStore.getState().titleStyle,
         globalConfig: useMixcutStore.getState().globalConfig,
         highlightWords: input.highlightWords || [],
+        forbiddenWords: input.forbiddenWords || [],
       });
     }
   };

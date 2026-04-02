@@ -32,6 +32,9 @@ export class CreateMaterialDto {
   @IsOptional()
   @IsString()
   mimeType?: string;
+
+  @IsOptional()
+  metadata?: Record<string, any>;
 }
 
 export class DetectFaceDto {

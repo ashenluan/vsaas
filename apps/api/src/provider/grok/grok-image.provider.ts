@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ImageProvider } from '../provider.registry';
+import { retryFetch } from '../retry-fetch';
 
 @Injectable()
 export class GrokImageProvider implements ImageProvider {
@@ -26,7 +27,7 @@ export class GrokImageProvider implements ImageProvider {
 
     // xAI Grok Image Generation API
     // Docs: https://docs.x.ai/api/endpoints#create-images
-    const response = await fetch(`${baseUrl}/images/generations`, {
+    const response = await retryFetch(`${baseUrl}/images/generations`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,

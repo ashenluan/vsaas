@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { retryFetch } from '../retry-fetch';
 
 export interface DigitalHumanProvider {
   readonly providerId: string;
@@ -28,7 +29,7 @@ export class WanS2VProvider implements DigitalHumanProvider {
     this.logger.log(`Detecting image for S2V: ${imageUrl.slice(0, 80)}`);
 
     // Use synchronous mode for detect (fast enough, no need for async)
-    const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/face-detect', {
+    const response = await retryFetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/face-detect', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -76,7 +77,7 @@ export class WanS2VProvider implements DigitalHumanProvider {
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((r) => setTimeout(r, interval));
 
-      const response = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
+      const response = await retryFetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
         headers: { 'Authorization': `Bearer ${apiKey}` },
       });
 
@@ -102,7 +103,7 @@ export class WanS2VProvider implements DigitalHumanProvider {
 
     this.logger.log(`Generating S2V video: image=${imageUrl.slice(0, 50)}`);
 
-    const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/video-synthesis', {
+    const response = await retryFetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/video-synthesis', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -136,7 +137,7 @@ export class WanS2VProvider implements DigitalHumanProvider {
   async checkTaskStatus(taskId: string): Promise<{ status: string; videoUrl?: string; progress?: number }> {
     const apiKey = this.config.get<string>('DASHSCOPE_API_KEY');
 
-    const response = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
+    const response = await retryFetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
       headers: { 'Authorization': `Bearer ${apiKey}` },
     });
 

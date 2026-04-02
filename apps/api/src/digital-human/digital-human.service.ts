@@ -128,6 +128,7 @@ export class DigitalHumanService {
       thumbnailUrl?: string;
       size?: number;
       mimeType?: string;
+      metadata?: Record<string, any>;
     },
   ) {
     return this.prisma.material.create({
@@ -139,6 +140,7 @@ export class DigitalHumanService {
         thumbnailUrl: data.thumbnailUrl,
         size: data.size || 0,
         mimeType: data.mimeType || 'application/octet-stream',
+        ...(data.metadata && { metadata: data.metadata }),
       },
     });
   }
@@ -459,9 +461,11 @@ export class DigitalHumanService {
         name: string;
         materialUrls: string[];
         speechTexts?: string[];
+        subHeadings?: string[];
         duration?: number;
         splitMode?: string;
         keepOriginalAudio?: boolean;
+        volume?: number;
       }[];
       speechMode?: 'global' | 'group';
       speechTexts?: string[];
@@ -488,9 +492,33 @@ export class DigitalHumanService {
       vfxNotFirstClipEffectList?: string[];
       bgType?: string;
       bgColor?: string;
+      bgImage?: string;
       maxDuration?: number;
+      fixedDuration?: number;
       crf?: number;
+      generatePreviewOnly?: boolean;
+      singleShotDuration?: number;
+      imageDuration?: number;
+      alignmentMode?: string;
+      forbiddenWords?: { word: string; soundReplaceMode?: string }[];
       scheduledAt?: string;
+      dedupConfig?: {
+        smartCrop?: boolean;
+        smartZoom?: boolean;
+        smartMirror?: boolean;
+        transparentMask?: boolean;
+        randomSpeed?: boolean;
+      };
+      coverType?: 'auto' | 'custom' | 'smart';
+      coverUrl?: string;
+      coverConfig?: {
+        coverTitle?: string;
+        coverTitleFont?: string;
+        coverTitleColor?: string;
+        coverTitleSize?: number;
+        coverTitlePosition?: 'top' | 'center' | 'bottom';
+      };
+      publishPlatforms?: string[];
     },
   ) {
     // Validate: at least one shot group with materials
@@ -539,13 +567,42 @@ export class DigitalHumanService {
         ...(g.speechTexts?.length && { speechTexts: g.speechTexts }),
         ...(g.duration && { duration: g.duration }),
         ...(g.splitMode && { splitMode: g.splitMode }),
+        ...(g.volume !== undefined && { volume: g.volume }),
+        // 无文案镜头组自动适配时长
+        ...(!g.speechTexts?.length && { durationAutoAdapt: true }),
       })),
       ...(data.speechTexts?.length && { speechTexts: data.speechTexts }),
       ...(data.titleConfig?.titles?.length && { titles: data.titleConfig.titles }),
       ...(data.bgMusic && { backgroundMusic: [data.bgMusic] }),
+      ...(data.bgType === 'image' && data.bgImage && { backgroundImages: [data.bgImage] }),
     });
 
     const { width, height } = this.parseResolutionWH(data.resolution);
+
+    // Build specialWordsConfig from both highlight and forbidden words
+    const specialWordsConfig: { type: 'Highlight' | 'Forbidden'; wordsList: string[]; style?: any; soundReplaceMode?: string }[] = [];
+    if (data.highlightWords?.length) {
+      for (const hw of data.highlightWords.filter((h) => h.word)) {
+        specialWordsConfig.push({
+          type: 'Highlight',
+          wordsList: [hw.word],
+          style: {
+            ...(hw.fontColor && { fontColor: hw.fontColor }),
+            ...(hw.outlineColour && { outlineColour: hw.outlineColour }),
+            ...(hw.bold && { bold: true }),
+          },
+        });
+      }
+    }
+    if (data.forbiddenWords?.length) {
+      for (const fw of data.forbiddenWords.filter((f) => f.word)) {
+        specialWordsConfig.push({
+          type: 'Forbidden',
+          wordsList: [fw.word],
+          soundReplaceMode: fw.soundReplaceMode || 'mute',
+        });
+      }
+    }
 
     const editingConfig = imsProvider.buildEditingConfig({
       mediaVolume: data.mediaVolume ?? 1,
@@ -555,19 +612,11 @@ export class DigitalHumanService {
       ...(data.voiceId && data.voiceType !== 'builtin' && { customizedVoice: data.voiceId }),
       backgroundMusicVolume: data.bgMusicVolume ?? 0.2,
       subtitleConfig: data.subtitleConfig,
-      ...(data.highlightWords?.length && {
-        specialWordsConfig: data.highlightWords
-          .filter((hw) => hw.word)
-          .map((hw) => ({
-            type: 'Highlight' as const,
-            wordsList: [hw.word],
-            style: {
-              ...(hw.fontColor && { fontColor: hw.fontColor }),
-              ...(hw.outlineColour && { outlineColour: hw.outlineColour }),
-              ...(hw.bold && { bold: true }),
-            },
-          })),
-      }),
+      ...(specialWordsConfig.length && { specialWordsConfig }),
+      // 新增处理配置
+      ...(data.singleShotDuration && { singleShotDuration: data.singleShotDuration }),
+      ...(data.imageDuration && { imageDuration: data.imageDuration }),
+      ...(data.alignmentMode && { alignmentMode: data.alignmentMode }),
       titleConfig: data.titleConfig?.enabled ? {
         font: data.titleConfig.font,
         fontSize: data.titleConfig.fontSize,
@@ -588,6 +637,24 @@ export class DigitalHumanService {
       ...(data.vfxNotFirstClipEffectList?.length && { vfxNotFirstClipEffectList: data.vfxNotFirstClipEffectList }),
       ...(data.bgType === 'blur' && { backgroundImageType: 'Blur' }),
       ...(data.bgType === 'color' && { backgroundImageType: 'Color' }),
+      // 二创去重
+      ...(data.dedupConfig && {
+        dedupSmartCrop: data.dedupConfig.smartCrop ?? false,
+        dedupSmartZoom: data.dedupConfig.smartZoom ?? false,
+        dedupSmartMirror: data.dedupConfig.smartMirror ?? false,
+        dedupTransparentMask: data.dedupConfig.transparentMask ?? false,
+        dedupRandomSpeed: data.dedupConfig.randomSpeed ?? false,
+      }),
+      // 封面
+      ...(data.coverType === 'smart' && data.coverConfig && {
+        coverConfig: {
+          coverTitle: data.coverConfig.coverTitle,
+          coverTitleFont: data.coverConfig.coverTitleFont,
+          coverTitleColor: data.coverConfig.coverTitleColor,
+          coverTitleSize: data.coverConfig.coverTitleSize,
+          coverTitlePosition: data.coverConfig.coverTitlePosition,
+        },
+      }),
     });
 
     const outputOssKey = this.storage.generateKey('mixcut', `${Date.now()}.mp4`);
@@ -599,7 +666,9 @@ export class DigitalHumanService {
       width: width || 1080,
       height: height || 1920,
       ...(data.maxDuration && { maxDuration: data.maxDuration }),
+      ...(data.fixedDuration && { fixedDuration: data.fixedDuration }),
       ...(data.crf && { crf: data.crf }),
+      ...(data.generatePreviewOnly && { generatePreviewOnly: true }),
     });
 
     // Compute delay for scheduled jobs
@@ -634,6 +703,9 @@ export class DigitalHumanService {
           titleConfig: data.titleConfig,
           highlightWords: data.highlightWords,
           ...(data.scheduledAt && { scheduledAt: data.scheduledAt }),
+          ...(data.publishPlatforms?.length && { publishPlatforms: data.publishPlatforms }),
+          ...(data.coverType && { coverType: data.coverType, coverUrl: data.coverUrl, coverConfig: data.coverConfig }),
+          ...(data.dedupConfig && { dedupConfig: data.dedupConfig }),
         },
       },
     });

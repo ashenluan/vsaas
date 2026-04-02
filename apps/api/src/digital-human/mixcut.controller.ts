@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DigitalHumanService } from './digital-human.service';
 import { CreateMixcutDto } from './dto/create-mixcut.dto';
@@ -19,6 +20,7 @@ export class MixcutController {
   constructor(private readonly service: DigitalHumanService) {}
 
   @Post()
+  @Throttle({ short: { ttl: 10000, limit: 2 }, medium: { ttl: 60000, limit: 10 } })
   create(@Req() req: any, @Body() body: CreateMixcutDto) {
     return this.service.createMixcutJob(req.user.sub, body);
   }

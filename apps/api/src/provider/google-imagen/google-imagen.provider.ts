@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ImageProvider } from '../provider.registry';
+import { retryFetch } from '../retry-fetch';
 
 @Injectable()
 export class GoogleImagenProvider implements ImageProvider {
@@ -23,7 +24,7 @@ export class GoogleImagenProvider implements ImageProvider {
 
     this.logger.log(`Generating image with Google Imagen: ${request.prompt}`);
 
-    const response = await fetch(
+    const response = await retryFetch(
       `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
       {
         method: 'POST',

@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useMixcutStore, type ShotGroup, type ShotMaterial } from '../_store/use-mixcut-store';
 import { materialApi } from '@/lib/api';
 import { uploadToOSS } from '@/lib/upload';
+import { toast } from 'sonner';
 import {
   ImagePlus, Film, Image as ImageIcon, X, GripVertical,
   Type, Wand2, Sparkles, Sticker, Volume2, VolumeX, Trash2,
@@ -85,8 +86,8 @@ export function ShotGroupCard({
           duration: isVideo ? 5 : 3,
         });
       }
-    } catch (err) {
-      console.error('Upload failed:', err);
+    } catch (err: any) {
+      toast.error(err?.message || '素材上传失败');
     } finally {
       setUploading(false);
     }
@@ -112,13 +113,20 @@ export function ShotGroupCard({
   };
 
   return (
-    <div className="rounded-xl border bg-card shadow-sm">
+    <div className={`rounded-xl border bg-card shadow-sm transition-opacity ${!group.enabled ? 'opacity-50' : ''}`}>
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span {...dragHandleProps} className="text-muted-foreground/50 cursor-grab active:cursor-grabbing">
             <GripVertical size={14} />
           </span>
+          <button
+            onClick={() => updateShotGroup(group.id, { enabled: !group.enabled })}
+            className={`relative h-4 w-7 rounded-full transition-colors ${group.enabled ? 'bg-primary' : 'bg-muted'}`}
+            title={group.enabled ? '点击禁用此镜头组' : '点击启用此镜头组'}
+          >
+            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${group.enabled ? 'translate-x-[14px]' : 'translate-x-0.5'}`} />
+          </button>
           <button onClick={() => setCollapsed(!collapsed)} className="text-muted-foreground hover:text-foreground transition-colors">
             {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -137,6 +145,9 @@ export function ShotGroupCard({
             {group.keepOriginalAudio ? <Volume2 size={10} /> : <VolumeX size={10} />}
             素材原声
           </button>
+          <span className="text-[9px] text-muted-foreground" title="分组音量">
+            🔊 {Math.round((group.volume ?? 1) * 100)}%
+          </span>
           <button
             onClick={() => duplicateShotGroup(group.id)}
             className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-primary transition-colors"
@@ -302,10 +313,55 @@ export function ShotGroupCard({
         </div>
       )}
 
+      {/* Per-group volume & sub-heading */}
+      {!collapsed && (
+        <div className="border-t px-4 py-2.5 space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="text-[10px] text-muted-foreground">分组音量</label>
+                <span className="text-[10px] tabular-nums text-muted-foreground">{Math.round((group.volume ?? 1) * 100)}%</span>
+              </div>
+              <input
+                type="range" min={0} max={2} step={0.05}
+                value={group.volume ?? 1}
+                onChange={(e) => updateShotGroup(group.id, { volume: Number(e.target.value) })}
+                className="w-full accent-primary h-1"
+              />
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={() => updateShotGroup(group.id, { volume: 0.3 })}
+                className={`rounded border px-1.5 py-0.5 text-[9px] transition-colors ${(group.volume ?? 1) === 0.3 ? 'border-primary bg-primary/10 text-primary' : 'border-input hover:bg-accent'}`}
+              >
+                口播
+              </button>
+              <button
+                onClick={() => updateShotGroup(group.id, { volume: 1 })}
+                className={`rounded border px-1.5 py-0.5 text-[9px] transition-colors ${(group.volume ?? 1) === 1 ? 'border-primary bg-primary/10 text-primary' : 'border-input hover:bg-accent'}`}
+              >
+                原声
+              </button>
+            </div>
+          </div>
+          {/* Sub-heading input */}
+          <div>
+            <label className="text-[10px] text-muted-foreground mb-0.5 block">副标题（可选，如价格/参数）</label>
+            <input
+              type="text"
+              value={group.subHeadings?.[0] || ''}
+              onChange={(e) => updateShotGroup(group.id, { subHeadings: e.target.value ? [e.target.value] : [] })}
+              placeholder="例：¥99.9 限时特惠"
+              className="flex h-7 w-full rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Action buttons */}
       {!collapsed && <div className="flex border-t">
         <ActionBtn icon={Type} label="字幕配音&标题" onClick={() => openDrawer('subtitle', group.id)} />
-        <ActionBtn icon={Wand2} label="智能混剪" sublabel={group.smartTrim ? '已开启' : '随音频，视频智能截取'} onClick={() => updateShotGroup(group.id, { smartTrim: !group.smartTrim })} active={group.smartTrim} />
+        <ActionBtn icon={Wand2} label="智能混剪" sublabel={group.smartTrim ? '已开启·随音频截取' : '关闭'} onClick={() => updateShotGroup(group.id, { smartTrim: !group.smartTrim })} active={group.smartTrim} />
         <ActionBtn icon={Sparkles} label="场景特效" onClick={() => setShowEffects(!showEffects)} />
         <ActionBtn icon={Sticker} label="贴纸" onClick={() => setShowStickers(!showStickers)} />
       </div>}

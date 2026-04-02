@@ -669,6 +669,8 @@ export class AliyunIMSProvider implements BatchComposeProvider {
       speechTexts?: string[];
       duration?: number;
       splitMode?: string;
+      volume?: number;
+      durationAutoAdapt?: boolean;
     }[];
     speechTexts?: string[];
     titles?: string[];
@@ -684,6 +686,8 @@ export class AliyunIMSProvider implements BatchComposeProvider {
         ...(g.speechTexts && { SpeechTextArray: g.speechTexts }),
         ...(g.duration && { Duration: g.duration }),
         ...(g.splitMode && { SplitMode: g.splitMode }),
+        ...(g.volume !== undefined && { Volume: g.volume }),
+        ...(g.durationAutoAdapt && { DurationAutoAdapt: true }),
       })),
     };
 
@@ -805,6 +809,20 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     filterList?: string[];
     // 对齐模式
     alignmentMode?: string;
+    // 二创去重
+    dedupSmartCrop?: boolean;
+    dedupSmartZoom?: boolean;
+    dedupSmartMirror?: boolean;
+    dedupTransparentMask?: boolean;
+    dedupRandomSpeed?: boolean;
+    // 封面配置
+    coverConfig?: {
+      coverTitle?: string;
+      coverTitleFont?: string;
+      coverTitleColor?: string;
+      coverTitleSize?: number;
+      coverTitlePosition?: 'top' | 'center' | 'bottom';
+    };
   }): any {
     const editingConfig: any = {
       MediaConfig: { Volume: config.mediaVolume ?? 1 },
@@ -839,8 +857,33 @@ export class AliyunIMSProvider implements BatchComposeProvider {
         ...(config.filterList?.length && { FilterList: config.filterList }),
         // 对齐
         ...(config.alignmentMode && { AlignmentMode: config.alignmentMode }),
+        // 二创去重
+        ...(config.dedupSmartCrop && { EnableSmartCrop: true }),
+        ...(config.dedupSmartZoom && { EnableSmartZoom: true }),
+        ...(config.dedupSmartMirror && { EnableSmartMirror: true }),
+        ...(config.dedupTransparentMask && { EnableTransparentMask: true }),
+        ...(config.dedupRandomSpeed && { EnableRandomSpeed: true }),
       },
     };
+
+    // 封面配置
+    if (config.coverConfig) {
+      const cc = config.coverConfig;
+      const coverCfg: any = {
+        Mode: 'Smart',
+      };
+      if (cc.coverTitle) {
+        coverCfg.Title = cc.coverTitle;
+        if (cc.coverTitleFont) coverCfg.Font = cc.coverTitleFont;
+        if (cc.coverTitleColor) coverCfg.FontColor = cc.coverTitleColor;
+        if (cc.coverTitleSize) coverCfg.FontSize = cc.coverTitleSize;
+        if (cc.coverTitlePosition) {
+          const posMap = { top: 0.15, center: 0.45, bottom: 0.75 };
+          coverCfg.Y = posMap[cc.coverTitlePosition] ?? 0.45;
+        }
+      }
+      editingConfig.CoverConfig = coverCfg;
+    }
 
     // 字幕配置 (通过 AsrConfig)
     if (config.subtitleConfig) {
@@ -949,7 +992,9 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     width: number;
     height: number;
     maxDuration?: number;
+    fixedDuration?: number;
     crf?: number;
+    generatePreviewOnly?: boolean;
   }): any {
     return {
       MediaURL: config.outputUrl,
@@ -957,7 +1002,9 @@ export class AliyunIMSProvider implements BatchComposeProvider {
       Width: config.width,
       Height: config.height,
       ...(config.maxDuration && { MaxDuration: config.maxDuration }),
+      ...(config.fixedDuration && { FixedDuration: config.fixedDuration }),
       ...(config.crf && { Video: { Crf: config.crf } }),
+      ...(config.generatePreviewOnly && { GeneratePreviewOnly: true }),
     };
   }
 

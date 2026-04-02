@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ImageProvider } from '../provider.registry';
+import { retryFetch } from '../retry-fetch';
 
 @Injectable()
 export class JimengImageProvider implements ImageProvider {
@@ -29,7 +30,7 @@ export class JimengImageProvider implements ImageProvider {
     this.logger.log(`Generating image with Jimeng (${model}): ${request.prompt?.slice(0, 80)}`);
 
     // Volcengine Ark API for Jimeng image generation
-    const response = await fetch(`${baseUrl}/images/generations`, {
+    const response = await retryFetch(`${baseUrl}/images/generations`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -82,7 +83,7 @@ export class JimengImageProvider implements ImageProvider {
       'https://ark.cn-beijing.volces.com/api/v3',
     );
 
-    const response = await fetch(`${baseUrl}/images/generations/${taskId}`, {
+    const response = await retryFetch(`${baseUrl}/images/generations/${taskId}`, {
       headers: { 'Authorization': `Bearer ${apiKey}` },
     });
 
