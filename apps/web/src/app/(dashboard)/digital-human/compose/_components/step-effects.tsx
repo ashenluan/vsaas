@@ -4,16 +4,8 @@ import { useComposeStore } from './use-compose-store';
 import { StepContainer, Card, Toggle, Slider, ChipSelect } from './shared';
 import { Sparkles, ArrowRightLeft, Palette } from 'lucide-react';
 
-const EFFECT_CATEGORY_LABELS: Record<string, string> = {
-  basic: '基础', atmosphere: '氛围', dynamic: '动感', light: '光影',
-  retro: '复古', dreamy: '梦幻', nature: '自然', splitScreen: '分屏',
-  color: '色彩', deform: '变形',
-};
-
-const FILTER_CATEGORY_LABELS: Record<string, string> = {
-  modern90s: '90年代', film: '胶片', infrared: '红外', fresh: '清新',
-  japanese: '日系', unsplash: '风光', negative80s: '80年代', travel: '旅行', art90s: '艺术',
-};
+// Category keys come from the API in Chinese — use as-is for display
+// No mapping needed since the API already returns Chinese category names
 
 export function StepEffects({ options }: { options: any }) {
   const { effects, updateEffects, transition, updateTransition, filter, updateFilter } = useComposeStore();
@@ -52,24 +44,24 @@ export function StepEffects({ options }: { options: any }) {
                 <div className="max-h-52 space-y-2.5 overflow-y-auto rounded-lg border p-3">
                   {Object.entries(effectsData).map(([category, items]) => (
                     <div key={category}>
-                      <span className="mb-1 block text-[10px] font-medium text-primary/70">{EFFECT_CATEGORY_LABELS[category] || category}</span>
+                      <span className="mb-1 block text-[10px] font-medium text-primary/70">{category}</span>
                       <div className="flex flex-wrap gap-1">
-                        {(items as string[]).map((e) => (
+                        {(items as { id: string; label: string }[]).map((e) => (
                           <button
-                            key={e}
+                            key={e.id}
                             onClick={() => {
-                              const list = effects.vfxFirstClipEffectList.includes(e)
-                                ? effects.vfxFirstClipEffectList.filter((x) => x !== e)
-                                : [...effects.vfxFirstClipEffectList, e];
+                              const list = effects.vfxFirstClipEffectList.includes(e.id)
+                                ? effects.vfxFirstClipEffectList.filter((x) => x !== e.id)
+                                : [...effects.vfxFirstClipEffectList, e.id];
                               updateEffects({ vfxFirstClipEffectList: list });
                             }}
                             className={`rounded-md border px-2 py-0.5 text-[11px] transition-all ${
-                              effects.vfxFirstClipEffectList.includes(e)
+                              effects.vfxFirstClipEffectList.includes(e.id)
                                 ? 'border-purple-400 bg-purple-50 text-purple-700 font-medium'
                                 : 'border-input hover:bg-accent'
                             }`}
                           >
-                            {e}
+                            {e.label}
                           </button>
                         ))}
                       </div>
@@ -84,24 +76,24 @@ export function StepEffects({ options }: { options: any }) {
                 <div className="max-h-52 space-y-2.5 overflow-y-auto rounded-lg border p-3">
                   {Object.entries(effectsData).map(([category, items]) => (
                     <div key={category}>
-                      <span className="mb-1 block text-[10px] font-medium text-primary/70">{EFFECT_CATEGORY_LABELS[category] || category}</span>
+                      <span className="mb-1 block text-[10px] font-medium text-primary/70">{category}</span>
                       <div className="flex flex-wrap gap-1">
-                        {(items as string[]).map((e) => (
+                        {(items as { id: string; label: string }[]).map((e) => (
                           <button
-                            key={e}
+                            key={e.id}
                             onClick={() => {
-                              const list = effects.vfxNotFirstClipEffectList.includes(e)
-                                ? effects.vfxNotFirstClipEffectList.filter((x) => x !== e)
-                                : [...effects.vfxNotFirstClipEffectList, e];
+                              const list = effects.vfxNotFirstClipEffectList.includes(e.id)
+                                ? effects.vfxNotFirstClipEffectList.filter((x) => x !== e.id)
+                                : [...effects.vfxNotFirstClipEffectList, e.id];
                               updateEffects({ vfxNotFirstClipEffectList: list });
                             }}
                             className={`rounded-md border px-2 py-0.5 text-[11px] transition-all ${
-                              effects.vfxNotFirstClipEffectList.includes(e)
+                              effects.vfxNotFirstClipEffectList.includes(e.id)
                                 ? 'border-purple-400 bg-purple-50 text-purple-700 font-medium'
                                 : 'border-input hover:bg-accent'
                             }`}
                           >
-                            {e}
+                            {e.label}
                           </button>
                         ))}
                       </div>
@@ -196,24 +188,24 @@ export function StepEffects({ options }: { options: any }) {
               <div className="max-h-56 space-y-2.5 overflow-y-auto rounded-lg border p-3">
                 {Object.entries(filtersData).map(([category, items]) => (
                   <div key={category}>
-                    <span className="mb-1 block text-[10px] font-medium text-amber-600">{FILTER_CATEGORY_LABELS[category] || category}</span>
+                    <span className="mb-1 block text-[10px] font-medium text-amber-600">{category}</span>
                     <div className="flex flex-wrap gap-1">
-                      {(items as string[]).map((f) => (
+                      {(items as { id: string; label: string }[]).map((f) => (
                         <button
-                          key={f}
+                          key={f.id}
                           onClick={() => {
-                            const list = filter.filterList.includes(f)
-                              ? filter.filterList.filter((x) => x !== f)
-                              : [...filter.filterList, f];
+                            const list = filter.filterList.includes(f.id)
+                              ? filter.filterList.filter((x) => x !== f.id)
+                              : [...filter.filterList, f.id];
                             updateFilter({ filterList: list });
                           }}
                           className={`rounded-md border px-2 py-0.5 text-[11px] transition-all ${
-                            filter.filterList.includes(f)
+                            filter.filterList.includes(f.id)
                               ? 'border-amber-400 bg-amber-50 text-amber-700 font-medium'
                               : 'border-input hover:bg-accent'
                           }`}
                         >
-                          {f}
+                          {f.label}
                         </button>
                       ))}
                     </div>
