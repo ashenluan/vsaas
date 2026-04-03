@@ -143,6 +143,9 @@ export class BatchProductionProcessor extends WorkerHost {
         throw new Error('所有脚本的语音合成都失败了');
       }
 
+      // 持久化 TTS 结果到 DB（崩溃恢复用）
+      await this.persistPipelineState(jobId, steps, 'tts_done');
+
       // Phase 2: S2V - Generate digital human videos
       this.sendProgress(userId, jobId, 'PROCESSING', 30, `开始数字人视频生成 (${ttsSuccessful.length} 个)`);
 
@@ -182,6 +185,9 @@ export class BatchProductionProcessor extends WorkerHost {
       if (s2vSuccessful.length === 0) {
         throw new Error('所有数字人视频生成都失败了');
       }
+
+      // 持久化 S2V 最终结果
+      await this.persistPipelineState(jobId, steps, 's2v_done');
 
       // 根据 S2V 实际成功数量调整 IMS videoCount
       // 避免素材不足导致 IMS 生成低质量或重复视频
@@ -560,6 +566,8 @@ export class BatchProductionProcessor extends WorkerHost {
             step.s2vVideoUrl = status.videoUrl;
             step.status = 's2v_done';
             this.logger.log(`S2V completed for ${step.scriptId}: ${status.videoUrl}`);
+            // 持久化每个完成的 S2V 结果，防止崩溃丢失
+            await this.persistPipelineState(jobId, allSteps, 's2v_polling');
           } else if (status.status === 'FAILED') {
             step.status = 'failed';
             step.error = `S2V 生成失败: ${status.errorMessage || status.errorCode || '未知错误'}`;
@@ -664,5 +672,30 @@ export class BatchProductionProcessor extends WorkerHost {
       where: { id: jobId },
       data: { status: status as any },
     });
+  }
+
+  /** 持久化管道中间状态到 DB，用于崩溃恢复和调试 */
+  private async persistPipelineState(jobId: string, steps: PipelineStep[], phase: string) {
+    try {
+      await this.prisma.generation.update({
+        where: { id: jobId },
+        data: {
+          output: {
+            phase,
+            pipeline: steps.map((s) => ({
+              scriptId: s.scriptId,
+              scriptTitle: s.scriptTitle,
+              ttsAudioUrl: s.ttsAudioUrl,
+              s2vTaskId: s.s2vTaskId,
+              s2vVideoUrl: s.s2vVideoUrl,
+              status: s.status,
+              error: s.error,
+            })),
+          },
+        },
+      });
+    } catch (err: any) {
+      this.logger.warn(`Failed to persist pipeline state for ${jobId}: ${err.message}`);
+    }
   }
 }

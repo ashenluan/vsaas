@@ -228,6 +228,16 @@ export class WanS2VProvider implements DigitalHumanProvider {
     }
   }
 
+  /**
+   * 检查任务是否已过期（DashScope 任务数据保留 24 小时）
+   * @param createdAt 任务创建时间
+   * @returns true 如果任务已过期
+   */
+  isTaskExpired(createdAt: Date): boolean {
+    const EXPIRY_MS = 23 * 60 * 60 * 1000; // 23 hours (safe margin before 24h)
+    return Date.now() - createdAt.getTime() > EXPIRY_MS;
+  }
+
   async checkTaskStatus(taskId: string): Promise<{ status: string; videoUrl?: string; progress?: number; errorCode?: string; errorMessage?: string }> {
     const apiKey = this.config.get<string>('DASHSCOPE_API_KEY');
 
