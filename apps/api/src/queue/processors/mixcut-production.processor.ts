@@ -80,22 +80,25 @@ export class MixcutProductionProcessor extends WorkerHost {
           duration: sj.duration,
         }));
 
-      // Re-poll once — sub-job statuses can lag behind the main job 'Finished' status
+      // Re-poll with retry — sub-job statuses can lag behind the main job 'Finished' status
       if (outputVideos.length === 0 && (imsStatus.subJobs || []).length > 0) {
         this.logger.warn(
           `Mixcut ${jobId}: main job Finished but 0 Success sub-jobs. ` +
-          `Statuses: ${(imsStatus.subJobs || []).map((sj: any) => sj.status).join(', ')}. Retrying in 5s...`,
+          `Statuses: ${(imsStatus.subJobs || []).map((sj: any) => sj.status).join(', ')}. Retrying...`,
         );
-        await new Promise((r) => setTimeout(r, 5000));
-        imsStatus = await imsProvider.checkJobStatus(imsResult.jobId);
-        outputVideos = (imsStatus.subJobs || [])
-          .filter((sj: any) => sj.status === 'Success')
-          .map((sj: any) => ({
-            mediaId: sj.mediaId,
-            mediaURL: sj.mediaURL,
-            duration: sj.duration,
-          }));
-        this.logger.log(`Mixcut ${jobId}: after re-poll, ${outputVideos.length} Success sub-jobs`);
+        for (let retry = 0; retry < 3; retry++) {
+          await new Promise((r) => setTimeout(r, 3000 * (retry + 1)));
+          imsStatus = await imsProvider.checkJobStatus(imsResult.jobId);
+          outputVideos = (imsStatus.subJobs || [])
+            .filter((sj: any) => sj.status === 'Success')
+            .map((sj: any) => ({
+              mediaId: sj.mediaId,
+              mediaURL: sj.mediaURL,
+              duration: sj.duration,
+            }));
+          this.logger.log(`Mixcut ${jobId}: re-poll #${retry + 1}, ${outputVideos.length} Success sub-jobs`);
+          if (outputVideos.length > 0) break;
+        }
       }
 
       // Fallback: if still 0, include any sub-job that has a mediaURL
@@ -182,12 +185,32 @@ export class MixcutProductionProcessor extends WorkerHost {
   }
 
   private async pollImsJob(imsJobId: string, userId: string, jobId: string): Promise<any> {
-    const maxAttempts = 360; // 360 * 10s = 60 minutes max
-    const interval = 10000;
+    const maxDurationMs = 60 * 60 * 1000; // 60 minutes max
+    const startTime = Date.now();
     const imsProvider = this.providers.batchComposeProvider;
+    let lastProgress = 0;
+    let attempt = 0;
 
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    while (Date.now() - startTime < maxDurationMs) {
+      // Adaptive interval: 15s early, 8s mid, 5s near completion
+      const interval = lastProgress < 30 ? 15000 : lastProgress < 70 ? 8000 : 5000;
       await new Promise((r) => setTimeout(r, interval));
+      attempt++;
+
+      // Check if callback already completed this job
+      if (attempt % 6 === 0) {
+        const gen = await this.prisma.generation.findUnique({ where: { id: jobId }, select: { status: true } });
+        if (gen?.status === 'COMPLETED' || gen?.status === 'FAILED') {
+          this.logger.log(`Mixcut ${jobId}: callback already resolved to ${gen.status}, stopping poll`);
+          return await imsProvider.checkJobStatus(imsJobId);
+        }
+      }
+
+      // Heartbeat log every 10 attempts
+      if (attempt % 10 === 0) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        this.logger.log(`Mixcut ${jobId} polling: attempt=${attempt}, elapsed=${elapsed}s, progress=${lastProgress}%`);
+      }
 
       try {
         const status = await imsProvider.checkJobStatus(imsJobId);
@@ -201,8 +224,9 @@ export class MixcutProductionProcessor extends WorkerHost {
           throw new Error(`IMS 智能混剪任务失败: ${detail}`);
         }
 
-        const progress = 15 + Math.round((status.progress || 0) * 0.8);
-        this.sendProgress(userId, jobId, 'PROCESSING', Math.min(progress, 94), `IMS 处理中: ${status.progress || 0}%`);
+        lastProgress = status.progress || 0;
+        const progress = 15 + Math.round(lastProgress * 0.8);
+        this.sendProgress(userId, jobId, 'PROCESSING', Math.min(progress, 94), `IMS 处理中: ${lastProgress}%`);
       } catch (err: any) {
         if (err.message.includes('失败')) throw err;
         this.logger.warn(`IMS poll error: ${err.message}`);
