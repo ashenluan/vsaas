@@ -197,6 +197,37 @@ export class WanS2VProvider implements DigitalHumanProvider {
     };
   }
 
+  /**
+   * 取消 PENDING 状态的异步任务
+   * 注意：仅 PENDING 状态可取消，RUNNING 状态无法取消
+   */
+  async cancelTask(taskId: string): Promise<boolean> {
+    const apiKey = this.config.get<string>('DASHSCOPE_API_KEY');
+
+    try {
+      const response = await retryFetch(
+        `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}/cancel`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${apiKey}` },
+        },
+        { maxRetries: 1 },
+      );
+
+      if (response.ok) {
+        this.logger.log(`Task ${taskId} cancel requested`);
+        return true;
+      }
+
+      const data: any = await response.json().catch(() => ({}));
+      this.logger.warn(`Task ${taskId} cancel failed: ${data.message || response.statusText}`);
+      return false;
+    } catch (err: any) {
+      this.logger.warn(`Task ${taskId} cancel error: ${err.message}`);
+      return false;
+    }
+  }
+
   async checkTaskStatus(taskId: string): Promise<{ status: string; videoUrl?: string; progress?: number; errorCode?: string; errorMessage?: string }> {
     const apiKey = this.config.get<string>('DASHSCOPE_API_KEY');
 

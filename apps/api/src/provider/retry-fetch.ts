@@ -9,6 +9,17 @@ export interface RetryOptions {
   retryableStatusCodes?: number[];
 }
 
+/** DashScope business error codes that should NOT be retried */
+const NON_RETRYABLE_ERROR_CODES = new Set([
+  'InvalidParameter',
+  'DataInspectionFailed',
+  'Arrearage',
+  'BadRequest.TooLarge',
+  'UnsupportedOperation',
+  'InvalidApiKey',
+  'AccessDenied',
+]);
+
 const DEFAULT_OPTIONS: Required<RetryOptions> = {
   maxRetries: 3,
   baseDelayMs: 1000,
@@ -41,7 +52,26 @@ export async function retryFetch(
     try {
       const response = await fetch(url, init);
 
-      if (response.ok || !retryableStatusCodes.includes(response.status)) {
+      if (response.ok) {
+        return response;
+      }
+
+      // 400 errors: check if it's a non-retryable DashScope business error
+      if (response.status === 400) {
+        // Clone response so caller can still read the body
+        const cloned = response.clone();
+        try {
+          const body = await cloned.json() as { code?: string; message?: string };
+          if (body.code && NON_RETRYABLE_ERROR_CODES.has(body.code)) {
+            logger.warn(
+              `Non-retryable DashScope error ${body.code} from ${url.split('?')[0]}: ${body.message || ''}`,
+            );
+            return response;
+          }
+        } catch { /* ignore JSON parse errors */ }
+      }
+
+      if (!retryableStatusCodes.includes(response.status)) {
         return response;
       }
 

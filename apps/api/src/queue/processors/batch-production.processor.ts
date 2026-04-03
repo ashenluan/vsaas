@@ -578,6 +578,11 @@ export class BatchProductionProcessor extends WorkerHost {
           }
         } catch (err: any) {
           this.logger.warn(`S2V poll error for ${step.scriptId}: ${err.message}`);
+          // Throttling protection: if rate-limited, wait extra 10s before next poll
+          if (err.message?.includes('429') || err.message?.includes('Throttling') || err.message?.includes('频繁')) {
+            this.logger.warn('Throttling detected, backing off 10s');
+            await new Promise((r) => setTimeout(r, 10000));
+          }
         }
       }
 
