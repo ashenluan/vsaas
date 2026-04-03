@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 // 驱动模式
-type DriveMode = 'text' | 'audio';
+type DriveMode = 'text' | 'audio' | 'video';
 
 // 生成模式
 const RESOLUTIONS = [
@@ -56,6 +56,9 @@ function CreateContent() {
   const [textContent, setTextContent] = useState('');
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [animateMode, setAnimateMode] = useState<'wan-std' | 'wan-pro'>('wan-std');
   const [resolution, setResolution] = useState('1080x1920');
   const [speechRate, setSpeechRate] = useState(1.0);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -74,6 +77,7 @@ function CreateContent() {
   const [previewText, setPreviewText] = useState('欢迎使用青柚AI数字人创作平台');
 
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   // WebSocket
   const { subscribe } = useWs();
@@ -168,6 +172,16 @@ function CreateContent() {
     setAudioPreview(URL.createObjectURL(f));
   };
 
+  const handleVideoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith('video/')) { setError('请上传视频文件'); return; }
+    if (f.size > 200 * 1024 * 1024) { setError('视频不能超过200MB'); return; }
+    setError('');
+    setVideoFile(f);
+    setVideoPreview(URL.createObjectURL(f));
+  };
+
   const handleVoicePreview = async (voiceId: string) => {
     setPreviewingVoice(voiceId);
     try {
@@ -186,6 +200,7 @@ function CreateContent() {
     if (!selectedVoice && driveMode === 'text') { setError('请选择声音'); return; }
     if (driveMode === 'text' && !textContent.trim()) { setError('请输入台词文案'); return; }
     if (driveMode === 'audio' && !audioFile) { setError('请上传音频文件'); return; }
+    if (driveMode === 'video' && !videoFile) { setError('请上传参考视频'); return; }
     setError('');
     setSubmitting(true);
 
@@ -194,6 +209,12 @@ function CreateContent() {
       if (driveMode === 'audio' && audioFile) {
         const { url } = await uploadToOSS(audioFile);
         audioUrl = url;
+      }
+
+      let videoUrl: string | undefined;
+      if (driveMode === 'video' && videoFile) {
+        const { url } = await uploadToOSS(videoFile);
+        videoUrl = url;
       }
 
       const payload: any = {
@@ -207,6 +228,9 @@ function CreateContent() {
         payload.voiceId = selectedVoice;
         payload.text = textContent.trim();
         if (speechRate !== 1.0) payload.speechRate = speechRate;
+      } else if (driveMode === 'video') {
+        payload.videoUrl = videoUrl;
+        payload.animateMode = animateMode;
       } else {
         payload.audioUrl = audioUrl;
       }
@@ -461,6 +485,17 @@ function CreateContent() {
             >
               音频驱动
             </button>
+            <button
+              onClick={() => setDriveMode('video')}
+              className={cn(
+                'rounded-lg px-4 py-2 text-sm font-medium transition-all',
+                driveMode === 'video'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              )}
+            >
+              视频驱动
+            </button>
           </div>
 
           {driveMode === 'text' ? (
@@ -500,7 +535,7 @@ function CreateContent() {
               />
               <p className="mt-1 text-right text-xs text-slate-400">{textContent.length} 字</p>
             </div>
-          ) : (
+          ) : driveMode === 'audio' ? (
             <div>
               <p className="mb-2 text-xs text-slate-500">上传音频文件，数字人将自动对口型（无需选择声音）</p>
               <input
@@ -529,6 +564,64 @@ function CreateContent() {
                   <span className="text-sm font-medium">点击上传音频文件</span>
                 </button>
               )}
+            </div>
+          ) : (
+            <div>
+              <p className="mb-2 text-xs text-slate-500">上传参考视频，数字人将模仿视频中的动作和表情（2-30秒，≤200MB）</p>
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                onChange={handleVideoFile}
+                className="hidden"
+              />
+              {videoPreview ? (
+                <div className="space-y-2">
+                  <video src={videoPreview} controls className="w-full rounded-xl" />
+                  <button
+                    onClick={() => { setVideoFile(null); setVideoPreview(null); }}
+                    className="text-xs text-red-500 hover:underline"
+                  >
+                    移除视频
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => videoInputRef.current?.click()}
+                  className="flex h-24 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-primary hover:text-primary transition-all"
+                >
+                  <Upload size={20} />
+                  <span className="text-sm font-medium">点击上传参考视频</span>
+                </button>
+              )}
+              {/* 模式选择 */}
+              <div className="mt-3">
+                <p className="mb-1.5 text-xs font-medium text-slate-600">生成模式</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setAnimateMode('wan-std')}
+                    className={cn(
+                      'rounded-lg px-3 py-1.5 text-xs font-medium border transition-all',
+                      animateMode === 'wan-std'
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                    )}
+                  >
+                    标准模式（快速）
+                  </button>
+                  <button
+                    onClick={() => setAnimateMode('wan-pro')}
+                    className={cn(
+                      'rounded-lg px-3 py-1.5 text-xs font-medium border transition-all',
+                      animateMode === 'wan-pro'
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                    )}
+                  >
+                    专业模式（更精细）
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -641,12 +734,12 @@ function CreateContent() {
             <div className="flex justify-between">
               <span className="text-slate-500">声音</span>
               <span className="font-medium text-slate-700">
-                {driveMode === 'audio' ? '音频驱动' : selectedVoice ? voices.find((v) => v.voiceId === selectedVoice || v.id === selectedVoice)?.name || '已选择' : '未选择'}
+                {driveMode === 'audio' ? '音频驱动' : driveMode === 'video' ? '视频驱动' : selectedVoice ? voices.find((v) => v.voiceId === selectedVoice || v.id === selectedVoice)?.name || '已选择' : '未选择'}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">驱动模式</span>
-              <span className="font-medium text-slate-700">{driveMode === 'text' ? '文本驱动' : '音频驱动'}</span>
+              <span className="font-medium text-slate-700">{driveMode === 'text' ? '文本驱动' : driveMode === 'audio' ? '音频驱动' : '视频驱动'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">分辨率</span>

@@ -807,13 +807,15 @@ export class DigitalHumanService {
     userId: string,
     data: {
       avatarId: string;
-      driveMode: 'text' | 'audio';
+      driveMode: 'text' | 'audio' | 'video';
       resolution: string;
       name?: string;
       voiceId?: string;
       text?: string;
       speechRate?: number;
       audioUrl?: string;
+      videoUrl?: string;
+      animateMode?: 'wan-std' | 'wan-pro';
     },
   ) {
     // Validate avatar (user-owned or public)
@@ -825,12 +827,14 @@ export class DigitalHumanService {
     });
     if (!avatar) throw new BadRequestException('数字人形象不存在');
 
-    // Check face detection
-    const faceDetect = (avatar.metadata as any)?.faceDetect;
-    if (!faceDetect?.valid) {
-      throw new BadRequestException(
-        '该形象未通过人脸检测，请先进行人脸检测',
-      );
+    // Check face detection (not needed for video drive mode — animate-move has built-in check)
+    if (data.driveMode !== 'video') {
+      const faceDetect = (avatar.metadata as any)?.faceDetect;
+      if (!faceDetect?.valid) {
+        throw new BadRequestException(
+          '该形象未通过人脸检测，请先进行人脸检测',
+        );
+      }
     }
 
     // Validate voice for text mode
@@ -851,6 +855,11 @@ export class DigitalHumanService {
     // Validate audio for audio mode
     if (data.driveMode === 'audio' && !data.audioUrl) {
       throw new BadRequestException('请上传音频文件');
+    }
+
+    // Validate video for video mode
+    if (data.driveMode === 'video' && !data.videoUrl) {
+      throw new BadRequestException('请上传参考视频');
     }
 
     // Deduct credits
@@ -877,7 +886,9 @@ export class DigitalHumanService {
           resolution: data.resolution,
           ...(data.driveMode === 'text'
             ? { voiceId: data.voiceId, text: data.text, speechRate: data.speechRate || 1.0 }
-            : { audioUrl: data.audioUrl }),
+            : data.driveMode === 'video'
+              ? { videoUrl: data.videoUrl, animateMode: data.animateMode || 'wan-std' }
+              : { audioUrl: data.audioUrl }),
         },
       },
     });

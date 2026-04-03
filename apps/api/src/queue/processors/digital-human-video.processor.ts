@@ -11,11 +11,13 @@ interface DHVideoJobData {
   userId: string;
   input: {
     avatarUrl: string;
-    driveMode: 'text' | 'audio';
+    driveMode: 'text' | 'audio' | 'video';
     resolution: string;
     voiceId?: string;
     text?: string;
     audioUrl?: string;
+    videoUrl?: string;
+    animateMode?: 'wan-std' | 'wan-pro';
   };
 }
 
@@ -49,6 +51,64 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
     });
 
     try {
+      // Video drive mode: use wan2.2-animate-move (image + reference video)
+      if (input.driveMode === 'video') {
+        if (!input.videoUrl) throw new Error('缺少参考视频');
+
+        this.ws.sendToUser(userId, 'compose:progress', {
+          jobId,
+          status: 'PROCESSING',
+          progress: 20,
+          message: '正在生成动作迁移视频...',
+        });
+
+        const dhProvider = this.providers.digitalHumanProvider;
+        const genResult = await dhProvider.generateAnimateVideo(
+          input.avatarUrl,
+          input.videoUrl,
+          input.animateMode || 'wan-std',
+        );
+
+        if (!genResult.taskId) {
+          throw new Error('动作迁移视频生成失败：未返回任务ID');
+        }
+
+        await this.prisma.generation.update({
+          where: { id: jobId },
+          data: { externalId: genResult.taskId },
+        });
+
+        const videoResult = await this.pollVideoCompletion(
+          dhProvider,
+          genResult.taskId,
+          userId,
+          jobId,
+        );
+
+        await this.prisma.generation.update({
+          where: { id: jobId },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+            output: {
+              videoUrl: videoResult.videoUrl,
+              taskId: genResult.taskId,
+            },
+          },
+        });
+
+        this.ws.sendToUser(userId, 'compose:progress', {
+          jobId,
+          status: 'COMPLETED',
+          progress: 100,
+          message: '动作迁移视频生成完成',
+          output: { videoUrl: videoResult.videoUrl },
+        });
+
+        this.logger.log(`Animate-move video completed: ${jobId}`);
+        return videoResult;
+      }
+
       let audioUrl = input.audioUrl;
 
       // Step 1: TTS if text drive mode

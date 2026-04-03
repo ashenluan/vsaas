@@ -10,6 +10,7 @@ import {
 export enum DriveMode {
   TEXT = 'text',
   AUDIO = 'audio',
+  VIDEO = 'video',
 }
 
 export class CreateVideoDto {
@@ -46,4 +47,14 @@ export class CreateVideoDto {
   @IsString()
   @IsNotEmpty({ message: '请上传音频文件' })
   audioUrl?: string;
+
+  // Video drive fields
+  @ValidateIf((o) => o.driveMode === DriveMode.VIDEO)
+  @IsString()
+  @IsNotEmpty({ message: '请上传参考视频' })
+  videoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  animateMode?: 'wan-std' | 'wan-pro';
 }

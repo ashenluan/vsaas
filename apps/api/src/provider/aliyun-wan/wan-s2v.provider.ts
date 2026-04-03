@@ -98,6 +98,49 @@ export class WanS2VProvider implements DigitalHumanProvider {
     throw new Error('S2V detect timed out');
   }
 
+  /**
+   * wan2.2-animate-move: 图片 + 参考视频 → 动作/表情迁移视频
+   */
+  async generateAnimateVideo(
+    imageUrl: string,
+    videoUrl: string,
+    mode: 'wan-std' | 'wan-pro' = 'wan-std',
+  ): Promise<{ taskId: string; status: string }> {
+    const apiKey = this.config.get<string>('DASHSCOPE_API_KEY');
+
+    this.logger.log(`Generating animate-move video: image=${imageUrl.slice(0, 50)}, video=${videoUrl.slice(0, 50)}`);
+
+    const response = await retryFetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/video-synthesis', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'X-DashScope-Async': 'enable',
+      },
+      body: JSON.stringify({
+        model: 'wan2.2-animate-move',
+        input: {
+          image_url: imageUrl,
+          video_url: videoUrl,
+        },
+        parameters: {
+          mode,
+        },
+      }),
+    });
+
+    const data: any = await response.json();
+
+    if (!response.ok) {
+      throw new Error(`Animate-move error: ${data.message || response.statusText}`);
+    }
+
+    return {
+      taskId: data.output?.task_id,
+      status: data.output?.task_status || 'PENDING',
+    };
+  }
+
   async generateVideo(imageUrl: string, audioUrl: string, resolution: string = '720P'): Promise<{ taskId: string; status: string }> {
     const apiKey = this.config.get<string>('DASHSCOPE_API_KEY');
 
