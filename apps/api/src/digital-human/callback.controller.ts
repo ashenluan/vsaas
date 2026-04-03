@@ -114,8 +114,8 @@ export class CallbackController {
           },
         });
 
-        // Use correct WS event based on generation type
-        const wsEvent = generation.type === 'MIXCUT' ? 'mixcut:progress' : 'compose:progress';
+        // Use correct WS event based on generation mode
+        const wsEvent = (generation.input as any)?.mode === 'mixcut' ? 'mixcut:progress' : 'compose:progress';
         this.ws.sendToUser(generation.userId, wsEvent, {
           jobId: generation.id,
           status: 'COMPLETED',
@@ -142,7 +142,7 @@ export class CallbackController {
           },
         });
 
-        const failWsEvent = generation.type === 'MIXCUT' ? 'mixcut:progress' : 'compose:progress';
+        const failWsEvent = (generation.input as any)?.mode === 'mixcut' ? 'mixcut:progress' : 'compose:progress';
         this.ws.sendToUser(generation.userId, failWsEvent, {
           jobId: generation.id,
           status: 'FAILED',
