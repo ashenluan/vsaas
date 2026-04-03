@@ -42,8 +42,10 @@ export class GenerationService {
     height: number;
     providerId: string;
     count: number;
+    model?: string;
     style?: string;
     seed?: number;
+    promptExtend?: boolean;
     referenceImage?: string;
   }) {
     const provider = this.providers.getImageProvider(input.providerId);
@@ -69,8 +71,10 @@ export class GenerationService {
           width: input.width,
           height: input.height,
           count: input.count,
+          model: input.model,
           style: input.style,
           seed: input.seed,
+          promptExtend: input.promptExtend,
           referenceImage: input.referenceImage,
         },
       },
