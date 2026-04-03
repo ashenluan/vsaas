@@ -41,9 +41,20 @@ export class CallbackController {
   ) {
     this.logger.log(`IMS callback received: ${JSON.stringify(body).slice(0, 500)}`);
 
+    // IMS wraps actual data inside MessageBody
+    const msg = body.MessageBody || body;
+
+    // Extract token from UserData JSON string inside MessageBody
+    let userData: any = {};
+    try {
+      if (typeof msg.UserData === 'string') {
+        userData = JSON.parse(msg.UserData);
+      }
+    } catch { /* ignore parse errors */ }
+
     // 验证回调来源（如果配置了 token）
     if (this.callbackToken) {
-      const incomingToken = headerToken || body.CallbackToken || body.Token;
+      const incomingToken = headerToken || userData.CallbackToken || body.CallbackToken || body.Token;
       if (incomingToken !== this.callbackToken) {
         this.logger.warn('IMS callback rejected: invalid token');
         throw new ForbiddenException('Invalid callback token');
@@ -51,19 +62,18 @@ export class CallbackController {
     }
 
     try {
-      const eventType = body.EventType || body.Type;
-      const jobId = body.JobId || body.MediaProduceJobId;
-      const status = body.Status;
+      const eventType = msg.EventType || body.EventType || body.Type;
+      const jobId = msg.JobId || body.JobId || body.MediaProduceJobId;
+      const status = msg.Status || body.Status;
 
       if (!jobId) {
         this.logger.warn('IMS callback missing JobId');
         return { success: true };
       }
 
-      // Find the generation record by externalId (indexed) instead of JSON path query
+      // Find the generation record by externalId (supports both BATCH_COMPOSE and MIXCUT)
       const generation = await this.prisma.generation.findFirst({
         where: {
-          type: 'BATCH_COMPOSE',
           externalId: jobId,
         },
       });
@@ -79,8 +89,8 @@ export class CallbackController {
         return { success: true };
       }
 
-      // Parse sub-jobs if available
-      const subJobs = body.SubJobList || body.SubJobs || [];
+      // Parse sub-jobs if available (can be in MessageBody or top-level)
+      const subJobs = msg.SubJobList || body.SubJobList || body.SubJobs || [];
       const outputVideos = subJobs
         .filter((sj: any) => sj.Status === 'Success')
         .map((sj: any) => ({
@@ -104,7 +114,9 @@ export class CallbackController {
           },
         });
 
-        this.ws.sendToUser(generation.userId, 'compose:progress', {
+        // Use correct WS event based on generation type
+        const wsEvent = generation.type === 'MIXCUT' ? 'mixcut:progress' : 'compose:progress';
+        this.ws.sendToUser(generation.userId, wsEvent, {
           jobId: generation.id,
           status: 'COMPLETED',
           progress: 100,
@@ -130,7 +142,8 @@ export class CallbackController {
           },
         });
 
-        this.ws.sendToUser(generation.userId, 'compose:progress', {
+        const failWsEvent = generation.type === 'MIXCUT' ? 'mixcut:progress' : 'compose:progress';
+        this.ws.sendToUser(generation.userId, failWsEvent, {
           jobId: generation.id,
           status: 'FAILED',
           progress: 0,
