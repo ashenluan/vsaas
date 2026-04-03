@@ -70,6 +70,26 @@ export class WanS2VProvider implements DigitalHumanProvider {
     return `人脸检测失败: ${msg}`;
   }
 
+  /** 翻译 DashScope 常见错误码为中文 */
+  private translateDashScopeError(code: string, message: string): string {
+    if (code === 'DataInspectionFailed' || message.includes('DataInspectionFailed')) {
+      return '内容审核未通过，请检查输入的图片/音频是否合规后重试。';
+    }
+    if (code === 'Throttling' || message.includes('Throttling')) {
+      return '请求过于频繁，请稍后再试。';
+    }
+    if (code === 'Arrearage' || message.includes('Arrearage')) {
+      return '阿里云账户余额不足，请充值后重试。';
+    }
+    if (code === 'BadRequest.TooLarge' || message.includes('TooLarge')) {
+      return '文件过大，请压缩后重试。';
+    }
+    if (code === 'InvalidParameter' || message.includes('InvalidParameter')) {
+      return `参数错误: ${message}`;
+    }
+    return message || code || '未知错误';
+  }
+
   private async pollDetectResult(apiKey: string, taskId: string): Promise<{ valid: boolean; result: any }> {
     const maxAttempts = 30;
     const interval = 2000;
@@ -131,8 +151,8 @@ export class WanS2VProvider implements DigitalHumanProvider {
 
     const data: any = await response.json();
 
-    if (!response.ok) {
-      throw new Error(`Animate-move error: ${data.message || response.statusText}`);
+    if (!response.ok || data.code) {
+      throw new Error(this.translateDashScopeError(data.code || '', data.message || response.statusText));
     }
 
     return {
@@ -167,8 +187,8 @@ export class WanS2VProvider implements DigitalHumanProvider {
 
     const data: any = await response.json();
 
-    if (!response.ok) {
-      throw new Error(`S2V generate error: ${data.message || response.statusText}`);
+    if (!response.ok || data.code) {
+      throw new Error(this.translateDashScopeError(data.code || '', data.message || response.statusText));
     }
 
     return {
@@ -191,12 +211,21 @@ export class WanS2VProvider implements DigitalHumanProvider {
       || data.output?.results?.video_url
       || data.output?.results?.[0]?.video_url;
 
+    const rawStatus = data.output?.task_status || 'UNKNOWN';
+    const errorCode = data.output?.code || '';
+    const errorMessage = data.output?.message || '';
+
+    // Translate error for FAILED tasks
+    const translatedError = (rawStatus === 'FAILED' || rawStatus === 'CANCELED')
+      ? this.translateDashScopeError(errorCode, errorMessage)
+      : errorMessage;
+
     return {
-      status: data.output?.task_status || 'UNKNOWN',
+      status: rawStatus,
       videoUrl,
       progress: data.output?.progress,
-      errorCode: data.output?.code,
-      errorMessage: data.output?.message,
+      errorCode,
+      errorMessage: translatedError,
     };
   }
 }

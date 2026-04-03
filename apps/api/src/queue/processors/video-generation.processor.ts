@@ -97,7 +97,13 @@ export class VideoGenerationProcessor extends WorkerHost {
         return status;
       }
       if (normalizedStatus === 'failed') {
-        throw new Error(`Video generation failed: ${status.error || status.message || 'Unknown error'}`);
+        throw new Error(`视频生成失败: ${status.error || status.message || '未知错误'}`);
+      }
+      if (normalizedStatus === 'canceled' || normalizedStatus === 'cancelled') {
+        throw new Error('视频生成任务已被取消');
+      }
+      if (normalizedStatus === 'unknown') {
+        throw new Error('视频生成任务已过期或不存在，请重新提交');
       }
 
       // 每 30 秒发一次进度通知

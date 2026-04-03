@@ -562,15 +562,26 @@ export class BatchProductionProcessor extends WorkerHost {
             this.logger.log(`S2V completed for ${step.scriptId}: ${status.videoUrl}`);
           } else if (status.status === 'FAILED') {
             step.status = 'failed';
-            step.error = `S2V failed: ${status.errorMessage || status.errorCode || 'unknown'}`;
+            step.error = `S2V 生成失败: ${status.errorMessage || status.errorCode || '未知错误'}`;
             this.logger.error(`S2V failed for ${step.scriptId}: ${status.errorCode} - ${status.errorMessage}`);
+          } else if (status.status === 'CANCELED') {
+            step.status = 'failed';
+            step.error = 'S2V 任务已被取消';
+            this.logger.warn(`S2V canceled for ${step.scriptId} (${step.s2vTaskId})`);
+          } else if (status.status === 'UNKNOWN') {
+            step.status = 'failed';
+            step.error = 'S2V 任务已过期或不存在，请重新提交';
+            this.logger.warn(`S2V task unknown/expired for ${step.scriptId} (${step.s2vTaskId})`);
+          } else if (attempt % 6 === 0) {
+            // Log every 30s for PENDING/RUNNING to show the process is alive
+            this.logger.log(`S2V polling ${step.scriptId} (${step.s2vTaskId}): ${status.status}`);
           }
         } catch (err: any) {
           this.logger.warn(`S2V poll error for ${step.scriptId}: ${err.message}`);
         }
       }
 
-      // Update progress
+      // Update progress — show waiting status even when no tasks have completed
       const s2vDone = allSteps.filter((s) => s.status === 's2v_done' || (s.status === 'failed' && s.error?.includes('S2V'))).length;
       const s2vTotal = allSteps.filter((s) => s.s2vTaskId || s.status === 's2v_done').length;
       if (s2vTotal > 0) {

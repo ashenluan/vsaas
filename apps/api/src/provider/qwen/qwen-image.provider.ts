@@ -82,7 +82,7 @@ export class QwenImageProvider implements ImageProvider {
     const data: any = await response.json();
 
     if (!response.ok || data.code) {
-      throw new Error(`Qwen API error: ${data.message || data.code || response.statusText}`);
+      throw new Error(this.translateError(data.code, data.message || response.statusText));
     }
 
     // Sync response returns images directly in output.choices
@@ -136,7 +136,7 @@ export class QwenImageProvider implements ImageProvider {
     const data: any = await response.json();
 
     if (!response.ok || data.code) {
-      throw new Error(`Qwen API error: ${data.message || data.code || response.statusText}`);
+      throw new Error(this.translateError(data.code, data.message || response.statusText));
     }
 
     return {
@@ -261,7 +261,7 @@ export class QwenImageProvider implements ImageProvider {
     const data: any = await response.json();
 
     if (!response.ok || data.code) {
-      throw new Error(`Qwen advanced image API error: ${data.message || data.code || response.statusText}`);
+      throw new Error(this.translateError(data.code, data.message || response.statusText));
     }
 
     return {
@@ -317,7 +317,7 @@ export class QwenImageProvider implements ImageProvider {
     const data: any = await response.json();
 
     if (!response.ok || data.code) {
-      throw new Error(`Image edit API error: ${data.message || data.code || response.statusText}`);
+      throw new Error(this.translateError(data.code, data.message || response.statusText));
     }
 
     return {
@@ -342,6 +342,39 @@ export class QwenImageProvider implements ImageProvider {
 
     const data: any = await response.json();
     const status = data.output?.task_status;
+
+    // Handle terminal non-success states
+    if (status === 'CANCELED') {
+      return {
+        taskId,
+        status,
+        images: [],
+        errorCode: 'CANCELED',
+        errorMessage: '任务已被取消',
+      };
+    }
+    if (status === 'UNKNOWN') {
+      return {
+        taskId,
+        status,
+        images: [],
+        errorCode: 'UNKNOWN',
+        errorMessage: '任务已过期或不存在',
+      };
+    }
+    if (status === 'FAILED') {
+      const errCode = data.output?.code || '';
+      const errMsg = data.output?.message || '';
+      return {
+        taskId,
+        status,
+        images: [],
+        errorCode: errCode,
+        errorMessage: this.translateError(errCode, errMsg),
+        usage: data.usage,
+        requestId: data.request_id,
+      };
+    }
 
     // Extract images from completed task — handle multiple response formats
     let images: { url: string }[] = [];
@@ -376,5 +409,25 @@ export class QwenImageProvider implements ImageProvider {
       errorCode: data.output?.code,
       errorMessage: data.output?.message,
     };
+  }
+
+  /** 翻译 DashScope 常见错误码为中文 */
+  private translateError(code: string, message: string): string {
+    if (code === 'DataInspectionFailed' || message.includes('DataInspectionFailed')) {
+      return '内容审核未通过，请检查输入内容后重试。';
+    }
+    if (code === 'Throttling' || message.includes('Throttling')) {
+      return '请求过于频繁，请稍后再试。';
+    }
+    if (code === 'Arrearage' || message.includes('Arrearage')) {
+      return '阿里云账户余额不足，请充值后重试。';
+    }
+    if (code === 'BadRequest.TooLarge' || message.includes('TooLarge')) {
+      return '文件过大，请压缩后重试。';
+    }
+    if (code === 'InvalidParameter' || message.includes('InvalidParameter')) {
+      return `参数错误: ${message}`;
+    }
+    return message || code || '未知错误';
   }
 }

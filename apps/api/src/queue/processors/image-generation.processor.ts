@@ -109,7 +109,13 @@ export class ImageGenerationProcessor extends WorkerHost {
         return status;
       }
       if (normalizedStatus === 'FAILED') {
-        throw new Error(`Image generation failed: ${status.message || 'Unknown error'}`);
+        throw new Error(`图片生成失败: ${status.errorMessage || status.message || '未知错误'}`);
+      }
+      if (normalizedStatus === 'CANCELED') {
+        throw new Error('图片生成任务已被取消');
+      }
+      if (normalizedStatus === 'UNKNOWN') {
+        throw new Error('图片生成任务已过期或不存在，请重新提交');
       }
 
       if (i > 0 && i % 10 === 0) {

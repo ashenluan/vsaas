@@ -261,7 +261,13 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
       }
 
       if (normalizedStatus === 'FAILED') {
-        throw new Error(`S2V 视频生成失败: ${status.message || 'Unknown error'}`);
+        throw new Error(`S2V 视频生成失败: ${status.errorMessage || status.message || '未知错误'}`);
+      }
+      if (normalizedStatus === 'CANCELED') {
+        throw new Error('S2V 视频生成任务已被取消');
+      }
+      if (normalizedStatus === 'UNKNOWN') {
+        throw new Error('S2V 任务已过期或不存在，请重新提交');
       }
 
       // Send progress updates every 30s
