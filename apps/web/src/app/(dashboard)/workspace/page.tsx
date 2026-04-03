@@ -110,7 +110,7 @@ const quickTools = [
 
 // ==================== More Tools (collapsed) ====================
 const moreTools = [
-  { title: '局部编辑', href: '/generate/inpaint', icon: Paintbrush },
+  { title: '图像编辑', href: '/generate/inpaint', icon: Paintbrush },
   { title: '一键仿图', href: '/generate/style-copy', icon: Copy },
   { title: '无损改字', href: '/generate/text-edit', icon: Type },
   { title: '手持产品', href: '/generate/handheld', icon: Hand },

@@ -19,6 +19,7 @@ export enum AdvancedImageType {
   MULTI_FUSION = 'MULTI_FUSION',
   VIRTUAL_TRYON = 'VIRTUAL_TRYON',
   INPAINT = 'INPAINT',
+  IMAGE_EDIT = 'IMAGE_EDIT',
 }
 
 class TextEditItem {
@@ -78,10 +79,41 @@ export class CreateAdvancedImageDto {
   @IsString()
   clothingImage?: string;
 
-  // INPAINT
+  @IsOptional()
+  @IsString()
+  topGarmentUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  bottomGarmentUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  tryonModel?: 'aitryon' | 'aitryon-plus';
+
+  @IsOptional()
+  restoreFace?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  resolution?: number;
+
+  // INPAINT (legacy) / IMAGE_EDIT
   @IsOptional()
   @IsString()
   maskImage?: string;
+
+  @IsOptional()
+  @IsString()
+  editModel?: 'wan2.7-image' | 'wan2.7-image-pro';
+
+  @IsOptional()
+  @IsString()
+  editSize?: string;
+
+  @IsOptional()
+  @IsArray()
+  bboxList?: number[][][];
 
   // Common
   @IsOptional()

@@ -20,6 +20,8 @@ import {
   Image as ImageIcon,
   ArrowRight,
   Camera,
+  Sparkles,
+  Settings2,
 } from 'lucide-react';
 
 interface UploadSlot {
@@ -28,16 +30,25 @@ interface UploadSlot {
   url: string | null;
 }
 
+const emptySlot: UploadSlot = { file: null, preview: null, url: null };
+
 export default function VirtualTryOnPage() {
-  const [personImage, setPersonImage] = useState<UploadSlot>({ file: null, preview: null, url: null });
-  const [clothingImage, setClothingImage] = useState<UploadSlot>({ file: null, preview: null, url: null });
+  const [personImage, setPersonImage] = useState<UploadSlot>(emptySlot);
+  const [topGarment, setTopGarment] = useState<UploadSlot>(emptySlot);
+  const [bottomGarment, setBottomGarment] = useState<UploadSlot>(emptySlot);
+  const [tryonModel, setTryonModel] = useState<'aitryon' | 'aitryon-plus'>('aitryon');
+  const [resolution, setResolution] = useState<number>(-1);
+  const [restoreFace, setRestoreFace] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [polling, setPolling] = useState(false);
   const [error, setError] = useState('');
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const personInputRef = useRef<HTMLInputElement>(null);
-  const clothingInputRef = useRef<HTMLInputElement>(null);
+  const topInputRef = useRef<HTMLInputElement>(null);
+  const bottomInputRef = useRef<HTMLInputElement>(null);
+
+  const creditCost = tryonModel === 'aitryon-plus' ? 12 : 8;
 
   useJobUpdates(activeJobId, (data) => {
     setResult((prev: any) => ({ ...prev, ...data }));
@@ -62,36 +73,63 @@ export default function VirtualTryOnPage() {
   };
 
   const clearSlot = (setter: React.Dispatch<React.SetStateAction<UploadSlot>>) => {
-    setter({ file: null, preview: null, url: null });
+    setter(emptySlot);
   };
 
   const handleGenerate = async () => {
     if (!personImage.file && !personImage.url) { setError('请上传人物照片'); return; }
-    if (!clothingImage.file && !clothingImage.url) { setError('请上传服装图片'); return; }
+    if (!topGarment.file && !topGarment.url && !bottomGarment.file && !bottomGarment.url) {
+      setError('请至少上传一件服装（上装或下装）');
+      return;
+    }
     setError('');
     setLoading(true);
     setResult(null);
 
     try {
-      // Upload images
+      // Upload images in parallel
+      const uploads: Promise<void>[] = [];
+
       let personUrl = personImage.url;
       if (personImage.file && !personUrl) {
-        const { url } = await uploadToOSS(personImage.file);
-        personUrl = url;
-        setPersonImage(prev => ({ ...prev, url }));
+        uploads.push(
+          uploadToOSS(personImage.file).then(({ url }) => {
+            personUrl = url;
+            setPersonImage(prev => ({ ...prev, url }));
+          }),
+        );
       }
 
-      let clothingUrl = clothingImage.url;
-      if (clothingImage.file && !clothingUrl) {
-        const { url } = await uploadToOSS(clothingImage.file);
-        clothingUrl = url;
-        setClothingImage(prev => ({ ...prev, url }));
+      let topUrl = topGarment.url;
+      if (topGarment.file && !topUrl) {
+        uploads.push(
+          uploadToOSS(topGarment.file).then(({ url }) => {
+            topUrl = url;
+            setTopGarment(prev => ({ ...prev, url }));
+          }),
+        );
       }
+
+      let bottomUrl = bottomGarment.url;
+      if (bottomGarment.file && !bottomUrl) {
+        uploads.push(
+          uploadToOSS(bottomGarment.file).then(({ url }) => {
+            bottomUrl = url;
+            setBottomGarment(prev => ({ ...prev, url }));
+          }),
+        );
+      }
+
+      await Promise.all(uploads);
 
       const job = await generationApi.createImage({
         type: 'VIRTUAL_TRYON',
         personImage: personUrl,
-        clothingImage: clothingUrl,
+        topGarmentUrl: topUrl || undefined,
+        bottomGarmentUrl: bottomUrl || undefined,
+        tryonModel,
+        resolution,
+        restoreFace,
       });
 
       setResult(job);
@@ -103,6 +141,58 @@ export default function VirtualTryOnPage() {
       setLoading(false);
     }
   };
+
+  const renderUploadSlot = (
+    label: string,
+    icon: React.ReactNode,
+    slot: UploadSlot,
+    setter: React.Dispatch<React.SetStateAction<UploadSlot>>,
+    inputRef: React.RefObject<HTMLInputElement | null>,
+    hint: string,
+    subHint: string,
+    height: string = 'h-[220px]',
+  ) => (
+    <div>
+      <label className="mb-2 flex items-center gap-1.5 text-sm font-medium text-foreground">
+        {icon}
+        {label}
+      </label>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        onChange={(e) => handleFileSelect(e, setter)}
+        className="hidden"
+      />
+      {slot.preview ? (
+        <div className="relative">
+          <img
+            src={slot.preview}
+            alt={label}
+            className={cn(height, 'w-full rounded-lg border border-border object-cover')}
+          />
+          <button
+            onClick={() => clearSlot(setter)}
+            className="absolute -right-2 -top-2 cursor-pointer rounded-full bg-foreground p-1 text-card shadow-md hover:bg-foreground/80"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      ) : (
+        <div
+          onClick={() => inputRef.current?.click()}
+          className={cn(
+            height,
+            'flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/30 transition-all hover:border-primary hover:bg-primary/5',
+          )}
+        >
+          <div className="mb-2 text-muted-foreground/40">{icon}</div>
+          <p className="text-sm text-muted-foreground">{hint}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground/60">{subHint}</p>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="mx-auto w-full max-w-3xl">
@@ -118,84 +208,140 @@ export default function VirtualTryOnPage() {
           </p>
         </div>
 
+        {/* Model selector */}
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <label className="mb-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <Sparkles size={15} className="text-muted-foreground" />
+            模型选择
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setTryonModel('aitryon')}
+              className={cn(
+                'cursor-pointer rounded-lg border-2 p-3 text-left transition-all',
+                tryonModel === 'aitryon'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/50',
+              )}
+            >
+              <div className="text-sm font-semibold text-foreground">基础版</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">aitryon · 速度快，效果好</div>
+              <div className="mt-1.5 text-xs font-medium text-primary">8 积分</div>
+            </button>
+            <button
+              onClick={() => setTryonModel('aitryon-plus')}
+              className={cn(
+                'cursor-pointer rounded-lg border-2 p-3 text-left transition-all',
+                tryonModel === 'aitryon-plus'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/50',
+              )}
+            >
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                Plus 版
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">推荐</span>
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">aitryon-plus · 更高质量</div>
+              <div className="mt-1.5 text-xs font-medium text-primary">12 积分</div>
+            </button>
+          </div>
+        </div>
+
         {/* Upload area */}
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <label className="mb-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <User size={15} className="text-muted-foreground" />
+            人物照片
+          </label>
+          {renderUploadSlot(
+            '',
+            <User size={28} />,
+            personImage,
+            setPersonImage,
+            personInputRef,
+            '上传人物全身照',
+            '清晰正面全身照效果最佳',
+            'h-[260px]',
+          )}
+        </div>
+
+        {/* Garment uploads */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {/* Person image */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <label className="mb-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <User size={15} className="text-muted-foreground" />
-              人物照片
-            </label>
-            <input
-              ref={personInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleFileSelect(e, setPersonImage)}
-              className="hidden"
-            />
-            {personImage.preview ? (
-              <div className="relative">
-                <img
-                  src={personImage.preview}
-                  alt="人物"
-                  className="h-[260px] w-full rounded-lg border border-border object-cover"
-                />
-                <button
-                  onClick={() => clearSlot(setPersonImage)}
-                  className="absolute -right-2 -top-2 cursor-pointer rounded-full bg-foreground p-1 text-card shadow-md hover:bg-foreground/80"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ) : (
-              <div
-                onClick={() => personInputRef.current?.click()}
-                className="flex h-[260px] w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/30 transition-all hover:border-primary hover:bg-primary/5"
-              >
-                <User size={32} className="mb-2 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">上传人物全身照</p>
-                <p className="mt-1 text-[11px] text-muted-foreground/60">清晰正面照效果最佳</p>
-              </div>
+            {renderUploadSlot(
+              '上装',
+              <Shirt size={15} className="text-muted-foreground" />,
+              topGarment,
+              setTopGarment,
+              topInputRef,
+              '上传上装图片',
+              '上衣、外套、T恤等',
+              'h-[200px]',
             )}
           </div>
-
-          {/* Clothing image */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <label className="mb-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <Shirt size={15} className="text-muted-foreground" />
-              服装图片
-            </label>
-            <input
-              ref={clothingInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleFileSelect(e, setClothingImage)}
-              className="hidden"
-            />
-            {clothingImage.preview ? (
-              <div className="relative">
-                <img
-                  src={clothingImage.preview}
-                  alt="服装"
-                  className="h-[260px] w-full rounded-lg border border-border object-cover"
-                />
-                <button
-                  onClick={() => clearSlot(setClothingImage)}
-                  className="absolute -right-2 -top-2 cursor-pointer rounded-full bg-foreground p-1 text-card shadow-md hover:bg-foreground/80"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ) : (
-              <div
-                onClick={() => clothingInputRef.current?.click()}
-                className="flex h-[260px] w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/30 transition-all hover:border-primary hover:bg-primary/5"
-              >
-                <Shirt size={32} className="mb-2 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">上传服装图片</p>
-                <p className="mt-1 text-[11px] text-muted-foreground/60">纯色背景平铺图效果最佳</p>
-              </div>
+            {renderUploadSlot(
+              '下装',
+              <Shirt size={15} className="text-muted-foreground" />,
+              bottomGarment,
+              setBottomGarment,
+              bottomInputRef,
+              '上传下装图片',
+              '裤子、裙子等',
+              'h-[200px]',
             )}
+          </div>
+        </div>
+        <p className="-mt-3 text-[11px] text-muted-foreground">至少上传一件服装（上装或下装），也可同时上传</p>
+
+        {/* Options */}
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <label className="mb-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <Settings2 size={15} className="text-muted-foreground" />
+            高级选项
+          </label>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Resolution */}
+            <div>
+              <label className="mb-1.5 block text-xs text-muted-foreground">输出分辨率</label>
+              <select
+                value={resolution}
+                onChange={(e) => setResolution(Number(e.target.value))}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value={-1}>原始分辨率</option>
+                <option value={1024}>1024px</option>
+                <option value={1280}>1280px</option>
+              </select>
+            </div>
+            {/* Restore face */}
+            <div>
+              <label className="mb-1.5 block text-xs text-muted-foreground">人脸修复</label>
+              <button
+                onClick={() => setRestoreFace(!restoreFace)}
+                className={cn(
+                  'flex w-full cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-sm transition-all',
+                  restoreFace
+                    ? 'border-primary bg-primary/5 text-foreground'
+                    : 'border-border bg-background text-muted-foreground',
+                )}
+              >
+                <span>{restoreFace ? '已开启' : '未开启'}</span>
+                <div
+                  className={cn(
+                    'h-5 w-9 rounded-full transition-all',
+                    restoreFace ? 'bg-primary' : 'bg-muted',
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'h-5 w-5 rounded-full border-2 bg-white transition-all',
+                      restoreFace ? 'translate-x-4 border-primary' : 'translate-x-0 border-muted',
+                    )}
+                  />
+                </div>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -216,7 +362,7 @@ export default function VirtualTryOnPage() {
              <><Wand2 size={18} /> 一键换装</>}
           </Button>
           <p className="mt-2.5 text-center text-xs text-muted-foreground">
-            消耗 <span className="font-semibold text-primary">10</span> 积分
+            消耗 <span className="font-semibold text-primary">{creditCost}</span> 积分
           </p>
         </div>
 

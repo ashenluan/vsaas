@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { generationApi } from '@/lib/api';
 import { useJobUpdates } from '@/components/ws-provider';
 import { uploadToOSS } from '@/lib/upload';
@@ -18,36 +18,42 @@ import {
   Clock,
   Sparkles,
   Paintbrush,
-  Eraser,
   RotateCcw,
-  Image as ImageIcon,
+  Square,
+  Settings2,
 } from 'lucide-react';
 
-const BRUSH_SIZES = [
-  { label: 'S', value: 10 },
-  { label: 'M', value: 25 },
-  { label: 'L', value: 50 },
-  { label: 'XL', value: 80 },
-];
+interface BBox {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
 
-export default function InpaintPage() {
+export default function ImageEditPage() {
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [brushSize, setBrushSize] = useState(25);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [editModel, setEditModel] = useState<'wan2.7-image' | 'wan2.7-image-pro'>('wan2.7-image');
+  const [editSize, setEditSize] = useState('2K');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [polling, setPolling] = useState(false);
   const [error, setError] = useState('');
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [canvasReady, setCanvasReady] = useState(false);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
+
+  // BBox drawing state
+  const [bbox, setBbox] = useState<BBox | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
+
+  const creditCost = editModel === 'wan2.7-image-pro' ? 10 : 5;
 
   useJobUpdates(activeJobId, (data) => {
     setResult((prev: any) => ({ ...prev, ...data }));
@@ -61,9 +67,10 @@ export default function InpaintPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { setError('请上传图片文件'); return; }
-    if (file.size > 10 * 1024 * 1024) { setError('图片不能超过10MB'); return; }
+    if (file.size > 20 * 1024 * 1024) { setError('图片不能超过20MB'); return; }
     setError('');
     setResult(null);
+    setBbox(null);
     setSourceFile(file);
     setSourceUrl(null);
 
@@ -85,109 +92,115 @@ export default function InpaintPage() {
       const w = Math.round(img.width * ratio);
       const h = Math.round(img.height * ratio);
       setImageSize({ width: w, height: h });
+      setNaturalSize({ width: img.width, height: img.height });
 
-      // Source canvas
-      const canvas = canvasRef.current;
-      if (canvas) {
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (ctx) ctx.drawImage(img, 0, 0, w, h);
-      }
-
-      // Mask canvas (transparent overlay)
-      const maskCanvas = maskCanvasRef.current;
-      if (maskCanvas) {
-        maskCanvas.width = w;
-        maskCanvas.height = h;
-        const ctx = maskCanvas.getContext('2d');
+      const overlay = overlayRef.current;
+      if (overlay) {
+        overlay.width = w;
+        overlay.height = h;
+        const ctx = overlay.getContext('2d');
         if (ctx) ctx.clearRect(0, 0, w, h);
       }
-
-      setCanvasReady(true);
     };
     img.src = imgSrc;
   };
 
-  const clearMask = () => {
-    const maskCanvas = maskCanvasRef.current;
-    if (!maskCanvas) return;
-    const ctx = maskCanvas.getContext('2d');
-    if (ctx) ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-  };
-
   const getPos = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = maskCanvasRef.current;
+    const canvas = overlayRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: Math.max(0, Math.min(e.clientX - rect.left, canvas.width)),
+      y: Math.max(0, Math.min(e.clientY - rect.top, canvas.height)),
     };
   };
 
-  const startDraw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    setIsDrawing(true);
-    draw(e);
-  };
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-    const maskCanvas = maskCanvasRef.current;
-    if (!maskCanvas) return;
-    const ctx = maskCanvas.getContext('2d');
+  const drawBboxOverlay = useCallback((box: BBox | null) => {
+    const canvas = overlayRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const { x, y } = getPos(e);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(59, 130, 246, 0.5)';
-    ctx.beginPath();
-    ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!box) return;
+
+    const x = Math.min(box.x1, box.x2);
+    const y = Math.min(box.y1, box.y2);
+    const w = Math.abs(box.x2 - box.x1);
+    const h = Math.abs(box.y2 - box.y1);
+
+    // Dim outside area
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(x, y, w, h);
+
+    // Draw border
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+  }, []);
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const pos = getPos(e);
+    setIsDrawing(true);
+    setDrawStart(pos);
+    setBbox(null);
+    drawBboxOverlay(null);
   };
 
-  const stopDraw = () => setIsDrawing(false);
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !drawStart) return;
+    const pos = getPos(e);
+    const tempBox = { x1: drawStart.x, y1: drawStart.y, x2: pos.x, y2: pos.y };
+    drawBboxOverlay(tempBox);
+  };
 
-  const getMaskDataUrl = (): string | null => {
-    const maskCanvas = maskCanvasRef.current;
-    if (!maskCanvas) return null;
-    // Create a black/white mask
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = maskCanvas.width;
-    tempCanvas.height = maskCanvas.height;
-    const ctx = tempCanvas.getContext('2d');
-    if (!ctx) return null;
-    // Fill with black (non-edit area)
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-    // Get mask pixels and convert blue areas to white
-    const maskCtx = maskCanvas.getContext('2d');
-    if (!maskCtx) return null;
-    const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-    const outData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-    for (let i = 0; i < maskData.data.length; i += 4) {
-      if (maskData.data[i + 3] > 0) {
-        outData.data[i] = 255;
-        outData.data[i + 1] = 255;
-        outData.data[i + 2] = 255;
-        outData.data[i + 3] = 255;
-      }
+  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !drawStart) return;
+    setIsDrawing(false);
+    const pos = getPos(e);
+    const w = Math.abs(pos.x - drawStart.x);
+    const h = Math.abs(pos.y - drawStart.y);
+    // Ignore tiny accidental clicks
+    if (w < 10 || h < 10) {
+      setBbox(null);
+      drawBboxOverlay(null);
+      setDrawStart(null);
+      return;
     }
-    ctx.putImageData(outData, 0, 0);
-    return tempCanvas.toDataURL('image/png');
+    const finalBox = { x1: drawStart.x, y1: drawStart.y, x2: pos.x, y2: pos.y };
+    setBbox(finalBox);
+    drawBboxOverlay(finalBox);
+    setDrawStart(null);
+  };
+
+  const clearBbox = () => {
+    setBbox(null);
+    drawBboxOverlay(null);
+  };
+
+  // Convert canvas bbox to original image pixel coordinates
+  const toBboxList = (box: BBox): number[][][] => {
+    if (!imageSize.width || !naturalSize.width) return [];
+    const scaleX = naturalSize.width / imageSize.width;
+    const scaleY = naturalSize.height / imageSize.height;
+    const x1 = Math.round(Math.min(box.x1, box.x2) * scaleX);
+    const y1 = Math.round(Math.min(box.y1, box.y2) * scaleY);
+    const x2 = Math.round(Math.max(box.x1, box.x2) * scaleX);
+    const y2 = Math.round(Math.max(box.y1, box.y2) * scaleY);
+    return [[[x1, y1, x2, y2]]];
   };
 
   const handleGenerate = async () => {
     if (!sourceImage) { setError('请先上传图片'); return; }
     if (!prompt.trim()) { setError('请描述要修改的内容'); return; }
 
-    const maskDataUrl = getMaskDataUrl();
-
     setError('');
     setLoading(true);
     setResult(null);
 
     try {
-      // Upload source image
       let imgUrl = sourceUrl;
       if (sourceFile && !imgUrl) {
         const { url } = await uploadToOSS(sourceFile);
@@ -195,21 +208,18 @@ export default function InpaintPage() {
         setSourceUrl(url);
       }
 
-      // Upload mask as blob
-      let maskUrl: string | undefined;
-      if (maskDataUrl) {
-        const maskBlob = await (await fetch(maskDataUrl)).blob();
-        const maskFile = new File([maskBlob], 'mask.png', { type: 'image/png' });
-        const { url } = await uploadToOSS(maskFile);
-        maskUrl = url;
+      const payload: any = {
+        type: 'IMAGE_EDIT',
+        sourceImage: imgUrl,
+        prompt: prompt.trim(),
+        editModel,
+        editSize,
+      };
+      if (bbox) {
+        payload.bboxList = toBboxList(bbox);
       }
 
-      const job = await generationApi.createImage({
-        type: 'INPAINT',
-        sourceImage: imgUrl,
-        maskImage: maskUrl,
-        prompt: prompt.trim(),
-      });
+      const job = await generationApi.createImage(payload);
 
       setResult(job);
       setActiveJobId(job.id);
@@ -221,6 +231,10 @@ export default function InpaintPage() {
     }
   };
 
+  const sizeOptions = editModel === 'wan2.7-image-pro'
+    ? [{ label: '1K', value: '1K' }, { label: '2K', value: '2K' }, { label: '4K', value: '4K' }]
+    : [{ label: '1K', value: '1K' }, { label: '2K', value: '2K' }];
+
   return (
     <div className="mx-auto w-full max-w-4xl">
       <div className="space-y-5">
@@ -228,11 +242,50 @@ export default function InpaintPage() {
         <div>
           <div className="flex items-center gap-2">
             <Paintbrush size={22} className="text-primary" />
-            <h1 className="text-xl font-bold text-foreground">局部编辑</h1>
+            <h1 className="text-xl font-bold text-foreground">图像编辑</h1>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            上传图片 → 涂抹选区 → 输入描述 → AI 局部重绘
+            上传图片 → 输入编辑指令 → 可选框选区域 → AI 智能编辑
           </p>
+        </div>
+
+        {/* Model selector */}
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <label className="mb-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <Sparkles size={15} className="text-muted-foreground" />
+            模型选择
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => { setEditModel('wan2.7-image'); if (editSize === '4K') setEditSize('2K'); }}
+              className={cn(
+                'cursor-pointer rounded-lg border-2 p-3 text-left transition-all',
+                editModel === 'wan2.7-image'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/50',
+              )}
+            >
+              <div className="text-sm font-semibold text-foreground">标准版</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">wan2.7-image · 速度快</div>
+              <div className="mt-1.5 text-xs font-medium text-primary">5 积分</div>
+            </button>
+            <button
+              onClick={() => setEditModel('wan2.7-image-pro')}
+              className={cn(
+                'cursor-pointer rounded-lg border-2 p-3 text-left transition-all',
+                editModel === 'wan2.7-image-pro'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/50',
+              )}
+            >
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                专业版
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">4K</span>
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">wan2.7-image-pro · 高质量</div>
+              <div className="mt-1.5 text-xs font-medium text-primary">10 积分</div>
+            </button>
+          </div>
         </div>
 
         {/* Upload + Canvas */}
@@ -252,40 +305,32 @@ export default function InpaintPage() {
             >
               <Upload size={32} className="mb-3 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">上传需要编辑的图片</p>
-              <p className="mt-1 text-xs text-muted-foreground/60">支持 JPG、PNG、WebP</p>
+              <p className="mt-1 text-xs text-muted-foreground/60">支持 JPG、PNG、WebP、BMP（最大20MB）</p>
             </div>
           ) : (
             <div>
               {/* Toolbar */}
               <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-medium text-foreground">画笔大小：</span>
-                  <div className="flex gap-1">
-                    {BRUSH_SIZES.map((b) => (
-                      <button
-                        key={b.value}
-                        onClick={() => setBrushSize(b.value)}
-                        className={cn(
-                          'cursor-pointer rounded-md border px-2.5 py-1 text-[11px] font-medium transition-all',
-                          brushSize === b.value
-                            ? 'border-primary bg-primary/5 text-primary'
-                            : 'border-border text-muted-foreground hover:border-primary/30'
-                        )}
-                      >
-                        {b.label}
-                      </button>
-                    ))}
-                  </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">
+                    <Square size={12} />
+                    拖拽框选编辑区域
+                  </span>
+                  {bbox && (
+                    <span className="text-[11px] text-muted-foreground">已框选区域</span>
+                  )}
                 </div>
                 <div className="flex gap-2">
+                  {bbox && (
+                    <button
+                      onClick={clearBbox}
+                      className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <RotateCcw size={12} /> 清除选区
+                    </button>
+                  )}
                   <button
-                    onClick={clearMask}
-                    className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <RotateCcw size={12} /> 清除选区
-                  </button>
-                  <button
-                    onClick={() => { setSourceImage(null); setCanvasReady(false); setSourceFile(null); setSourceUrl(null); }}
+                    onClick={() => { setSourceImage(null); setSourceFile(null); setSourceUrl(null); setBbox(null); }}
                     className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <X size={12} /> 换图
@@ -295,27 +340,26 @@ export default function InpaintPage() {
 
               {/* Canvas area */}
               <div ref={containerRef} className="relative inline-block w-full">
-                <canvas
-                  ref={canvasRef}
+                <img
+                  src={sourceImage}
+                  alt="source"
                   style={{ width: imageSize.width, height: imageSize.height }}
                   className="rounded-lg border border-border"
                 />
                 <canvas
-                  ref={maskCanvasRef}
-                  style={{
-                    width: imageSize.width,
-                    height: imageSize.height,
-                    cursor: 'crosshair',
-                  }}
+                  ref={overlayRef}
+                  style={
+                    { width: imageSize.width, height: imageSize.height, cursor: 'crosshair' }
+                  }
                   className="absolute left-0 top-0 rounded-lg"
-                  onMouseDown={startDraw}
-                  onMouseMove={draw}
-                  onMouseUp={stopDraw}
-                  onMouseLeave={stopDraw}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={() => { if (isDrawing) { setIsDrawing(false); setDrawStart(null); } }}
                 />
               </div>
               <p className="mt-2 text-[11px] text-muted-foreground/60">
-                在图片上涂抹需要修改的区域（蓝色高亮），未涂抹则对整图生效
+                可在图片上拖拽框选需要编辑的区域（可选），不框选则对整图进行编辑
               </p>
             </div>
           )}
@@ -326,19 +370,48 @@ export default function InpaintPage() {
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <label className="mb-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
               <Sparkles size={15} className="text-amber-500" />
-              描述修改内容
+              编辑指令
             </label>
             <textarea
               className="w-full resize-none rounded-lg border border-input bg-background p-3 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring/30"
               rows={3}
-              maxLength={1000}
-              placeholder="描述希望在选区内生成的内容，例如：将背景换成海边沙滩..."
+              maxLength={2000}
+              placeholder="描述编辑内容，例如：把头发颜色改为红色、给她戴上墨镜、将背景替换为海边..."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />
             <div className="mt-2 flex items-center justify-between">
               <PromptPolishButton prompt={prompt} type="image" onPolished={setPrompt} />
-              <span className="text-xs text-muted-foreground/60">{prompt.length}/1000</span>
+              <span className="text-xs text-muted-foreground/60">{prompt.length}/2000</span>
+            </div>
+          </div>
+        )}
+
+        {/* Options */}
+        {sourceImage && (
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <label className="mb-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <Settings2 size={15} className="text-muted-foreground" />
+              高级选项
+            </label>
+            <div>
+              <label className="mb-1.5 block text-xs text-muted-foreground">输出分辨率</label>
+              <div className="flex gap-2">
+                {sizeOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setEditSize(opt.value)}
+                    className={cn(
+                      'cursor-pointer rounded-lg border px-4 py-2 text-sm font-medium transition-all',
+                      editSize === opt.value
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-border text-muted-foreground hover:border-primary/30',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -358,10 +431,10 @@ export default function InpaintPage() {
             >
               {loading ? <><Loader2 size={18} className="animate-spin" /> 上传中...</> :
                polling ? <><Loader2 size={18} className="animate-spin" /> 生成中...</> :
-               <><Wand2 size={18} /> 开始局部重绘</>}
+               <><Wand2 size={18} /> 开始编辑</>}
             </Button>
             <p className="mt-2.5 text-center text-xs text-muted-foreground">
-              消耗 <span className="font-semibold text-primary">5</span> 积分
+              消耗 <span className="font-semibold text-primary">{creditCost}</span> 积分
             </p>
           </div>
         )}
@@ -400,6 +473,21 @@ export default function InpaintPage() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {result && (result.status === 'PROCESSING' || result.status === 'PENDING') && (
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <Loader2 size={16} className="animate-spin text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">
+                {result.status === 'PROCESSING' ? '编辑中...' : '排队中...'}
+              </h3>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full animate-pulse rounded-full bg-primary" style={{ width: '45%' }} />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">AI 正在编辑图片，请稍候...</p>
           </div>
         )}
 

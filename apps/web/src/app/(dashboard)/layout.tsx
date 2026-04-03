@@ -60,7 +60,7 @@ const navItems: NavItem[] = [
   { label: '一键成片', desc: '分镜脚本多场景成片', href: '/generate/storyboard', icon: Scissors, badge: 'new', badgeColor: 'bg-purple-500' },
   { label: '视频反推', desc: 'AI反向分析生成提示词', href: '/generate/reverse', icon: ScanSearch },
   { label: '一键换装', desc: 'AI智能服饰替换', href: '/generate/virtual-tryon', icon: Shirt },
-  { label: '局部编辑', desc: '局部重绘/Inpainting', href: '/generate/inpaint', icon: Paintbrush },
+  { label: '图像编辑', desc: '万相2.7 AI智能图像编辑', href: '/generate/inpaint', icon: Paintbrush },
   { label: '一键仿图', desc: '学习参考图风格生成新图', href: '/generate/style-copy', icon: Copy },
   { label: '无损改字', desc: '智能替换图片中的文字', href: '/generate/text-edit', icon: Type },
   { label: '手持产品', desc: 'AI生成真人手持产品图', href: '/generate/handheld', icon: Hand },

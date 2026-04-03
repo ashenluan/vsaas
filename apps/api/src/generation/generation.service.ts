@@ -19,6 +19,7 @@ const VALID_GENERATION_JOB_TYPES = new Set([
   'MULTI_FUSION',
   'VIRTUAL_TRYON',
   'INPAINT',
+  'IMAGE_EDIT',
   'STORYBOARD',
 ]);
 
@@ -139,7 +140,10 @@ export class GenerationService {
     HANDHELD_PRODUCT: 5,
     MULTI_FUSION: 10,
     VIRTUAL_TRYON: 8,
+    VIRTUAL_TRYON_PLUS: 12,
     INPAINT: 5,
+    IMAGE_EDIT: 5,
+    IMAGE_EDIT_PRO: 10,
   };
 
   async createAdvancedImageGeneration(userId: string, input: {
@@ -153,11 +157,23 @@ export class GenerationService {
     images?: string[];
     fusionMode?: string;
     clothingImage?: string;
+    topGarmentUrl?: string;
+    bottomGarmentUrl?: string;
+    tryonModel?: string;
+    restoreFace?: boolean;
+    resolution?: number;
     maskImage?: string;
     count?: number;
   }) {
     const count = input.count || 1;
-    const baseCost = this.advancedCostMap[input.type] || 5;
+    // Model-based cost overrides
+    let costKey = input.type;
+    if (input.type === 'VIRTUAL_TRYON' && (input as any).tryonModel === 'aitryon-plus') {
+      costKey = 'VIRTUAL_TRYON_PLUS';
+    } else if (input.type === 'IMAGE_EDIT' && (input as any).editModel === 'wan2.7-image-pro') {
+      costKey = 'IMAGE_EDIT_PRO';
+    }
+    const baseCost = this.advancedCostMap[costKey] || 5;
     const totalCost = baseCost * count;
 
     const descriptions: Record<string, string> = {
@@ -167,6 +183,7 @@ export class GenerationService {
       MULTI_FUSION: '多图融合',
       VIRTUAL_TRYON: '一键换装',
       INPAINT: '局部编辑',
+      IMAGE_EDIT: '图像编辑',
     };
 
     await this.userService.deductCredits(
@@ -218,7 +235,7 @@ export class GenerationService {
     // Map frontend shorthand types to valid JobType enum values
     if (type) {
       const typeMap: Record<string, string[]> = {
-        'IMAGE': ['TEXT_TO_IMAGE', 'IMAGE_TO_IMAGE', 'STYLE_COPY', 'TEXT_EDIT', 'HANDHELD_PRODUCT', 'MULTI_FUSION', 'VIRTUAL_TRYON', 'INPAINT'],
+        'IMAGE': ['TEXT_TO_IMAGE', 'IMAGE_TO_IMAGE', 'STYLE_COPY', 'TEXT_EDIT', 'HANDHELD_PRODUCT', 'MULTI_FUSION', 'VIRTUAL_TRYON', 'INPAINT', 'IMAGE_EDIT'],
         'VIDEO': ['TEXT_TO_VIDEO', 'IMAGE_TO_VIDEO', 'STORYBOARD'],
       };
       if (typeMap[type]) {

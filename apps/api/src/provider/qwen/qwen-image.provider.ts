@@ -28,7 +28,7 @@ export class QwenImageProvider implements ImageProvider {
 
     // 高级图片类型路由到对应 API
     const advancedType = request.type as string | undefined;
-    if (advancedType && ['STYLE_COPY', 'TEXT_EDIT', 'INPAINT', 'MULTI_FUSION', 'HANDHELD_PRODUCT', 'VIRTUAL_TRYON'].includes(advancedType)) {
+    if (advancedType && ['STYLE_COPY', 'TEXT_EDIT', 'INPAINT', 'IMAGE_EDIT', 'MULTI_FUSION', 'HANDHELD_PRODUCT', 'VIRTUAL_TRYON'].includes(advancedType)) {
       return this.generateAdvanced(apiKey, baseUrl, request);
     }
 
@@ -156,6 +156,11 @@ export class QwenImageProvider implements ImageProvider {
     const advancedType = request.type as string;
     this.logger.log(`Advanced image generation (${advancedType}): ${(request.prompt || '').slice(0, 80)}`);
 
+    // IMAGE_EDIT uses wan2.7 multimodal-generation endpoint (different from wanx2.1-imageedit)
+    if (advancedType === 'IMAGE_EDIT') {
+      return this.generateImageEdit(apiKey, baseUrl, request);
+    }
+
     // 映射高级类型到 wanx2.1-imageedit 的 function 参数
     const typeMapping: Record<string, { model: string; fn: string; buildInput: () => any }> = {
       STYLE_COPY: {
@@ -207,14 +212,20 @@ export class QwenImageProvider implements ImageProvider {
         }),
       },
       VIRTUAL_TRYON: {
-        model: 'wanx2.1-imageedit',
-        fn: 'description_edit',
-        buildInput: () => ({
-          prompt: request.prompt || '将服装穿在人物身上，保持自然',
-          function: 'description_edit',
-          base_image_url: request.personImage || request.referenceImage,
-          ref_image_url: request.clothingImage,
-        }),
+        model: request.tryonModel || 'aitryon',
+        fn: 'aitryon',
+        buildInput: () => {
+          const input: any = {
+            person_image_url: request.personImage || request.referenceImage,
+          };
+          // Support new top/bottom garment slots, fall back to legacy clothingImage
+          if (request.topGarmentUrl) input.top_garment_url = request.topGarmentUrl;
+          if (request.bottomGarmentUrl) input.bottom_garment_url = request.bottomGarmentUrl;
+          if (!request.topGarmentUrl && !request.bottomGarmentUrl && request.clothingImage) {
+            input.top_garment_url = request.clothingImage;
+          }
+          return input;
+        },
       },
     };
 
@@ -238,8 +249,10 @@ export class QwenImageProvider implements ImageProvider {
           model: mapping.model,
           input: inputData,
           parameters: {
-            n: request.count ?? 1,
+            ...(advancedType !== 'VIRTUAL_TRYON' && { n: request.count ?? 1 }),
             ...(request.strength !== undefined && { strength: request.strength }),
+            ...(advancedType === 'VIRTUAL_TRYON' && request.resolution !== undefined && { resolution: request.resolution }),
+            ...(advancedType === 'VIRTUAL_TRYON' && request.restoreFace !== undefined && { restore_face: request.restoreFace }),
           },
         }),
       },
@@ -260,6 +273,62 @@ export class QwenImageProvider implements ImageProvider {
     };
   }
 
+  /**
+   * 图像编辑：使用 wan2.7-image / wan2.7-image-pro
+   * 通过 multimodal-generation 端点，支持文字指令编辑和 bbox 区域编辑
+   */
+  private async generateImageEdit(apiKey: string, baseUrl: string, request: any): Promise<any> {
+    const model = request.editModel || 'wan2.7-image';
+    this.logger.log(`Image edit with ${model}: ${(request.prompt || '').slice(0, 80)}`);
+
+    const content: any[] = [];
+    const sourceImg = request.sourceImage || request.referenceImage;
+    if (sourceImg) {
+      content.push({ image: sourceImg });
+    }
+    content.push({ text: request.prompt || '编辑这张图片' });
+
+    const parameters: any = {
+      n: request.count ?? 1,
+      size: request.editSize || '2K',
+      watermark: false,
+    };
+    if (request.bboxList?.length) {
+      parameters.bbox_list = request.bboxList;
+    }
+
+    const response = await retryFetch(
+      `${baseUrl}/services/aigc/multimodal-generation/generation`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'X-DashScope-Async': 'enable',
+        },
+        body: JSON.stringify({
+          model,
+          input: { messages: [{ role: 'user', content }] },
+          parameters,
+        }),
+      },
+    );
+
+    const data: any = await response.json();
+
+    if (!response.ok || data.code) {
+      throw new Error(`Image edit API error: ${data.message || data.code || response.statusText}`);
+    }
+
+    return {
+      taskId: data.output?.task_id,
+      status: data.output?.task_status,
+      provider: this.providerId,
+      modelId: model,
+      requestId: data.request_id,
+    };
+  }
+
   async checkTaskStatus(taskId: string): Promise<any> {
     const apiKey = this.config.get<string>('DASHSCOPE_API_KEY') || '';
     const baseUrl = this.config.get<string>(
@@ -274,17 +343,38 @@ export class QwenImageProvider implements ImageProvider {
     const data: any = await response.json();
     const status = data.output?.task_status;
 
-    // Extract images from completed task
-    const images = data.output?.choices?.map((choice: any) => ({
-      url: choice.message?.content?.find((c: any) => c.type === 'image')?.image,
-    })).filter((img: any) => img.url) ?? [];
+    // Extract images from completed task — handle multiple response formats
+    let images: { url: string }[] = [];
+
+    if (status === 'SUCCEEDED') {
+      // Format 1: aitryon returns image_url directly in output
+      if (data.output?.image_url) {
+        images = [{ url: data.output.image_url }];
+      }
+      // Format 2: wanx2.1-imageedit returns in choices[].message.content[]
+      else if (data.output?.choices) {
+        images = data.output.choices.map((choice: any) => ({
+          url: choice.message?.content?.find((c: any) => c.type === 'image')?.image,
+        })).filter((img: any) => img.url);
+      }
+      // Format 3: some APIs return results array or result_url
+      else if (data.output?.result_url) {
+        images = [{ url: data.output.result_url }];
+      } else if (data.output?.results) {
+        const results = Array.isArray(data.output.results) ? data.output.results : [data.output.results];
+        images = results.map((r: any) => ({ url: r.url || r.image_url })).filter((img: any) => img.url);
+      }
+    }
 
     return {
       taskId,
       status,
-      images: status === 'SUCCEEDED' ? images : [],
+      images,
+      imageUrl: images[0]?.url,
       usage: data.usage,
       requestId: data.request_id,
+      errorCode: data.output?.code,
+      errorMessage: data.output?.message,
     };
   }
 }
