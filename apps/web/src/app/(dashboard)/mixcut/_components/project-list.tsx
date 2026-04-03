@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useMixcutStore, createShotGroup } from '../_store/use-mixcut-store';
 import { ScriptImportModal } from './script-import-modal';
 import { mixcutApi } from '@/lib/api';
-import { Plus, FileText, Trash2, Film, Clock, Layers, Loader2, RefreshCw, Download, Play, ExternalLink, CheckCircle } from 'lucide-react';
+import { Plus, FileText, Trash2, Film, Clock, Layers, Loader2, RefreshCw, Download, Play, ExternalLink, CheckCircle, Eye } from 'lucide-react';
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
   PENDING: { label: '等待中', className: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
@@ -192,6 +192,7 @@ export function ProjectList() {
                   createdAt={job.createdAt}
                   updatedAt={job.updatedAt}
                   outputVideos={(job.output as any)?.outputVideos || []}
+                  isPreviewOnly={(job.output as any)?.isPreviewOnly || false}
                   videoCount={input.videoCount}
                   scheduledAt={input.scheduledAt}
                   onOpen={() => handleOpenProject(job)}
@@ -256,6 +257,7 @@ function ProjectCard({
   createdAt,
   updatedAt,
   outputVideos,
+  isPreviewOnly,
   videoCount,
   scheduledAt,
   onOpen,
@@ -270,6 +272,7 @@ function ProjectCard({
   createdAt?: string;
   updatedAt?: string;
   outputVideos: { mediaId: string; mediaURL: string; duration?: number }[];
+  isPreviewOnly: boolean;
   videoCount?: number;
   scheduledAt?: string;
   onOpen: () => void;
@@ -363,6 +366,14 @@ function ProjectCard({
       </div>
 
       {/* Output videos for completed jobs */}
+      {status === 'COMPLETED' && isPreviewOnly && outputVideos.length === 0 && (
+        <div className="mt-3 border-t pt-3">
+          <span className="text-[11px] font-medium text-blue-600">
+            <Eye size={10} className="inline mr-1" />
+            预览完成（预览模式不生成视频文件）
+          </span>
+        </div>
+      )}
       {status === 'COMPLETED' && outputVideos.length > 0 && (
         <div className="mt-3 border-t pt-3">
           <div className="mb-2 flex items-center justify-between">

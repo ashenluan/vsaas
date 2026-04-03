@@ -65,11 +65,14 @@ export class MixcutProductionProcessor extends WorkerHost {
 
       this.sendProgress(userId, jobId, 'PROCESSING', 15, `IMS 任务已提交: ${imsResult.jobId}`);
 
+      // Detect preview mode from outputConfig
+      const isPreviewOnly = outputConfig?.GeneratePreviewOnly === true;
+
       // Poll IMS status
-      const imsStatus = await this.pollImsJob(imsResult.jobId, userId, jobId);
+      let imsStatus = await this.pollImsJob(imsResult.jobId, userId, jobId);
 
       // Extract output videos from successful sub-jobs
-      const outputVideos = (imsStatus.subJobs || [])
+      let outputVideos = (imsStatus.subJobs || [])
         .filter((sj: any) => sj.status === 'Success')
         .map((sj: any) => ({
           mediaId: sj.mediaId,
@@ -77,11 +80,49 @@ export class MixcutProductionProcessor extends WorkerHost {
           duration: sj.duration,
         }));
 
+      // Re-poll once — sub-job statuses can lag behind the main job 'Finished' status
+      if (outputVideos.length === 0 && (imsStatus.subJobs || []).length > 0) {
+        this.logger.warn(
+          `Mixcut ${jobId}: main job Finished but 0 Success sub-jobs. ` +
+          `Statuses: ${(imsStatus.subJobs || []).map((sj: any) => sj.status).join(', ')}. Retrying in 5s...`,
+        );
+        await new Promise((r) => setTimeout(r, 5000));
+        imsStatus = await imsProvider.checkJobStatus(imsResult.jobId);
+        outputVideos = (imsStatus.subJobs || [])
+          .filter((sj: any) => sj.status === 'Success')
+          .map((sj: any) => ({
+            mediaId: sj.mediaId,
+            mediaURL: sj.mediaURL,
+            duration: sj.duration,
+          }));
+        this.logger.log(`Mixcut ${jobId}: after re-poll, ${outputVideos.length} Success sub-jobs`);
+      }
+
+      // Fallback: if still 0, include any sub-job that has a mediaURL
+      if (outputVideos.length === 0) {
+        outputVideos = (imsStatus.subJobs || [])
+          .filter((sj: any) => sj.mediaURL)
+          .map((sj: any) => ({
+            mediaId: sj.mediaId,
+            mediaURL: sj.mediaURL,
+            duration: sj.duration,
+          }));
+        if (outputVideos.length > 0) {
+          this.logger.warn(`Mixcut ${jobId}: fallback to mediaURL filter, found ${outputVideos.length} videos`);
+        }
+      }
+
+      this.logger.log(
+        `Mixcut ${jobId} finished: ${outputVideos.length}/${(imsStatus.subJobs || []).length} videos. ` +
+        `Statuses: ${(imsStatus.subJobs || []).map((sj: any) => `${sj.status}[${sj.mediaURL ? 'url' : 'no-url'}]`).join(', ')}`,
+      );
+
       // Update final status
       const output = {
         imsJobId: imsResult.jobId,
         imsStatus,
         outputVideos,
+        isPreviewOnly,
       };
 
       await this.prisma.generation.update({
@@ -93,12 +134,17 @@ export class MixcutProductionProcessor extends WorkerHost {
         },
       });
 
+      const message = isPreviewOnly
+        ? '快速预览完成（预览模式不生成视频文件）'
+        : `智能混剪完成，生成 ${outputVideos.length} 个视频`;
+
       this.ws.sendToUser(userId, 'mixcut:progress', {
         jobId,
         status: 'COMPLETED',
         progress: 100,
-        message: `智能混剪完成，生成 ${outputVideos.length} 个视频`,
+        message,
         outputVideos,
+        isPreviewOnly,
       });
       return output;
     } catch (error: any) {

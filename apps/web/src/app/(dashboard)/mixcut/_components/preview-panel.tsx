@@ -41,9 +41,16 @@ export function PreviewPanel() {
       progress: data.progress,
       message: data.message || '',
     });
-    if (data.status === 'COMPLETED' && data.outputVideos?.length) {
-      setOutputVideos(data.outputVideos);
-      setJobStatus('COMPLETED');
+    if (data.status === 'COMPLETED') {
+      if (data.isPreviewOnly) {
+        setJobStatus('COMPLETED');
+        toast.success('快速预览完成（预览模式不生成视频文件）');
+      } else if (data.outputVideos?.length) {
+        setOutputVideos(data.outputVideos);
+        setJobStatus('COMPLETED');
+      } else {
+        setJobStatus('COMPLETED');
+      }
     }
   });
 
