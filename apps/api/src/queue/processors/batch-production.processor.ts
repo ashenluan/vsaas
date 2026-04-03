@@ -147,13 +147,14 @@ export class BatchProductionProcessor extends WorkerHost {
       await this.persistPipelineState(jobId, steps, 'tts_done');
 
       // Phase 2: S2V - Generate digital human videos
+      // 优化：一次性提交所有任务，统一轮询（而非分批串行等待）
       this.sendProgress(userId, jobId, 'PROCESSING', 30, `开始数字人视频生成 (${ttsSuccessful.length} 个)`);
 
-      const S2V_CONCURRENCY = 2;
-      for (let i = 0; i < ttsSuccessful.length; i += S2V_CONCURRENCY) {
-        const batch = ttsSuccessful.slice(i, i + S2V_CONCURRENCY);
+      const S2V_SUBMIT_BATCH = 4; // 提交批大小（避免瞬间并发过高触发限流）
+      for (let i = 0; i < ttsSuccessful.length; i += S2V_SUBMIT_BATCH) {
+        const batch = ttsSuccessful.slice(i, i + S2V_SUBMIT_BATCH);
 
-        // Submit S2V tasks
+        // Submit S2V tasks (rate-limited batches, but don't wait for completion)
         await Promise.all(
           batch.map(async (step) => {
             try {
@@ -165,7 +166,6 @@ export class BatchProductionProcessor extends WorkerHost {
                 this.parseResolution(input.resolution),
               );
               step.s2vTaskId = result.taskId;
-              // 记录 S2V 实际使用的分辨率
               (step as any).s2vResolution = this.parseResolution(input.resolution);
               this.logger.log(`S2V task submitted for script ${step.scriptId}: ${result.taskId}`);
             } catch (error: any) {
@@ -175,11 +175,12 @@ export class BatchProductionProcessor extends WorkerHost {
             }
           }),
         );
-
-        // Poll for S2V completion
-        const pendingS2v = batch.filter((s) => s.s2vTaskId && s.status === 's2v');
-        await this.pollS2vTasks(pendingS2v, userId, jobId, steps);
       }
+
+      // 统一轮询所有已提交的 S2V 任务
+      const allPendingS2v = ttsSuccessful.filter((s) => s.s2vTaskId && s.status === 's2v');
+      this.logger.log(`All S2V tasks submitted: ${allPendingS2v.length} tasks, starting unified polling`);
+      await this.pollS2vTasks(allPendingS2v, userId, jobId, steps);
 
       const s2vSuccessful = steps.filter((s) => s.status === 's2v_done');
       if (s2vSuccessful.length === 0) {
