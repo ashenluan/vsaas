@@ -24,6 +24,7 @@ class SubtitleConfigDto {
   @IsOptional() @IsString() outlineColour?: string;
   @IsOptional() @IsInt() shadow?: number;
   @IsOptional() @IsString() backColour?: string;
+  @IsOptional() @IsNumber() textWidth?: number;
   @IsOptional() @IsString() effectColorStyleId?: string;
   @IsOptional() @IsString() bubbleStyleId?: string;
   @IsOptional() @IsBoolean() bold?: boolean;
