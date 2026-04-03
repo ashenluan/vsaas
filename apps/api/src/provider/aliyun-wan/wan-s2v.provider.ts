@@ -8,7 +8,7 @@ export interface DigitalHumanProvider {
   isAvailable(): Promise<boolean>;
   detectImage(imageUrl: string): Promise<{ valid: boolean; result: any }>;
   generateVideo(imageUrl: string, audioUrl: string, resolution?: string): Promise<{ taskId: string; status: string }>;
-  checkTaskStatus(taskId: string): Promise<{ status: string; videoUrl?: string; progress?: number }>;
+  checkTaskStatus(taskId: string): Promise<{ status: string; videoUrl?: string; progress?: number; errorCode?: string; errorMessage?: string }>;
 }
 
 @Injectable()
@@ -134,7 +134,7 @@ export class WanS2VProvider implements DigitalHumanProvider {
     };
   }
 
-  async checkTaskStatus(taskId: string): Promise<{ status: string; videoUrl?: string; progress?: number }> {
+  async checkTaskStatus(taskId: string): Promise<{ status: string; videoUrl?: string; progress?: number; errorCode?: string; errorMessage?: string }> {
     const apiKey = this.config.get<string>('DASHSCOPE_API_KEY');
 
     const response = await retryFetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
@@ -152,6 +152,8 @@ export class WanS2VProvider implements DigitalHumanProvider {
       status: data.output?.task_status || 'UNKNOWN',
       videoUrl,
       progress: data.output?.progress,
+      errorCode: data.output?.code,
+      errorMessage: data.output?.message,
     };
   }
 }

@@ -80,7 +80,25 @@ export class BatchProductionProcessor extends WorkerHost {
       this.sendProgress(userId, jobId, 'PROCESSING', 0, '开始处理批量混剪任务');
 
       // Phase 1: TTS for each script using cloned voice
-      const steps: PipelineStep[] = input.scripts.map((s) => ({
+      // Split long scripts into segments (DashScope S2V has 20s audio limit)
+      const expandedScripts: { id: string; title: string; content: string; segmentIndex: number; totalSegments: number }[] = [];
+      for (const s of input.scripts) {
+        const segments = this.splitScriptForS2V(s.content);
+        segments.forEach((seg, i) => {
+          expandedScripts.push({
+            id: s.id,
+            title: segments.length > 1 ? `${s.title}_${i + 1}` : s.title,
+            content: seg,
+            segmentIndex: i,
+            totalSegments: segments.length,
+          });
+        });
+      }
+      if (expandedScripts.length > input.scripts.length) {
+        this.logger.log(`Scripts expanded from ${input.scripts.length} to ${expandedScripts.length} segments for S2V 20s limit`);
+      }
+
+      const steps: PipelineStep[] = expandedScripts.map((s) => ({
         scriptId: s.id,
         scriptTitle: s.title,
         status: 'pending' as const,
@@ -92,7 +110,7 @@ export class BatchProductionProcessor extends WorkerHost {
       const TTS_CONCURRENCY = 3;
       for (let i = 0; i < steps.length; i += TTS_CONCURRENCY) {
         const batch = steps.slice(i, i + TTS_CONCURRENCY);
-        const scriptBatch = input.scripts.slice(i, i + TTS_CONCURRENCY);
+        const scriptBatch = expandedScripts.slice(i, i + TTS_CONCURRENCY);
 
         await Promise.all(
           batch.map(async (step, idx) => {
@@ -366,10 +384,51 @@ export class BatchProductionProcessor extends WorkerHost {
       // Poll IMS status
       const imsStatus = await this.pollImsJob(imsResult.jobId, userId, jobId);
 
+      // Extract output videos from IMS sub-jobs
+      let outputVideos = (imsStatus.subJobs || [])
+        .filter((sj: any) => sj.status === 'Success')
+        .map((sj: any) => ({
+          mediaId: sj.mediaId,
+          mediaURL: sj.mediaURL,
+          duration: sj.duration,
+        }));
+
+      // Re-poll once if main job finished but sub-jobs lag behind
+      if (outputVideos.length === 0 && (imsStatus.subJobs || []).length > 0) {
+        this.logger.warn(
+          `Compose ${jobId}: main job Finished but 0 Success sub-jobs. Retrying in 5s...`,
+        );
+        await new Promise((r) => setTimeout(r, 5000));
+        const rePollStatus = await imsProvider.checkJobStatus(imsResult.jobId);
+        outputVideos = (rePollStatus.subJobs || [])
+          .filter((sj: any) => sj.status === 'Success')
+          .map((sj: any) => ({
+            mediaId: sj.mediaId,
+            mediaURL: sj.mediaURL,
+            duration: sj.duration,
+          }));
+      }
+
+      // Fallback: include any sub-job with a mediaURL
+      if (outputVideos.length === 0) {
+        outputVideos = (imsStatus.subJobs || [])
+          .filter((sj: any) => sj.mediaURL)
+          .map((sj: any) => ({
+            mediaId: sj.mediaId,
+            mediaURL: sj.mediaURL,
+            duration: sj.duration,
+          }));
+      }
+
+      this.logger.log(
+        `Compose ${jobId} finished: ${outputVideos.length}/${(imsStatus.subJobs || []).length} videos`,
+      );
+
       // Update final status
       const output = {
         imsJobId: imsResult.jobId,
         imsStatus,
+        outputVideos,
         pipeline: steps.map((s) => ({
           scriptId: s.scriptId,
           scriptTitle: s.scriptTitle,
@@ -390,7 +449,13 @@ export class BatchProductionProcessor extends WorkerHost {
         },
       });
 
-      this.sendProgress(userId, jobId, 'COMPLETED', 100, '批量混剪完成');
+      this.ws.sendToUser(userId, 'compose:progress', {
+        jobId,
+        status: 'COMPLETED',
+        progress: 100,
+        message: `批量混剪完成，生成 ${outputVideos.length} 个视频`,
+        outputVideos,
+      });
       return output;
     } catch (error: any) {
       this.logger.error(`Batch production ${jobId} failed: ${error.message}`, error.stack);
@@ -429,6 +494,48 @@ export class BatchProductionProcessor extends WorkerHost {
     }
   }
 
+  /**
+   * Split script text into segments that produce <20s audio for Wan2.2 S2V.
+   * DashScope S2V has a hard 20s audio limit. Chinese speech ~4 chars/s → max ~70 chars.
+   * We use 60 chars as safe limit and split at sentence boundaries.
+   */
+  private splitScriptForS2V(text: string): string[] {
+    const MAX_CHARS = 60;
+    if (text.length <= MAX_CHARS) return [text];
+
+    // Split on sentence-ending punctuation
+    const sentences = text.split(/(?<=[。！？；\n])/g).filter((s) => s.trim());
+    const segments: string[] = [];
+    let current = '';
+
+    for (const sentence of sentences) {
+      if (current.length + sentence.length <= MAX_CHARS) {
+        current += sentence;
+      } else {
+        if (current) segments.push(current.trim());
+        // If single sentence > MAX_CHARS, split on commas
+        if (sentence.length > MAX_CHARS) {
+          const parts = sentence.split(/(?<=[，、,])/g).filter((s) => s.trim());
+          let sub = '';
+          for (const part of parts) {
+            if (sub.length + part.length <= MAX_CHARS) {
+              sub += part;
+            } else {
+              if (sub) segments.push(sub.trim());
+              sub = part;
+            }
+          }
+          if (sub) current = sub;
+        } else {
+          current = sentence;
+        }
+      }
+    }
+    if (current.trim()) segments.push(current.trim());
+
+    return segments.length > 0 ? segments : [text];
+  }
+
   private async pollS2vTasks(
     steps: PipelineStep[],
     userId: string,
@@ -455,8 +562,8 @@ export class BatchProductionProcessor extends WorkerHost {
             this.logger.log(`S2V completed for ${step.scriptId}: ${status.videoUrl}`);
           } else if (status.status === 'FAILED') {
             step.status = 'failed';
-            step.error = 'S2V generation failed';
-            this.logger.error(`S2V failed for ${step.scriptId}`);
+            step.error = `S2V failed: ${status.errorMessage || status.errorCode || 'unknown'}`;
+            this.logger.error(`S2V failed for ${step.scriptId}: ${status.errorCode} - ${status.errorMessage}`);
           }
         } catch (err: any) {
           this.logger.warn(`S2V poll error for ${step.scriptId}: ${err.message}`);
