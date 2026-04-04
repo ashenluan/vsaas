@@ -10,7 +10,6 @@ import { DigitalHumanController } from './digital-human.controller';
 import { VoiceController } from './voice.controller';
 import { MaterialController } from './material.controller';
 import { ScriptController } from './script.controller';
-import { ComposeController } from './compose.controller';
 import { MixcutController } from './mixcut.controller';
 import { CallbackController } from './callback.controller';
 import { DhBatchV2Controller } from './dh-batch-v2.controller';
@@ -24,7 +23,6 @@ import { DhBatchV2Controller } from './dh-batch-v2.controller';
     WsModule,
     BullModule.registerQueue(
       { name: 'voice-cloning' },
-      { name: 'batch-production' },
       { name: 'digital-human-video' },
       { name: 'mixcut-production' },
       { name: 'dh-batch-v2' },
@@ -35,7 +33,6 @@ import { DhBatchV2Controller } from './dh-batch-v2.controller';
     VoiceController,
     MaterialController,
     ScriptController,
-    ComposeController,
     MixcutController,
     CallbackController,
     DhBatchV2Controller,

@@ -9,6 +9,7 @@ import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProviderRegistry } from '../provider/provider.registry';
 import { UserService } from '../user/user.service';
+import { StorageService } from '../storage/storage.service';
 import {
   TRANSITION_LIST,
   ADVANCED_TRANSITION_LIST,
@@ -20,7 +21,6 @@ import {
   FONT_LIST,
   IMS_VOICE_LIST,
 } from '../provider/aliyun-ims/ims-compose.provider';
-import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class DigitalHumanService {
@@ -32,7 +32,6 @@ export class DigitalHumanService {
     private readonly userService: UserService,
     private readonly storage: StorageService,
     @InjectQueue('voice-cloning') private readonly voiceQueue: Queue,
-    @InjectQueue('batch-production') private readonly batchQueue: Queue,
     @InjectQueue('digital-human-video') private readonly dhVideoQueue: Queue,
     @InjectQueue('mixcut-production') private readonly mixcutQueue: Queue,
     @InjectQueue('dh-batch-v2') private readonly dhBatchV2Queue: Queue,
@@ -239,18 +238,8 @@ export class DigitalHumanService {
     return { success: true };
   }
 
-  // ==================== Compose ====================
+  // ==================== IMS Options (used by mixcut) ====================
 
-  async listComposeJobs(userId: string) {
-    return this.prisma.generation.findMany({
-      where: { userId, type: 'BATCH_COMPOSE' },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  /**
-   * 获取混剪可用的选项（转场、特效、滤镜、字幕模板等）
-   */
   getComposeOptions() {
     return {
       transitions: TRANSITION_LIST,
@@ -263,158 +252,6 @@ export class DigitalHumanService {
       fonts: FONT_LIST,
       imsVoices: IMS_VOICE_LIST,
     };
-  }
-
-  async createComposeJob(
-    userId: string,
-    data: {
-      voiceId: string;
-      avatarId: string;
-      scriptIds: string[];
-      materialIds?: string[];
-      bgMusic?: string;
-      videoCount: number;
-      resolution: string;
-      subtitleConfig?: any;
-      titleConfig?: any;
-      effectsConfig?: any;
-      transitionConfig?: any;
-      filterConfig?: any;
-      highlightWords?: { word: string; fontColor?: string; outlineColour?: string; bold?: boolean }[];
-      forbiddenWords?: { word: string; soundReplaceMode?: string }[];
-      bgType?: string;
-      bgColor?: string;
-      bgImage?: string;
-      bgBlurRadius?: number;
-      stickers?: { url: string; x: number; y: number; width: number; height: number; opacity?: number; dyncFrames?: number }[];
-      dedupConfig?: { smartCrop?: boolean; smartZoom?: boolean; smartMirror?: boolean; transparentMask?: boolean; randomSpeed?: boolean };
-      coverType?: string;
-      coverConfig?: { coverTitle?: string; coverTitleFont?: string; coverTitleColor?: string; coverTitleSize?: number; coverTitlePosition?: 'top' | 'center' | 'bottom' };
-      maxDuration?: number;
-      crf?: number;
-      speechRate?: number;
-      mediaVolume?: number;
-      speechVolume?: number;
-      bgMusicVolume?: number;
-    },
-  ) {
-    // Validate voice (user-owned or public)
-    const voice = await this.prisma.voice.findFirst({
-      where: {
-        voiceId: data.voiceId,
-        status: 'READY',
-        OR: [{ userId }, { isPublic: true }],
-      },
-    });
-    if (!voice) throw new BadRequestException('Voice not found or not ready');
-
-    // Validate avatar (user-owned or public)
-    const avatar = await this.prisma.material.findFirst({
-      where: {
-        id: data.avatarId,
-        OR: [{ userId }, { isPublic: true }],
-      },
-    });
-    if (!avatar) throw new BadRequestException('Avatar not found');
-
-    // 检查形象是否通过人脸检测
-    const faceDetect = (avatar.metadata as any)?.faceDetect;
-    if (!faceDetect?.valid) {
-      throw new BadRequestException(
-        '该形象未通过人脸检测，请先在「数字人形象」页面进行人脸检测',
-      );
-    }
-
-    // Validate scripts
-    const scripts = await this.prisma.script.findMany({
-      where: { id: { in: data.scriptIds }, userId },
-    });
-    if (scripts.length === 0)
-      throw new BadRequestException('No valid scripts selected');
-
-    // Fetch additional materials if provided
-    let materials: any[] = [];
-    if (data.materialIds?.length) {
-      materials = await this.prisma.material.findMany({
-        where: { id: { in: data.materialIds }, userId },
-      });
-    }
-
-    // Estimate cost
-    const costPerVideo = 20;
-    const totalCost = costPerVideo * data.videoCount;
-    await this.userService.deductCredits(
-      userId,
-      totalCost,
-      `批量混剪: ${data.videoCount}条视频`,
-    );
-
-    const job = await this.prisma.generation.create({
-      data: {
-        userId,
-        type: 'BATCH_COMPOSE',
-        status: 'PENDING',
-        provider: 'aliyun-ims',
-        creditsUsed: totalCost,
-        input: {
-          voiceId: data.voiceId,
-          avatarId: data.avatarId,
-          avatarUrl: avatar.url,
-          scriptIds: data.scriptIds,
-          scripts: scripts.map((s) => ({ id: s.id, title: s.title, content: s.content })),
-          materialIds: data.materialIds || [],
-          materials: materials.map((m) => ({ id: m.id, name: m.name, type: m.type, url: m.url })),
-          bgMusic: data.bgMusic,
-          videoCount: data.videoCount,
-          resolution: data.resolution,
-          subtitleConfig: data.subtitleConfig,
-          titleConfig: data.titleConfig,
-          effectsConfig: data.effectsConfig,
-          transitionConfig: data.transitionConfig,
-          filterConfig: data.filterConfig,
-          highlightWords: data.highlightWords,
-          forbiddenWords: data.forbiddenWords,
-          bgType: data.bgType,
-          bgColor: data.bgColor,
-          bgImage: data.bgImage,
-          bgBlurRadius: data.bgBlurRadius,
-          stickers: data.stickers,
-          dedupConfig: data.dedupConfig,
-          coverType: data.coverType,
-          coverConfig: data.coverConfig,
-          maxDuration: data.maxDuration,
-          crf: data.crf,
-          speechRate: data.speechRate,
-          mediaVolume: data.mediaVolume,
-          speechVolume: data.speechVolume,
-          bgMusicVolume: data.bgMusicVolume,
-        },
-      },
-    });
-
-    // Dispatch to BullMQ queue for processing
-    await this.batchQueue.add('compose', {
-      jobId: job.id,
-      userId,
-      input: job.input,
-    }, {
-      attempts: 2,
-      backoff: { type: 'exponential', delay: 10000 },
-    });
-
-    this.logger.log(
-      `Compose job ${job.id} queued for user ${userId}: ${data.videoCount} videos`,
-    );
-
-    return job;
-  }
-
-  async getComposeJob(userId: string, id: string) {
-    const job = await this.prisma.generation.findFirst({
-      where: { id, userId, type: 'BATCH_COMPOSE' },
-    });
-    if (!job) throw new NotFoundException('Compose job not found');
-    return job;
   }
 
   // ==================== Mixcut (脚本化自动成片) ====================

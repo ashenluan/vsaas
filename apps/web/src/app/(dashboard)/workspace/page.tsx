@@ -11,7 +11,7 @@ import {
   Video,
   Film,
   UserCircle,
-  Clapperboard,
+  Layers,
   Sparkles,
   ArrowRight,
   TrendingUp,
@@ -115,7 +115,7 @@ const moreTools = [
   { title: '无损改字', href: '/generate/text-edit', icon: Type },
   { title: '手持产品', href: '/generate/handheld', icon: Hand },
   { title: '多图融合', href: '/generate/multi-fusion', icon: Blend },
-  { title: '批量混剪', href: '/digital-human/compose', icon: Clapperboard },
+  { title: '交错混剪', href: '/digital-human/dh-batch-v2', icon: Layers },
 ];
 
 // ==================== Template Categories ====================

@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ImageGenerationProcessor } from './processors/image-generation.processor';
 import { VideoGenerationProcessor } from './processors/video-generation.processor';
-import { BatchProductionProcessor } from './processors/batch-production.processor';
 import { VoiceCloningProcessor } from './processors/voice-cloning.processor';
 import { DigitalHumanVideoProcessor } from './processors/digital-human-video.processor';
 import { MixcutProductionProcessor } from './processors/mixcut-production.processor';
@@ -20,7 +19,6 @@ import { PrismaModule } from '../prisma/prisma.module';
       { name: 'image-generation' },
       { name: 'video-generation' },
       { name: 'voice-cloning' },
-      { name: 'batch-production' },
       { name: 'digital-human-video' },
       { name: 'mixcut-production' },
       { name: 'dh-batch-v2' },
@@ -35,7 +33,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   providers: [
     ImageGenerationProcessor,
     VideoGenerationProcessor,
-    BatchProductionProcessor,
     VoiceCloningProcessor,
     DigitalHumanVideoProcessor,
     MixcutProductionProcessor,

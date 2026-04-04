@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useWs } from '@/components/ws-provider';
-import { CheckCircle2, XCircle, Loader2, Download, Plus } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, Download, Plus, RefreshCw } from 'lucide-react';
+import { dhBatchV2Api } from '@/lib/api';
 
 export function DhV2Result({ result, onNewTask }: { result: any; onNewTask: () => void }) {
   const { subscribe } = useWs();
@@ -21,18 +22,41 @@ export function DhV2Result({ result, onNewTask }: { result: any; onNewTask: () =
     });
   }, [job?.id, subscribe]);
 
+  // HTTP polling fallback
+  useEffect(() => {
+    if (!job?.id) return;
+    const status = progress?.status || job.status;
+    if (status === 'COMPLETED' || status === 'FAILED') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const updated = await dhBatchV2Api.get(job.id);
+        if (updated && updated.status !== job.status) {
+          setJob(updated);
+          if (updated.status === 'COMPLETED' || updated.status === 'FAILED') {
+            setProgress({ progress: updated.status === 'COMPLETED' ? 100 : 0, message: '', status: updated.status });
+          }
+        }
+      } catch { /* ignore */ }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [job?.id, job?.status, progress?.status]);
+
   const status = progress?.status || job.status;
   const isProcessing = status === 'PENDING' || status === 'PROCESSING';
   const isCompleted = status === 'COMPLETED';
   const isFailed = status === 'FAILED';
 
   const outputVideos = job.outputVideos || (job.output as any)?.outputVideos || [];
+  const channel = (job.input as any)?.channel;
 
   return (
     <div className="animate-in fade-in duration-500">
       <h1 className="mb-6 text-2xl font-bold">交错混剪</h1>
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-3xl">
         <div className="rounded-2xl border bg-card p-8 shadow-sm">
+          {/* Status icon */}
           <div className="mb-4 flex justify-center">
             {isCompleted ? (
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
@@ -53,6 +77,7 @@ export function DhV2Result({ result, onNewTask }: { result: any; onNewTask: () =
             {isCompleted ? '任务完成' : isFailed ? '任务失败' : '任务处理中'}
           </h2>
 
+          {/* Progress bar */}
           {isProcessing && progress && (
             <div className="mx-auto mb-6 max-w-md">
               <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
@@ -74,12 +99,21 @@ export function DhV2Result({ result, onNewTask }: { result: any; onNewTask: () =
             </p>
           )}
 
+          {/* Job info */}
           <div className="mx-auto mb-6 max-w-md rounded-lg bg-muted/50 p-4 text-sm">
             <div className="grid grid-cols-2 gap-2">
               <span className="text-muted-foreground">任务ID</span>
               <span className="font-mono text-xs truncate">{job.id}</span>
               <span className="text-muted-foreground">通道</span>
-              <span>{(job.input as any)?.channel === 'A' ? '内置数字人' : '自定义照片'}</span>
+              <span>{channel === 'A' ? '内置数字人' : '自定义照片'}</span>
+              <span className="text-muted-foreground">创建时间</span>
+              <span className="text-xs">{new Date(job.createdAt).toLocaleString('zh-CN')}</span>
+              {job.creditsUsed && (
+                <>
+                  <span className="text-muted-foreground">消耗积分</span>
+                  <span>{job.creditsUsed}</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -113,13 +147,19 @@ export function DhV2Result({ result, onNewTask }: { result: any; onNewTask: () =
             </div>
           )}
 
+          {isCompleted && outputVideos.length === 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-600">
+              任务已完成但未生成视频，请检查任务日志。
+            </div>
+          )}
+
           {isFailed && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
               {job.errorMsg || progress?.message || '任务处理失败'}
             </div>
           )}
 
-          <div className="mt-6 flex justify-center">
+          <div className="mt-6 flex justify-center gap-3">
             <button
               onClick={onNewTask}
               className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useDhV2Store } from './use-dh-v2-store';
 import { Card } from './shared';
 import { dhBatchV2Api } from '@/lib/api';
-import { AlertCircle, Loader2, Rocket } from 'lucide-react';
+import { AlertCircle, Loader2, Rocket, Music, Volume2 } from 'lucide-react';
 
 export function StepSubmit({
   voices,
@@ -84,6 +84,8 @@ export function StepSubmit({
     }
   };
 
+  const crfLabel = { 20: '高质量', 23: '较高', 27: '标准', 30: '较低' }[store.output.crf] || `CRF ${store.output.crf}`;
+
   return (
     <div className="animate-in fade-in slide-in-from-right-2 duration-300">
       <h2 className="mb-1 text-lg font-semibold">确认提交</h2>
@@ -95,19 +97,53 @@ export function StepSubmit({
         </div>
       )}
 
-      <Card className="max-w-xl">
-        <div className="space-y-3 text-sm">
-          <SummaryRow label="通道" value={store.channel === 'A' ? '通道 A — 内置数字人' : '通道 B — 自定义照片'} />
-          <SummaryRow label="声音" value={voice?.name || '--'} />
-          <SummaryRow label="形象" value={avatarName} />
-          <SummaryRow label="脚本" value={`${store.selectedScripts.length} 个`} />
-          <SummaryRow label="素材" value={`${store.selectedMaterials.length} 个`} />
-          <SummaryRow label="字幕" value={store.subtitle.open ? '开启' : '关闭'} />
-          <SummaryRow label="数量 × 分辨率" value={`${store.output.videoCount} 条 · ${store.output.resolution.replace('x', '×')}`} />
-        </div>
-      </Card>
+      <div className="grid grid-cols-1 gap-4 max-w-2xl lg:grid-cols-2">
+        {/* 基本信息 */}
+        <Card>
+          <h3 className="mb-3 text-sm font-semibold text-muted-foreground">基本信息</h3>
+          <div className="space-y-2.5 text-sm">
+            <SummaryRow label="通道" value={store.channel === 'A' ? '通道 A — 内置数字人' : '通道 B — 自定义照片'} />
+            <SummaryRow label="声音" value={voice?.name || '--'} />
+            <SummaryRow label="形象" value={avatarName} />
+            <SummaryRow label="脚本" value={`${store.selectedScripts.length} 个`} />
+            <SummaryRow label="素材" value={`${store.selectedMaterials.length} 个`} />
+          </div>
+        </Card>
 
-      <div className="mt-4 max-w-xl rounded-xl border border-blue-200 bg-blue-50 p-4">
+        {/* 输出参数 */}
+        <Card>
+          <h3 className="mb-3 text-sm font-semibold text-muted-foreground">输出参数</h3>
+          <div className="space-y-2.5 text-sm">
+            <SummaryRow label="数量 × 分辨率" value={`${store.output.videoCount} 条 · ${store.output.resolution.replace('x', '×')}`} />
+            <SummaryRow label="最大时长" value={`${store.output.maxDuration}s`} />
+            <SummaryRow label="视频质量" value={crfLabel} />
+            <SummaryRow label="字幕" value={store.subtitle.open ? `开启 · ${store.subtitle.fontSize}px · ${store.subtitle.fontColor}` : '关闭'} />
+            {store.transitionId && <SummaryRow label="转场" value={store.transitionId} />}
+          </div>
+        </Card>
+
+        {/* 音量 & 音乐 */}
+        <Card className="lg:col-span-2">
+          <h3 className="mb-3 text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
+            <Volume2 size={14} /> 音量 & 音乐
+          </h3>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm sm:grid-cols-4">
+            <SummaryRow label="口播音量" value={`${Math.round(store.output.speechVolume * 100)}%`} />
+            <SummaryRow label="素材音量" value={`${Math.round(store.output.mediaVolume * 100)}%`} />
+            <SummaryRow label="背景音乐音量" value={`${Math.round(store.output.bgMusicVolume * 100)}%`} />
+            <SummaryRow label="语速" value={store.output.speechRate === 0 ? '正常' : `${store.output.speechRate > 0 ? '+' : ''}${store.output.speechRate}`} />
+          </div>
+          {store.bgMusic && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-2.5 text-xs text-green-700">
+              <Music size={12} />
+              <span className="truncate">{store.bgMusic.split('/').pop()}</span>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* 费用确认 */}
+      <div className="mt-4 max-w-2xl rounded-xl border border-blue-200 bg-blue-50 p-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-blue-800">确认费用</span>
           <span className="text-2xl font-bold text-blue-900 tabular-nums">{store.output.videoCount * 20} 积分</span>
@@ -115,12 +151,12 @@ export function StepSubmit({
         <p className="mt-1 text-xs text-blue-600">20 积分/条 × {store.output.videoCount} 条视频</p>
       </div>
 
-      <div className="mt-4 max-w-xl rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+      <div className="mt-4 max-w-2xl rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
         交错混剪将生成 [数字人+口播] → [素材+旁白] → [数字人+口播] → ... 的交替画面结构。
         {store.channel === 'B' && ' 通道 B 需要额外时间进行 S2V 数字人视频渲染。'}
       </div>
 
-      <div className="mt-6 flex items-center justify-between max-w-xl">
+      <div className="mt-6 flex items-center justify-between max-w-2xl">
         <button
           onClick={() => store.setStep('config')}
           className="inline-flex h-9 items-center gap-1.5 rounded-md border px-4 text-sm font-medium hover:bg-accent transition-colors"
@@ -147,7 +183,7 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between border-b border-dashed pb-2 last:border-0">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
+      <span className="font-medium text-right">{value}</span>
     </div>
   );
 }

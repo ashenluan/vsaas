@@ -82,7 +82,7 @@ function CreateContent() {
   // WebSocket
   const { subscribe } = useWs();
   useEffect(() => {
-    return subscribe('compose:progress', (data: any) => {
+    return subscribe('digital-human:progress', (data: any) => {
       if (result?.id === data.jobId) {
         setResult((prev: any) => ({ ...prev, ...data }));
       }
