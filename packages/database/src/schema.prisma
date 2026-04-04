@@ -127,6 +127,7 @@ enum JobType {
   VIRTUAL_TRYON
   INPAINT
   STORYBOARD
+  DH_BATCH_V2
 }
 
 enum JobStatus {

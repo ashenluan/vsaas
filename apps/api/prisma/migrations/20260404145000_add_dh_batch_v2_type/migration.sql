@@ -1,2 +1,2 @@
 -- AlterEnum
-ALTER TYPE "GenerationType" ADD VALUE 'DH_BATCH_V2';
+ALTER TYPE "JobType" ADD VALUE 'DH_BATCH_V2';
