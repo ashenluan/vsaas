@@ -10,6 +10,7 @@ import { JimengVideoProvider } from './jimeng/jimeng-video.provider';
 import { VeoVideoProvider } from './veo/veo-video.provider';
 import { QwenVoiceProvider } from './qwen/qwen-voice.provider';
 import { WanS2VProvider } from './aliyun-wan/wan-s2v.provider';
+import { WanR2VProvider } from './aliyun-wan/wan-r2v.provider';
 import { AliyunIMSProvider } from './aliyun-ims/ims-compose.provider';
 
 export interface ImageProvider {
@@ -45,6 +46,7 @@ export class ProviderRegistry implements OnModuleInit {
     private readonly veo: VeoVideoProvider,
     public readonly voiceProvider: QwenVoiceProvider,
     public readonly digitalHumanProvider: WanS2VProvider,
+    public readonly r2vProvider: WanR2VProvider,
     public readonly batchComposeProvider: AliyunIMSProvider,
   ) {}
 
@@ -57,6 +59,7 @@ export class ProviderRegistry implements OnModuleInit {
     this.registerVideoProvider(this.grokVideo);
     this.registerVideoProvider(this.jimengVideo);
     this.registerVideoProvider(this.veo);
+    this.registerVideoProvider(this.r2vProvider as any);
   }
 
   registerImageProvider(provider: ImageProvider) {

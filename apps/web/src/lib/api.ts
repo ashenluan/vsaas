@@ -94,6 +94,8 @@ export const generationApi = {
     apiFetch('/generations/image', { method: 'POST', body: JSON.stringify(data) }),
   createVideo: (data: any) =>
     apiFetch('/generations/video', { method: 'POST', body: JSON.stringify(data) }),
+  composeStoryboard: (data: any) =>
+    apiFetch('/generations/storyboard/compose', { method: 'POST', body: JSON.stringify(data) }),
   list: (params?: { type?: string; status?: string; page?: number; provider?: string }) => {
     const qs = new URLSearchParams();
     if (params?.type) qs.set('type', params.type);

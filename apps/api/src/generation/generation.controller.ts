@@ -37,6 +37,12 @@ export class GenerationController {
     return this.generationService.createVideoGeneration(req.user.sub, body);
   }
 
+  @Post('storyboard/compose')
+  @Throttle({ short: { ttl: 10000, limit: 2 }, medium: { ttl: 60000, limit: 5 } })
+  createStoryboardCompose(@Req() req: any, @Body() body: any) {
+    return this.generationService.createStoryboardCompose(req.user.sub, body);
+  }
+
   @Get('providers')
   getProviders() {
     return this.generationService.getProviders();

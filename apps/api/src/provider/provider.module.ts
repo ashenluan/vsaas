@@ -10,6 +10,7 @@ import { JimengVideoProvider } from './jimeng/jimeng-video.provider';
 import { VeoVideoProvider } from './veo/veo-video.provider';
 import { QwenVoiceProvider } from './qwen/qwen-voice.provider';
 import { WanS2VProvider } from './aliyun-wan/wan-s2v.provider';
+import { WanR2VProvider } from './aliyun-wan/wan-r2v.provider';
 import { AliyunIMSProvider } from './aliyun-ims/ims-compose.provider';
 
 @Module({
@@ -29,6 +30,8 @@ import { AliyunIMSProvider } from './aliyun-ims/ims-compose.provider';
     QwenVoiceProvider,
     // 数字人视频
     WanS2VProvider,
+    // 参考生视频
+    WanR2VProvider,
     // 批量混剪
     AliyunIMSProvider,
   ],

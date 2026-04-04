@@ -33,6 +33,7 @@ export class GenerationService {
     private readonly userService: UserService,
     @InjectQueue('image-generation') private readonly imageQueue: Queue,
     @InjectQueue('video-generation') private readonly videoQueue: Queue,
+    @InjectQueue('storyboard-compose') private readonly storyboardQueue: Queue,
   ) {}
 
   async createImageGeneration(userId: string, input: {
@@ -98,6 +99,10 @@ export class GenerationService {
     duration?: number;
     resolution?: string;
     referenceImage?: string;
+    media?: { type: string; url: string; reference_voice?: string }[];
+    ratio?: string;
+    negativePrompt?: string;
+    promptExtend?: boolean;
   }) {
     const provider = this.providers.getVideoProvider(input.providerId);
     if (!provider) throw new BadRequestException(`Unknown provider: ${input.providerId}`);
@@ -121,6 +126,10 @@ export class GenerationService {
           duration: input.duration,
           resolution: input.resolution,
           referenceImage: input.referenceImage,
+          ...(input.media && { media: input.media }),
+          ...(input.ratio && { ratio: input.ratio }),
+          ...(input.negativePrompt && { negativePrompt: input.negativePrompt }),
+          ...(input.promptExtend !== undefined && { promptExtend: input.promptExtend }),
         },
       },
     });
@@ -295,4 +304,49 @@ export class GenerationService {
       video: this.providers.listVideoProviders(),
     };
   }
-}
+
+  // ========== 一键成片 — 合成分镜视频 ==========
+
+  async createStoryboardCompose(userId: string, input: {
+    videos: { url: string; duration: number }[];
+    transition?: string;
+    transitionDuration?: number;
+    width: number;
+    height: number;
+    bgMusicUrl?: string;
+  }) {
+    if (!input.videos || input.videos.length < 2) {
+      throw new BadRequestException('至少需要 2 个分镜视频才能合成');
+    }
+
+    const creditCost = 10; // flat cost for composition
+    await this.userService.deductCredits(userId, creditCost, `成片合成: ${input.videos.length} 个分镜`);
+
+    const job = await this.prisma.generation.create({
+      data: {
+        userId,
+        type: 'STORYBOARD',
+        status: 'PENDING',
+        provider: 'aliyun-ims',
+        creditsUsed: creditCost,
+        input: {
+          videos: input.videos,
+          transition: input.transition,
+          transitionDuration: input.transitionDuration,
+          width: input.width,
+          height: input.height,
+          bgMusicUrl: input.bgMusicUrl,
+        },
+      },
+    });
+
+    this.logger.log(`Created storyboard compose ${job.id} for user ${userId}`);
+
+    await this.storyboardQueue.add('compose', {
+      jobId: job.id,
+      userId,
+      ...input,
+    });
+
+    return job;
+  }

@@ -12,6 +12,7 @@ import { UserModule } from '../user/user.module';
     BullModule.registerQueue(
       { name: 'image-generation' },
       { name: 'video-generation' },
+      { name: 'storyboard-compose' },
     ),
   ],
   controllers: [GenerationController],
