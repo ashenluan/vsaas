@@ -71,7 +71,7 @@ export class CallbackController {
         return { success: true };
       }
 
-      // Find the generation record by externalId (supports both BATCH_COMPOSE and MIXCUT)
+      // Find the generation record by externalId (supports BATCH_COMPOSE, MIXCUT, DH_BATCH_V2)
       const generation = await this.prisma.generation.findFirst({
         where: {
           externalId: jobId,
@@ -89,6 +89,67 @@ export class CallbackController {
         return { success: true };
       }
 
+      // Determine if this is a single-video (ProduceMediaComplete) or batch (BatchProduceMediaComplete) callback
+      const isSingleProduceJob = eventType === 'ProduceMediaComplete' || generation.type === 'DH_BATCH_V2';
+
+      if (isSingleProduceJob) {
+        // Single Timeline job callback — no sub-jobs, just one output
+        const mediaUrl = msg.MediaURL || body.MediaURL || msg.MediaUrl;
+        const mediaId = msg.MediaId || body.MediaId;
+
+        if (status === 'Success' || status === 'Finished') {
+          await this.prisma.generation.update({
+            where: { id: generation.id },
+            data: {
+              status: 'COMPLETED',
+              completedAt: new Date(),
+              output: {
+                ...((generation.output as any) || {}),
+                imsCallback: body,
+                callbackMediaUrl: mediaUrl,
+                callbackMediaId: mediaId,
+              },
+            },
+          });
+
+          this.ws.sendToUser(generation.userId, 'dh-batch-v2:progress', {
+            jobId: generation.id,
+            status: 'COMPLETED',
+            progress: 100,
+            message: 'Timeline 合成完成',
+          });
+
+          this.logger.log(`Timeline job ${jobId} completed via callback: ${mediaUrl}`);
+        } else if (status === 'Failed' || status === 'Fail') {
+          const errorMsg = msg.ErrorMessage || body.ErrorMessage || body.Message || 'Timeline job failed';
+
+          await this.prisma.generation.update({
+            where: { id: generation.id },
+            data: {
+              status: 'FAILED',
+              completedAt: new Date(),
+              errorMsg,
+              output: {
+                ...((generation.output as any) || {}),
+                imsCallback: body,
+              },
+            },
+          });
+
+          this.ws.sendToUser(generation.userId, 'dh-batch-v2:progress', {
+            jobId: generation.id,
+            status: 'FAILED',
+            progress: 0,
+            message: `合成失败: ${errorMsg}`,
+          });
+
+          this.logger.error(`Timeline job ${jobId} failed via callback: ${errorMsg}`);
+        }
+
+        return { success: true };
+      }
+
+      // Batch job callback (original logic)
       // Parse sub-jobs if available (can be in MessageBody or top-level)
       const subJobs = msg.SubJobList || body.SubJobList || body.SubJobs || [];
       const outputVideos = subJobs

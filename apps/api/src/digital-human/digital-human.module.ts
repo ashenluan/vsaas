@@ -13,6 +13,7 @@ import { ScriptController } from './script.controller';
 import { ComposeController } from './compose.controller';
 import { MixcutController } from './mixcut.controller';
 import { CallbackController } from './callback.controller';
+import { DhBatchV2Controller } from './dh-batch-v2.controller';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { CallbackController } from './callback.controller';
       { name: 'batch-production' },
       { name: 'digital-human-video' },
       { name: 'mixcut-production' },
+      { name: 'dh-batch-v2' },
     ),
   ],
   controllers: [
@@ -36,6 +38,7 @@ import { CallbackController } from './callback.controller';
     ComposeController,
     MixcutController,
     CallbackController,
+    DhBatchV2Controller,
   ],
   providers: [DigitalHumanService],
   exports: [DigitalHumanService],

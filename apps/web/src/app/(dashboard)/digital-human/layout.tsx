@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { UserCircle, Video, FolderOpen, Mic2, FileText, Clapperboard } from 'lucide-react';
+import { UserCircle, Video, FolderOpen, Mic2, FileText, Clapperboard, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const subNavItems = [
@@ -12,6 +12,7 @@ const subNavItems = [
   { label: '声音管理', href: '/digital-human/voices', icon: Mic2 },
   { label: '脚本编辑', href: '/digital-human/scripts', icon: FileText },
   { label: '批量混剪', href: '/digital-human/compose', icon: Clapperboard },
+  { label: '交错混剪', href: '/digital-human/dh-batch-v2', icon: Layers },
 ];
 
 export default function DigitalHumanLayout({ children }: { children: React.ReactNode }) {

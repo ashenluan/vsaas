@@ -1067,4 +1067,158 @@ export class AliyunIMSProvider implements BatchComposeProvider {
   getBubbleStyleList() {
     return BUBBLE_STYLE_LIST;
   }
+
+  // ========== Timeline 单视频合成 (SubmitMediaProducingJob) ==========
+
+  /**
+   * 提交 Timeline 合成任务（单视频）
+   * 用于数字人交错混剪：将 DH 片段和素材片段按 Timeline 精确编排
+   */
+  async submitTimelineJob(
+    timeline: any,
+    outputConfig: { mediaUrl: string; width?: number; height?: number },
+    callbackUrl?: string,
+    callbackToken?: string,
+  ): Promise<{ jobId: string; mediaId?: string }> {
+    this.logger.log('Submitting timeline media producing job');
+
+    const client = this.getClient();
+
+    const outputMediaConfig: any = { MediaURL: outputConfig.mediaUrl };
+    if (outputConfig.width && outputConfig.height) {
+      outputMediaConfig.Width = outputConfig.width;
+      outputMediaConfig.Height = outputConfig.height;
+    }
+
+    const request = new $ICE20201109.SubmitMediaProducingJobRequest({
+      timeline: JSON.stringify(timeline),
+      outputMediaConfig: JSON.stringify(outputMediaConfig),
+      outputMediaTarget: 'oss-object',
+      source: 'OpenAPI',
+    });
+
+    if (callbackUrl) {
+      const userData: any = { NotifyAddress: callbackUrl };
+      if (callbackToken) userData.CallbackToken = callbackToken;
+      request.userData = JSON.stringify(userData);
+    }
+
+    const runtime = new $Util.RuntimeOptions({});
+
+    try {
+      const response = await client.submitMediaProducingJobWithOptions(request, runtime);
+      const jobId = response.body?.jobId || '';
+      const mediaId = response.body?.mediaId || undefined;
+      this.logger.log(`Timeline job submitted: ${jobId}`);
+      return { jobId, mediaId };
+    } catch (error: any) {
+      this.logger.error(`Timeline job submit failed: ${error.message}`);
+      throw new Error(`IMS Timeline 合成任务提交失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 查询单视频合成任务状态
+   * 状态: Init → Queuing → Processing → Success/Failed
+   */
+  async checkMediaProducingJobStatus(jobId: string): Promise<{
+    status: string;
+    mediaUrl?: string;
+    mediaId?: string;
+    progress?: number;
+    duration?: number;
+    errorCode?: string;
+    errorMessage?: string;
+  }> {
+    const client = this.getClient();
+    const request = new $ICE20201109.GetMediaProducingJobRequest({ jobId });
+    const runtime = new $Util.RuntimeOptions({});
+
+    try {
+      const response = await client.getMediaProducingJobWithOptions(request, runtime);
+      const job = response.body?.mediaProducingJob;
+
+      if (!job) {
+        return { status: 'UNKNOWN' };
+      }
+
+      return {
+        status: job.status || 'UNKNOWN',
+        mediaUrl: job.mediaURL || undefined,
+        mediaId: job.mediaId || undefined,
+        progress: job.progress,
+        duration: job.duration,
+        errorCode: job.code || undefined,
+        errorMessage: job.message || undefined,
+      };
+    } catch (error: any) {
+      this.logger.error(`Check media producing job failed: ${error.message}`);
+      throw new Error(`查询合成任务失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 获取系统预置数字人列表
+   */
+  async listBuiltinAvatars(pageNo = 1, pageSize = 100): Promise<{
+    avatars: { avatarId: string; avatarName: string; coverUrl: string; videoUrl: string; width: number; height: number; outputMask: boolean }[];
+    totalCount: number;
+  }> {
+    const client = this.getClient();
+    const request = new $ICE20201109.ListSmartSysAvatarModelsRequest({ pageNo, pageSize });
+    const runtime = new $Util.RuntimeOptions({});
+
+    try {
+      const response = await client.listSmartSysAvatarModelsWithOptions(request, runtime);
+      const list = (response.body?.smartSysAvatarModelList as any[]) || [];
+
+      return {
+        avatars: list.map((a: any) => ({
+          avatarId: a.avatarId || a.AvatarId || '',
+          avatarName: a.avatarName || a.AvatarName || '',
+          coverUrl: a.coverUrl || a.CoverUrl || '',
+          videoUrl: a.videoUrl || a.VideoUrl || '',
+          width: a.width || a.Width || 0,
+          height: a.height || a.Height || 0,
+          outputMask: a.outputMask ?? a.OutputMask ?? false,
+        })),
+        totalCount: response.body?.totalCount || 0,
+      };
+    } catch (error: any) {
+      this.logger.error(`List builtin avatars failed: ${error.message}`);
+      throw new Error(`获取系统数字人列表失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 通过 Timeline 拼接多个视频片段为一个视频
+   * 用于将多个 S2V 数字人片段 + 素材片段按顺序拼接
+   */
+  async concatVideos(
+    clips: { mediaUrl: string; in?: number; out?: number }[],
+    outputUrl: string,
+    width: number,
+    height: number,
+    callbackUrl?: string,
+    callbackToken?: string,
+  ): Promise<{ jobId: string }> {
+    const timeline = {
+      VideoTracks: [{
+        VideoTrackClips: clips.map((c) => ({
+          MediaURL: c.mediaUrl,
+          ...(c.in !== undefined && { In: c.in }),
+          ...(c.out !== undefined && { Out: c.out }),
+        })),
+      }],
+    };
+
+    const result = await this.submitTimelineJob(
+      timeline,
+      { mediaUrl: outputUrl, width, height },
+      callbackUrl,
+      callbackToken,
+    );
+
+    return { jobId: result.jobId };
+  }
 }

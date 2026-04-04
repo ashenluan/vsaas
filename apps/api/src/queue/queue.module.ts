@@ -6,6 +6,7 @@ import { BatchProductionProcessor } from './processors/batch-production.processo
 import { VoiceCloningProcessor } from './processors/voice-cloning.processor';
 import { DigitalHumanVideoProcessor } from './processors/digital-human-video.processor';
 import { MixcutProductionProcessor } from './processors/mixcut-production.processor';
+import { DhBatchV2Processor } from './processors/dh-batch-v2.processor';
 import { GenerationModule } from '../generation/generation.module';
 import { ProviderModule } from '../provider/provider.module';
 import { UserModule } from '../user/user.module';
@@ -22,6 +23,7 @@ import { PrismaModule } from '../prisma/prisma.module';
       { name: 'batch-production' },
       { name: 'digital-human-video' },
       { name: 'mixcut-production' },
+      { name: 'dh-batch-v2' },
     ),
     GenerationModule,
     ProviderModule,
@@ -37,6 +39,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     VoiceCloningProcessor,
     DigitalHumanVideoProcessor,
     MixcutProductionProcessor,
+    DhBatchV2Processor,
   ],
   exports: [BullModule],
 })

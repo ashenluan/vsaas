@@ -330,3 +330,31 @@ export const mixcutApi = {
     imsVoices: Record<string, { id: string; label: string; desc: string }[]>;
   }>('/mixcut/options'),
 };
+
+// Digital Human - DH Batch V2 (数字人交错混剪)
+export const dhBatchV2Api = {
+  create: (data: {
+    channel: 'A' | 'B';
+    builtinAvatarId?: string;
+    avatarId?: string;
+    voiceId: string;
+    scriptIds: string[];
+    materialIds?: string[];
+    bgMusic?: string;
+    videoCount: number;
+    resolution: string;
+    subtitleConfig?: { open?: boolean; style?: string; font?: string; fontSize?: number; fontColor?: string };
+    transitionId?: string;
+    speechRate?: number;
+    mediaVolume?: number;
+    speechVolume?: number;
+    bgMusicVolume?: number;
+    maxDuration?: number;
+    crf?: number;
+  }) =>
+    apiFetch('/dh-batch-v2', { method: 'POST', body: JSON.stringify(data) }),
+  list: () => apiFetch<any[]>('/dh-batch-v2'),
+  get: (id: string) => apiFetch(`/dh-batch-v2/${id}`),
+  listBuiltinAvatars: () =>
+    apiFetch<{ avatars: { avatarId: string; avatarName: string; coverUrl: string; videoUrl: string; width: number; height: number }[]; totalCount: number }>('/dh-batch-v2/avatars'),
+};

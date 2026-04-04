@@ -35,6 +35,7 @@ export class DigitalHumanService {
     @InjectQueue('batch-production') private readonly batchQueue: Queue,
     @InjectQueue('digital-human-video') private readonly dhVideoQueue: Queue,
     @InjectQueue('mixcut-production') private readonly mixcutQueue: Queue,
+    @InjectQueue('dh-batch-v2') private readonly dhBatchV2Queue: Queue,
   ) {}
 
   // ==================== Voices ====================
@@ -916,6 +917,152 @@ export class DigitalHumanService {
       where: { id, userId, type: 'DIGITAL_HUMAN_VIDEO' },
     });
     if (!job) throw new NotFoundException('视频任务不存在');
+    return job;
+  }
+
+  // ==================== DH Batch V2 (交错混剪) ====================
+
+  async listBuiltinAvatars() {
+    const imsProvider = this.providers.batchComposeProvider;
+    return imsProvider.listBuiltinAvatars();
+  }
+
+  async createDhBatchV2Job(
+    userId: string,
+    data: {
+      channel: 'A' | 'B';
+      builtinAvatarId?: string;
+      avatarId?: string;
+      voiceId: string;
+      scriptIds: string[];
+      materialIds?: string[];
+      bgMusic?: string;
+      videoCount: number;
+      resolution: string;
+      subtitleConfig?: any;
+      transitionId?: string;
+      speechRate?: number;
+      mediaVolume?: number;
+      speechVolume?: number;
+      bgMusicVolume?: number;
+      maxDuration?: number;
+      crf?: number;
+    },
+  ) {
+    // Validate voice
+    const voice = await this.prisma.voice.findFirst({
+      where: {
+        voiceId: data.voiceId,
+        status: 'READY',
+        OR: [{ userId }, { isPublic: true }],
+      },
+    });
+    if (!voice) throw new BadRequestException('Voice not found or not ready');
+
+    // Channel B: validate avatar
+    let avatarUrl: string | undefined;
+    if (data.channel === 'B') {
+      if (!data.avatarId) throw new BadRequestException('Channel B 需要选择自定义数字人形象');
+      const avatar = await this.prisma.material.findFirst({
+        where: { id: data.avatarId, OR: [{ userId }, { isPublic: true }] },
+      });
+      if (!avatar) throw new BadRequestException('Avatar not found');
+      const faceDetect = (avatar.metadata as any)?.faceDetect;
+      if (!faceDetect?.valid) {
+        throw new BadRequestException('该形象未通过人脸检测，请先进行人脸检测');
+      }
+      avatarUrl = avatar.url;
+    }
+
+    // Channel A: validate builtin avatar
+    if (data.channel === 'A' && !data.builtinAvatarId) {
+      throw new BadRequestException('Channel A 需要选择内置数字人');
+    }
+
+    // Validate scripts
+    const scripts = await this.prisma.script.findMany({
+      where: { id: { in: data.scriptIds }, userId },
+    });
+    if (scripts.length === 0) throw new BadRequestException('No valid scripts selected');
+
+    // Fetch materials
+    let materials: any[] = [];
+    if (data.materialIds?.length) {
+      materials = await this.prisma.material.findMany({
+        where: { id: { in: data.materialIds }, OR: [{ userId }, { isPublic: true }] },
+      });
+    }
+    if (materials.length === 0) {
+      throw new BadRequestException('交错混剪需要至少一个素材视频');
+    }
+
+    // Deduct credits
+    const costPerVideo = 20;
+    const totalCost = data.videoCount * costPerVideo;
+    await this.userService.deductCredits(userId, totalCost, `数字人交错混剪 x${data.videoCount}`);
+
+    // Create generation record
+    const job = await this.prisma.generation.create({
+      data: {
+        userId,
+        type: 'DH_BATCH_V2',
+        status: 'PENDING',
+        provider: data.channel === 'A' ? 'aliyun-ims-avatar' : 'aliyun-wan+ims',
+        creditsUsed: totalCost,
+        input: {
+          channel: data.channel,
+          builtinAvatarId: data.builtinAvatarId,
+          avatarUrl,
+          voiceId: data.voiceId,
+          scripts: scripts.map((s) => ({ id: s.id, title: s.title, content: s.content })),
+          materials: materials.map((m) => ({ id: m.id, name: m.name, type: m.type, url: m.url })),
+          bgMusic: data.bgMusic,
+          videoCount: data.videoCount,
+          resolution: data.resolution,
+          subtitleConfig: data.subtitleConfig,
+          transitionId: data.transitionId,
+          speechRate: data.speechRate,
+          mediaVolume: data.mediaVolume,
+          speechVolume: data.speechVolume,
+          bgMusicVolume: data.bgMusicVolume,
+          maxDuration: data.maxDuration,
+          crf: data.crf,
+        },
+      },
+    });
+
+    // Dispatch to queue
+    await this.dhBatchV2Queue.add(
+      'dh-batch-v2',
+      {
+        jobId: job.id,
+        userId,
+        channel: data.channel,
+        input: job.input,
+      },
+      {
+        attempts: 1,
+        backoff: { type: 'exponential', delay: 10000 },
+      },
+    );
+
+    this.logger.log(`DhBatchV2 job ${job.id} queued: channel=${data.channel}, videos=${data.videoCount}`);
+    return job;
+  }
+
+  async listDhBatchV2Jobs(userId: string) {
+    return this.prisma.generation.findMany({
+      where: { userId, type: 'DH_BATCH_V2' },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  async getDhBatchV2Job(userId: string, id: string) {
+    const job = await this.prisma.generation.findFirst({
+      where: { id, userId, type: 'DH_BATCH_V2' },
+    });
+    if (!job) throw new NotFoundException('任务不存在');
     return job;
   }
 }
