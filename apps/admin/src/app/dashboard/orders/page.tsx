@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { adminFetch } from '@/lib/api';
+import { adminApi, adminFetch } from '@/lib/api';
 import { formatOrderAmount } from '@/lib/order-amount';
 
 export default function AdminOrdersPage() {
@@ -9,6 +9,8 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -20,6 +22,32 @@ export default function AdminOrdersPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [page]);
+
+  const updateOrderStatus = async (orderId: string, status: 'PAID' | 'FAILED') => {
+    setUpdatingOrderId(orderId);
+    setNotice(null);
+
+    try {
+      const updated = await adminApi.updateOrderStatus(orderId, status);
+      setOrders((current) =>
+        current.map((order) => (order.id === orderId ? { ...order, ...updated } : order)),
+      );
+      setNotice({
+        type: 'success',
+        message:
+          status === 'PAID'
+            ? '订单已标记为已入账，用户积分已同步增加。'
+            : '订单已标记为失败。',
+      });
+    } catch (error) {
+      setNotice({
+        type: 'error',
+        message: error instanceof Error ? error.message : '更新订单状态失败，请稍后重试。',
+      });
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
 
   const statusLabels: Record<string, string> = {
     PENDING: '待支付', PAID: '已支付', FAILED: '失败', REFUNDED: '已退款',
@@ -33,6 +61,18 @@ export default function AdminOrdersPage() {
     <div>
       <h1 className="mb-6 text-2xl font-bold">订单管理</h1>
 
+      {notice && (
+        <div
+          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+            notice.type === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-rose-200 bg-rose-50 text-rose-800'
+          }`}
+        >
+          {notice.message}
+        </div>
+      )}
+
       <div className="rounded-xl border bg-card shadow-sm">
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/50">
@@ -43,17 +83,18 @@ export default function AdminOrdersPage() {
               <th className="px-4 py-3 text-left font-medium">积分</th>
               <th className="px-4 py-3 text-left font-medium">状态</th>
               <th className="px-4 py-3 text-left font-medium">创建时间</th>
+              <th className="px-4 py-3 text-left font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">加载中...</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">加载中...</td>
               </tr>
             ) : orders.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                  暂无订单数据（当前为管理员手动充值模式）
+                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                  暂无人工充值申请
                 </td>
               </tr>
             ) : (
@@ -70,6 +111,30 @@ export default function AdminOrdersPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
                     {new Date(order.createdAt).toLocaleString('zh-CN')}
+                  </td>
+                  <td className="px-4 py-3">
+                    {order.status === 'PENDING' ? (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'PAID')}
+                          disabled={updatingOrderId === order.id}
+                          className="rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {updatingOrderId === order.id ? '处理中...' : '标记已入账'}
+                        </button>
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'FAILED')}
+                          disabled={updatingOrderId === order.id}
+                          className="rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          标记失败
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {order.status === 'PAID' ? '已完成入账' : '无需处理'}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))

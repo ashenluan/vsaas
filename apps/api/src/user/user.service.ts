@@ -16,6 +16,13 @@ export class UserService {
     return Number.NaN;
   }
 
+  private serializeOrder<T extends { amount: unknown }>(order: T): T & { amount: number } {
+    return {
+      ...order,
+      amount: this.normalizeAmount(order.amount),
+    };
+  }
+
   async getProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -152,6 +159,34 @@ export class UserService {
     }));
   }
 
+  async createManualTopUpOrder(userId: string, packageId: string) {
+    if (!packageId) {
+      throw new BadRequestException('packageId is required');
+    }
+
+    const creditPackage = await this.prisma.creditPackage.findFirst({
+      where: { id: packageId, isActive: true },
+    });
+
+    if (!creditPackage) {
+      throw new NotFoundException('Credit package not found');
+    }
+
+    const order = await this.prisma.order.create({
+      data: {
+        userId,
+        packageId: creditPackage.id,
+        amount: this.normalizeAmount(creditPackage.price),
+        credits: creditPackage.credits,
+        currency: creditPackage.currency,
+        paymentMethod: 'MANUAL',
+        status: 'PENDING',
+      },
+    });
+
+    return this.serializeOrder(order);
+  }
+
   async getOrders(userId: string, page: number = 1, pageSize: number = 20) {
     const [items, total] = await Promise.all([
       this.prisma.order.findMany({
@@ -164,10 +199,7 @@ export class UserService {
     ]);
 
     return {
-      items: items.map((order) => ({
-        ...order,
-        amount: this.normalizeAmount(order.amount),
-      })),
+      items: items.map((order) => this.serializeOrder(order)),
       total,
       page,
       pageSize,

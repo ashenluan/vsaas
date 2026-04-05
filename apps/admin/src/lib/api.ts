@@ -75,6 +75,11 @@ export const adminApi = {
   getProviderAnalytics: () => adminFetch('/admin/analytics/providers'),
   getCreditAnalytics: (days = 30) => adminFetch(`/admin/analytics/credits?days=${days}`),
   getCreditPackages: () => adminFetch('/admin/pricing/packages'),
+  updateOrderStatus: (id: string, status: string) =>
+    adminFetch(`/admin/orders/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
 
   // Config
   listProviders: () => adminFetch('/admin/config/providers'),

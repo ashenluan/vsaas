@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { userApi } from '@/lib/api';
 import type { CreditPackage, Order } from '@vsaas/shared-types';
-import { Wallet, Sparkles, CreditCard, Check } from 'lucide-react';
+import { Wallet, Sparkles, CreditCard, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +33,8 @@ export default function BillingPage() {
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submittingPackageId, setSubmittingPackageId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -48,8 +50,25 @@ export default function BillingPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleTopUp = (pack: CreditPackage) => {
-    alert(`当前为人工充值模式，请联系管理员为您充值「${pack.name}」：${pack.credits} 积分，价格 ${formatPrice(pack.price)}。`);
+  const handleTopUp = async (pack: CreditPackage) => {
+    setSubmittingPackageId(pack.id);
+    setNotice(null);
+
+    try {
+      const order = await userApi.createManualTopUpOrder(pack.id);
+      setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)].slice(0, 6));
+      setNotice({
+        type: 'success',
+        message: `已提交「${pack.name}」人工充值申请，管理员确认后会为您入账 ${pack.credits} 积分。`,
+      });
+    } catch (error) {
+      setNotice({
+        type: 'error',
+        message: error instanceof Error ? error.message : '提交充值申请失败，请稍后重试。',
+      });
+    } finally {
+      setSubmittingPackageId(null);
+    }
   };
 
   return (
@@ -98,6 +117,20 @@ export default function BillingPage() {
             <h2 className="text-xl font-bold text-slate-900 tracking-tight">充值积分</h2>
             <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 font-bold px-3 py-1 text-xs">人工充值</Badge>
           </div>
+
+          {notice && (
+            <Card
+              className={`mb-4 rounded-2xl border shadow-sm ${
+                notice.type === 'success'
+                  ? 'border-emerald-200 bg-emerald-50'
+                  : 'border-rose-200 bg-rose-50'
+              }`}
+            >
+              <CardContent className="px-4 py-3 text-sm font-medium text-slate-700">
+                {notice.message}
+              </CardContent>
+            </Card>
+          )}
 
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -167,8 +200,16 @@ export default function BillingPage() {
                         : 'bg-slate-100 text-slate-900 hover:bg-slate-200 hover:shadow-md border border-slate-200'
                     }`}
                     onClick={() => handleTopUp(pack)}
+                    disabled={submittingPackageId === pack.id}
                   >
-                    人工充值
+                    {submittingPackageId === pack.id ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 size={16} className="animate-spin" />
+                        提交中...
+                      </span>
+                    ) : (
+                      '提交人工充值申请'
+                    )}
                   </Button>
                 </CardContent>
               </Card>
@@ -197,7 +238,7 @@ export default function BillingPage() {
                     <CreditCard size={28} className="text-slate-300" />
                   </div>
                   <h3 className="text-base font-semibold text-slate-700 mb-1">暂无交易记录</h3>
-                  <p className="text-sm text-slate-500 max-w-[250px]">管理员为您充值后，最近订单会显示在这里。</p>
+                  <p className="text-sm text-slate-500 max-w-[250px]">提交人工充值申请后，最近订单会显示在这里。</p>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">

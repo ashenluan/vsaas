@@ -21,6 +21,13 @@ export class AdminService {
     return Number.NaN;
   }
 
+  private serializeOrder<T extends { amount: unknown }>(order: T): T & { amount: number } {
+    return {
+      ...order,
+      amount: this.normalizeAmount(order.amount),
+    };
+  }
+
   async listUsers(query: { page?: number; pageSize?: number; search?: string; role?: string; status?: string }) {
     const { page = 1, pageSize = 20, search, role, status } = query;
     const where: any = {};
@@ -215,7 +222,7 @@ export class AdminService {
       }),
       this.prisma.order.count({ where }),
     ]);
-    return { items, total, page, pageSize };
+    return { items: items.map((order) => this.serializeOrder(order)), total, page, pageSize };
   }
 
   async updateOrderStatus(id: string, status: string) {
@@ -223,9 +230,52 @@ export class AdminService {
     if (!validStatuses.includes(status)) {
       throw new BadRequestException(`无效的订单状态，可选值: ${validStatuses.join(', ')}`);
     }
-    return this.prisma.order.update({
-      where: { id },
-      data: { status: status as any, ...(status === 'PAID' ? { paidAt: new Date() } : {}) },
+
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id },
+      });
+
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+
+      if (order.status === status) {
+        return this.serializeOrder(order);
+      }
+
+      if (order.status === 'PAID' && status !== 'PAID') {
+        throw new BadRequestException('已入账订单暂不支持改为其他状态，请通过人工退款/积分调整处理');
+      }
+
+      if (status === 'PAID') {
+        const updatedUser = await tx.user.update({
+          where: { id: order.userId },
+          data: { creditBalance: { increment: order.credits } },
+          select: { creditBalance: true },
+        });
+
+        await tx.creditTransaction.create({
+          data: {
+            userId: order.userId,
+            amount: order.credits,
+            type: 'PURCHASE',
+            description: `人工充值订单入账: ${order.id}`,
+            referenceId: order.id,
+            balanceAfter: updatedUser.creditBalance,
+          },
+        });
+      }
+
+      const updatedOrder = await tx.order.update({
+        where: { id },
+        data: {
+          status: status as any,
+          paidAt: status === 'PAID' ? new Date() : null,
+        },
+      });
+
+      return this.serializeOrder(updatedOrder);
     });
   }
 

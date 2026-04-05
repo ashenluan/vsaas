@@ -72,4 +72,12 @@ export class UserController {
       pageSize ? parseInt(pageSize, 10) : 20,
     );
   }
+
+  @Post('orders')
+  createOrder(
+    @Req() req: any,
+    @Body() body: { packageId?: string },
+  ) {
+    return this.userService.createManualTopUpOrder(req.user.sub, body.packageId ?? '');
+  }
 }

@@ -133,6 +133,11 @@ export const userApi = {
   getCreditHistory: (page = 1, pageSize = 20) =>
     apiFetch(`/user/credits/history?page=${page}&pageSize=${pageSize}`),
   getBillingPackages: () => apiFetch<CreditPackage[]>('/user/billing/packages'),
+  createManualTopUpOrder: (packageId: string) =>
+    apiFetch<Order>('/user/orders', {
+      method: 'POST',
+      body: JSON.stringify({ packageId }),
+    }),
   getOrders: (page = 1, pageSize = 20) =>
     apiFetch<{ items: Order[]; total: number; page: number; pageSize: number }>(
       `/user/orders?page=${page}&pageSize=${pageSize}`,

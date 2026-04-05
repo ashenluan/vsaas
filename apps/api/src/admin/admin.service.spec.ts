@@ -6,16 +6,23 @@ function createMockPrisma() {
     user: {
       count: vi.fn(),
       aggregate: vi.fn(),
+      update: vi.fn(),
     },
     generation: {
       count: vi.fn(),
     },
     creditTransaction: {
       aggregate: vi.fn(),
+      create: vi.fn(),
     },
     creditPackage: {
       findMany: vi.fn(),
     },
+    order: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    $transaction: vi.fn(),
   };
 }
 
@@ -112,6 +119,122 @@ describe('AdminService', () => {
     ]);
     expect(prisma.creditPackage.findMany).toHaveBeenCalledWith({
       orderBy: [{ sortOrder: 'asc' }, { credits: 'asc' }],
+    });
+  });
+
+  describe('updateOrderStatus', () => {
+    it('credits the user exactly once when a pending order is marked as paid', async () => {
+      const txOrder = {
+        findUnique: vi.fn(),
+        update: vi.fn(),
+      };
+      const txUser = {
+        update: vi.fn(),
+      };
+      const txCreditTransaction = {
+        create: vi.fn(),
+      };
+
+      txOrder.findUnique.mockResolvedValue({
+        id: 'order-1',
+        userId: 'user-1',
+        amount: { toString: () => '29.90' },
+        credits: 200,
+        status: 'PENDING',
+      });
+      txUser.update.mockResolvedValue({ creditBalance: 320 });
+      txOrder.update.mockResolvedValue({
+        id: 'order-1',
+        userId: 'user-1',
+        amount: { toString: () => '29.90' },
+        credits: 200,
+        status: 'PAID',
+        paidAt: new Date('2026-04-06T08:30:00.000Z'),
+      });
+
+      prisma.$transaction.mockImplementation((fn: any) =>
+        fn({
+          order: txOrder,
+          user: txUser,
+          creditTransaction: txCreditTransaction,
+        }),
+      );
+
+      const result = await service.updateOrderStatus('order-1', 'PAID');
+
+      expect(txUser.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { creditBalance: { increment: 200 } },
+        select: { creditBalance: true },
+      });
+      expect(txCreditTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'user-1',
+          amount: 200,
+          type: 'PURCHASE',
+          referenceId: 'order-1',
+          balanceAfter: 320,
+        }),
+      });
+      expect(txOrder.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: {
+          status: 'PAID',
+          paidAt: new Date('2026-04-06T08:30:00.000Z'),
+        },
+      });
+      expect(result).toEqual({
+        id: 'order-1',
+        userId: 'user-1',
+        amount: 29.9,
+        credits: 200,
+        status: 'PAID',
+        paidAt: new Date('2026-04-06T08:30:00.000Z'),
+      });
+    });
+
+    it('does not double credit an order that is already paid', async () => {
+      const txOrder = {
+        findUnique: vi.fn(),
+        update: vi.fn(),
+      };
+      const txUser = {
+        update: vi.fn(),
+      };
+      const txCreditTransaction = {
+        create: vi.fn(),
+      };
+
+      txOrder.findUnique.mockResolvedValue({
+        id: 'order-1',
+        userId: 'user-1',
+        amount: { toString: () => '29.90' },
+        credits: 200,
+        status: 'PAID',
+        paidAt: new Date('2026-04-06T08:25:00.000Z'),
+      });
+
+      prisma.$transaction.mockImplementation((fn: any) =>
+        fn({
+          order: txOrder,
+          user: txUser,
+          creditTransaction: txCreditTransaction,
+        }),
+      );
+
+      const result = await service.updateOrderStatus('order-1', 'PAID');
+
+      expect(txUser.update).not.toHaveBeenCalled();
+      expect(txCreditTransaction.create).not.toHaveBeenCalled();
+      expect(txOrder.update).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        id: 'order-1',
+        userId: 'user-1',
+        amount: 29.9,
+        credits: 200,
+        status: 'PAID',
+        paidAt: new Date('2026-04-06T08:25:00.000Z'),
+      });
     });
   });
 });

@@ -20,10 +20,12 @@ function createMockPrisma() {
     },
     creditPackage: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
     },
     order: {
       findMany: vi.fn(),
       count: vi.fn(),
+      create: vi.fn(),
     },
     creditTransaction: {
       create: vi.fn(),
@@ -277,6 +279,59 @@ describe('UserService - 积分系统', () => {
         take: 10,
       });
       expect(prisma.order.count).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+    });
+
+    it('creates a pending manual top-up order from an active package', async () => {
+      prisma.creditPackage.findFirst.mockResolvedValue({
+        id: 'pkg-1',
+        name: '基础包',
+        credits: 200,
+        price: { toString: () => '29.90' },
+        currency: 'CNY',
+        isActive: true,
+        sortOrder: 2,
+      });
+      prisma.order.create.mockResolvedValue({
+        id: 'order-1',
+        userId: 'user-1',
+        packageId: 'pkg-1',
+        amount: { toString: () => '29.90' },
+        credits: 200,
+        currency: 'CNY',
+        status: 'PENDING',
+        paymentMethod: 'MANUAL',
+        createdAt: new Date('2026-04-06T09:00:00.000Z'),
+        paidAt: null,
+      });
+
+      const order = await service.createManualTopUpOrder('user-1', 'pkg-1');
+
+      expect(prisma.creditPackage.findFirst).toHaveBeenCalledWith({
+        where: { id: 'pkg-1', isActive: true },
+      });
+      expect(prisma.order.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-1',
+          packageId: 'pkg-1',
+          amount: 29.9,
+          credits: 200,
+          currency: 'CNY',
+          paymentMethod: 'MANUAL',
+          status: 'PENDING',
+        },
+      });
+      expect(order).toEqual({
+        id: 'order-1',
+        userId: 'user-1',
+        packageId: 'pkg-1',
+        amount: 29.9,
+        credits: 200,
+        currency: 'CNY',
+        status: 'PENDING',
+        paymentMethod: 'MANUAL',
+        createdAt: new Date('2026-04-06T09:00:00.000Z'),
+        paidAt: null,
+      });
     });
   });
 });
