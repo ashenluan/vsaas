@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsInt,
   IsNumber,
+  IsBoolean,
   Min,
   Max,
   MinLength,
@@ -44,8 +45,24 @@ export class CreateImageDto {
   style?: string;
 
   @IsOptional()
+  @IsString()
+  model?: string;
+
+  @IsOptional()
+  @IsString()
+  resolution?: string;
+
+  @IsOptional()
+  @IsString()
+  outputSize?: string;
+
+  @IsOptional()
   @IsNumber()
   seed?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  promptExtend?: boolean;
 
   @IsOptional()
   @IsString()

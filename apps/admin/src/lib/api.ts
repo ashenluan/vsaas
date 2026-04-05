@@ -1,4 +1,5 @@
 import { clearAdminTokens, getAdminAccessToken } from './admin-auth-storage';
+import type { PricingCatalogModelEntry, PricingCostUnit } from '@vsaas/shared-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -75,6 +76,24 @@ export const adminApi = {
   getProviderAnalytics: () => adminFetch('/admin/analytics/providers'),
   getCreditAnalytics: (days = 30) => adminFetch(`/admin/analytics/credits?days=${days}`),
   getCreditPackages: () => adminFetch('/admin/pricing/packages'),
+  listModels: () => adminFetch<Array<PricingCatalogModelEntry & { providerName?: string; available: boolean; reason?: string }>>('/admin/models'),
+  updateModel: (
+    provider: string,
+    modelId: string,
+    data: {
+      displayName?: string;
+      creditCost?: number;
+      costUnit?: PricingCostUnit;
+      isActive?: boolean;
+      sortOrder?: number;
+      maxDuration?: number;
+      capabilities?: Record<string, unknown>;
+    },
+  ) =>
+    adminFetch<PricingCatalogModelEntry>(`/admin/models/${encodeURIComponent(provider)}/${encodeURIComponent(modelId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
   updateOrderStatus: (id: string, status: string) =>
     adminFetch(`/admin/orders/${id}/status`, {
       method: 'PATCH',

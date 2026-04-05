@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { generationApi } from '@/lib/api';
+import { getAdvancedCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { useJobUpdates } from '@/components/ws-provider';
 import { uploadToOSS } from '@/lib/upload';
 import { cn } from '@/lib/utils';
@@ -50,6 +51,8 @@ export default function HandheldProductPage() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const productInputRef = useRef<HTMLInputElement>(null);
   const personInputRef = useRef<HTMLInputElement>(null);
+  const pricingCatalog = useGenerationPricingCatalog();
+  const creditCost = getAdvancedCredits(pricingCatalog, 'handheld-product') ?? 5;
 
   useJobUpdates(activeJobId, (data) => {
     setResult((prev: any) => ({ ...prev, ...data }));
@@ -272,7 +275,7 @@ export default function HandheldProductPage() {
              <><Wand2 size={18} /> 生成手持图</>}
           </Button>
           <p className="mt-2.5 text-center text-xs text-muted-foreground">
-            消耗 <span className="font-semibold text-primary">{5 * count}</span> 积分
+            消耗 <span className="font-semibold text-primary">{creditCost * count}</span> 积分
           </p>
         </div>
 

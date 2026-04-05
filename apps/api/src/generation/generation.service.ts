@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProviderRegistry } from '../provider/provider.registry';
 import { UserService } from '../user/user.service';
 import { CREDIT_COSTS } from '../common/credit-costs';
+import { PricingService } from '../pricing/pricing.service';
 
 const VALID_GENERATION_JOB_TYPES = new Set([
   'TEXT_TO_IMAGE',
@@ -33,6 +34,7 @@ export class GenerationService {
     private readonly prisma: PrismaService,
     private readonly providers: ProviderRegistry,
     private readonly userService: UserService,
+    private readonly pricing: PricingService,
     @InjectQueue('image-generation') private readonly imageQueue: Queue,
     @InjectQueue('video-generation') private readonly videoQueue: Queue,
     @InjectQueue('storyboard-compose') private readonly storyboardQueue: Queue,
@@ -46,6 +48,8 @@ export class GenerationService {
     providerId: string;
     count: number;
     model?: string;
+    resolution?: string;
+    outputSize?: string;
     style?: string;
     seed?: number;
     promptExtend?: boolean;
@@ -58,9 +62,8 @@ export class GenerationService {
     }
     if (!providerStatus.available) throw new BadRequestException(`Provider ${input.providerId} is not available`);
 
-    const provider = providerStatus.provider;
-
-    const estimatedCost = provider.estimateCost(input);
+    const pricing = await this.pricing.getImageCharge(input);
+    const estimatedCost = pricing.totalCredits;
     await this.userService.deductCredits(userId, estimatedCost, `图片生成: ${input.prompt?.slice(0, 50)}`);
 
     let job: any;
@@ -71,6 +74,7 @@ export class GenerationService {
           type: 'TEXT_TO_IMAGE',
           status: 'PENDING',
           provider: input.providerId,
+          model: input.model ?? pricing.entry.modelId,
           creditsUsed: estimatedCost,
           input: {
             prompt: input.prompt,
@@ -79,6 +83,8 @@ export class GenerationService {
             height: input.height,
             count: input.count,
             model: input.model,
+            resolution: input.resolution,
+            outputSize: input.outputSize,
             style: input.style,
             seed: input.seed,
             promptExtend: input.promptExtend,
@@ -114,23 +120,27 @@ export class GenerationService {
     providerId: string;
     duration?: number;
     resolution?: string;
+    model?: string;
     referenceImage?: string;
     media?: { type: string; url: string; reference_voice?: string }[];
+    count?: number;
+    aspectRatio?: string;
     ratio?: string;
     negativePrompt?: string;
     promptExtend?: boolean;
   }) {
-    const providerStatus = await this.providers.getVideoProviderStatus(input.providerId);
+    const normalizedInput = this.pricing.normalizeVideoRuntimeInput(input);
+
+    const providerStatus = await this.providers.getVideoProviderStatus(normalizedInput.providerId);
     if (!providerStatus.provider) throw new BadRequestException(`Unknown provider: ${input.providerId}`);
     if (!providerStatus.isEnabled) {
       throw new BadRequestException(`Provider ${input.providerId} is disabled by admin configuration`);
     }
     if (!providerStatus.available) throw new BadRequestException(`Provider ${input.providerId} is not available`);
 
-    const provider = providerStatus.provider;
-
-    const estimatedCost = provider.estimateCost(input);
-    await this.userService.deductCredits(userId, estimatedCost, `视频生成: ${input.prompt?.slice(0, 50)}`);
+    const pricing = await this.pricing.getVideoCharge(normalizedInput);
+    const estimatedCost = pricing.totalCredits;
+    await this.userService.deductCredits(userId, estimatedCost, `视频生成: ${normalizedInput.prompt?.slice(0, 50)}`);
 
     let job: any;
     try {
@@ -139,17 +149,21 @@ export class GenerationService {
           userId,
           type: 'TEXT_TO_VIDEO',
           status: 'PENDING',
-          provider: input.providerId,
+          provider: normalizedInput.providerId,
+          model: normalizedInput.model ?? pricing.entry.modelId,
           creditsUsed: estimatedCost,
           input: {
-            prompt: input.prompt,
-            duration: input.duration,
-            resolution: input.resolution,
-            referenceImage: input.referenceImage,
-            ...(input.media && { media: input.media }),
-            ...(input.ratio && { ratio: input.ratio }),
-            ...(input.negativePrompt && { negativePrompt: input.negativePrompt }),
-            ...(input.promptExtend !== undefined && { promptExtend: input.promptExtend }),
+            prompt: normalizedInput.prompt,
+            duration: normalizedInput.duration,
+            resolution: normalizedInput.resolution,
+            model: normalizedInput.model,
+            referenceImage: normalizedInput.referenceImage,
+            ...(normalizedInput.media && { media: normalizedInput.media }),
+            ...(normalizedInput.aspectRatio && { aspectRatio: normalizedInput.aspectRatio }),
+            ...(normalizedInput.ratio && { ratio: normalizedInput.ratio }),
+            ...(normalizedInput.count !== undefined && { count: normalizedInput.count }),
+            ...(normalizedInput.negativePrompt && { negativePrompt: normalizedInput.negativePrompt }),
+            ...(normalizedInput.promptExtend !== undefined && { promptExtend: normalizedInput.promptExtend }),
           },
         },
       });
@@ -159,7 +173,7 @@ export class GenerationService {
       await this.videoQueue.add('generate', {
         jobId: job.id,
         userId,
-        input,
+        input: normalizedInput,
       }, {
         attempts: 2,
         backoff: { type: 'exponential', delay: 5000 },
@@ -346,6 +360,10 @@ export class GenerationService {
       image: await this.providers.listPublicImageProviders(),
       video: await this.providers.listPublicVideoProviders(),
     };
+  }
+
+  async getPricingCatalog() {
+    return this.pricing.getPublicPricingCatalog();
   }
 
   // ========== 一键成片 — 合成分镜视频 ==========

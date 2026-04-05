@@ -1,5 +1,5 @@
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from './auth';
-import type { CreditPackage, Order } from '@vsaas/shared-types';
+import type { CreditPackage, Order, PublicPricingCatalog } from '@vsaas/shared-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 export const API_UNAUTHORIZED_EVENT = 'api:unauthorized';
@@ -152,6 +152,7 @@ export const generationApi = {
     apiFetch('/generations/video', { method: 'POST', body: JSON.stringify(data) }),
   composeStoryboard: (data: any) =>
     apiFetch('/generations/storyboard/compose', { method: 'POST', body: JSON.stringify(data) }),
+  getPricingCatalog: () => apiFetch<PublicPricingCatalog>('/generations/pricing'),
   list: (params?: { type?: string; status?: string; page?: number; provider?: string }) => {
     const qs = new URLSearchParams();
     if (params?.type) qs.set('type', params.type);

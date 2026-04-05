@@ -214,7 +214,7 @@ export default function VideoReversePage() {
             )}
           </Button>
           <p className="mt-2.5 text-center text-xs text-muted-foreground">
-            消耗 <span className="font-semibold text-primary">5</span> 积分
+            当前不消耗生成积分
           </p>
         </div>
 

@@ -99,7 +99,7 @@ export interface ModelGenerationPageProps {
   /** Render model-specific parameter controls (duration, resolution, etc.) */
   renderParameters: () => React.ReactNode;
   /** Return estimated credit cost for the current parameter state */
-  estimateCost: () => number;
+  estimateCost: () => number | null;
   /** Show negative-prompt toggle (image models) */
   showNegativePrompt?: boolean;
   /** Custom placeholder for the prompt textarea */
@@ -142,6 +142,7 @@ export function ModelGenerationPage({
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const estimatedCost = estimateCost();
 
   const genType = type === 'image' ? 'IMAGE' : 'VIDEO';
 
@@ -430,7 +431,7 @@ export function ModelGenerationPage({
             )}
           </Button>
           <p className="mt-2.5 text-center text-xs text-muted-foreground">
-            本次消耗 <span className="font-semibold text-primary">{estimateCost()}</span> 积分
+            本次消耗 <span className="font-semibold text-primary">{estimatedCost === null ? '--' : estimatedCost}</span> 积分
           </p>
         </div>
 

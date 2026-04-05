@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../prisma/prisma.service';
 import { ProviderConfigService } from '../provider/provider-config.service';
 import { ProviderRegistry } from '../provider/provider.registry';
+import { PricingService } from '../pricing/pricing.service';
 
 @Injectable()
 export class AdminService {
@@ -10,6 +11,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly providerConfigs: ProviderConfigService,
     private readonly providers: ProviderRegistry,
+    private readonly pricing: PricingService,
   ) {}
 
   private normalizeAmount(amount: unknown): number {
@@ -288,6 +290,37 @@ export class AdminService {
       ...pkg,
       price: this.normalizeAmount(pkg.price),
     }));
+  }
+
+  async listModelConfigs() {
+    const [models, diagnostics] = await Promise.all([
+      this.pricing.listEditableModelCatalog(),
+      this.providers.listAdminProviderDiagnostics(),
+    ]);
+    const diagnosticsByProvider = new Map(diagnostics.map((diagnostic) => [diagnostic.provider, diagnostic]));
+
+    return models.map((model) => ({
+      ...model,
+      providerName: diagnosticsByProvider.get(model.provider)?.name ?? model.provider,
+      available: diagnosticsByProvider.get(model.provider)?.available ?? false,
+      reason: diagnosticsByProvider.get(model.provider)?.reason,
+    }));
+  }
+
+  async updateModelConfig(
+    provider: string,
+    modelId: string,
+    data: {
+      displayName?: string;
+      creditCost?: number;
+      costUnit?: 'per_image' | 'per_second' | 'per_job';
+      isActive?: boolean;
+      capabilities?: Record<string, unknown>;
+      maxDuration?: number;
+      sortOrder?: number;
+    },
+  ) {
+    return this.pricing.updateModelCatalogEntry(provider, modelId, data);
   }
 
   async getDailyStats(days: number = 30) {

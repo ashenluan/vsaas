@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { generationApi } from '@/lib/api';
+import { getAdvancedCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { useJobUpdates } from '@/components/ws-provider';
 import { uploadToOSS } from '@/lib/upload';
 import { cn } from '@/lib/utils';
@@ -47,8 +48,11 @@ export default function VirtualTryOnPage() {
   const personInputRef = useRef<HTMLInputElement>(null);
   const topInputRef = useRef<HTMLInputElement>(null);
   const bottomInputRef = useRef<HTMLInputElement>(null);
+  const pricingCatalog = useGenerationPricingCatalog();
 
-  const creditCost = tryonModel === 'aitryon-plus' ? 12 : 8;
+  const baseTryonCost = getAdvancedCredits(pricingCatalog, 'virtual-tryon') ?? 8;
+  const plusTryonCost = getAdvancedCredits(pricingCatalog, 'virtual-tryon-plus') ?? 12;
+  const creditCost = tryonModel === 'aitryon-plus' ? plusTryonCost : baseTryonCost;
 
   useJobUpdates(activeJobId, (data) => {
     setResult((prev: any) => ({ ...prev, ...data }));
@@ -226,7 +230,7 @@ export default function VirtualTryOnPage() {
             >
               <div className="text-sm font-semibold text-foreground">基础版</div>
               <div className="mt-0.5 text-[11px] text-muted-foreground">aitryon · 速度快，效果好</div>
-              <div className="mt-1.5 text-xs font-medium text-primary">8 积分</div>
+              <div className="mt-1.5 text-xs font-medium text-primary">{baseTryonCost} 积分</div>
             </button>
             <button
               onClick={() => setTryonModel('aitryon-plus')}
@@ -242,7 +246,7 @@ export default function VirtualTryOnPage() {
                 <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">推荐</span>
               </div>
               <div className="mt-0.5 text-[11px] text-muted-foreground">aitryon-plus · 更高质量</div>
-              <div className="mt-1.5 text-xs font-medium text-primary">12 积分</div>
+              <div className="mt-1.5 text-xs font-medium text-primary">{plusTryonCost} 积分</div>
             </button>
           </div>
         </div>

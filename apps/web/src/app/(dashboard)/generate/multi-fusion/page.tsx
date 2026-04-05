@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { generationApi } from '@/lib/api';
+import { getAdvancedCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { useJobUpdates } from '@/components/ws-provider';
 import { uploadToOSS } from '@/lib/upload';
 import { cn } from '@/lib/utils';
@@ -49,6 +50,8 @@ export default function MultiFusionPage() {
   const [error, setError] = useState('');
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const pricingCatalog = useGenerationPricingCatalog();
+  const creditCost = getAdvancedCredits(pricingCatalog, 'multi-fusion') ?? 10;
 
   useJobUpdates(activeJobId, (data) => {
     setResult((prev: any) => ({ ...prev, ...data }));
@@ -250,7 +253,7 @@ export default function MultiFusionPage() {
              <><Wand2 size={18} /> 开始融合</>}
           </Button>
           <p className="mt-2.5 text-center text-xs text-muted-foreground">
-            消耗 <span className="font-semibold text-primary">10</span> 积分
+            消耗 <span className="font-semibold text-primary">{creditCost}</span> 积分
           </p>
         </div>
 

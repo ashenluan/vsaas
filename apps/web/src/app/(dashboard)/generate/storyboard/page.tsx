@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { generationApi } from '@/lib/api';
+import { getAdvancedCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { uploadToOSS } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -120,6 +121,8 @@ export default function StoryboardPage() {
   const [composeJobId, setComposeJobId] = useState<string | null>(null);
   const [composeResult, setComposeResult] = useState<any>(null);
   const [composeError, setComposeError] = useState('');
+  const pricingCatalog = useGenerationPricingCatalog();
+  const composeCreditCost = getAdvancedCredits(pricingCatalog, 'storyboard-compose') ?? 10;
 
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -784,7 +787,7 @@ export default function StoryboardPage() {
               )}
             </Button>
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              消耗 <span className="font-semibold text-primary">10</span> 积分 · 使用智能媒体服务合成
+              消耗 <span className="font-semibold text-primary">{composeCreditCost}</span> 积分 · 使用智能媒体服务合成
             </p>
           </div>
         )}

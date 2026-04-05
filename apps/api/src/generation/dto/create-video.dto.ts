@@ -46,6 +46,10 @@ export class CreateVideoDto {
 
   @IsOptional()
   @IsString()
+  model?: string;
+
+  @IsOptional()
+  @IsString()
   referenceImage?: string;
 
   // R2V fields
@@ -58,6 +62,16 @@ export class CreateVideoDto {
   @IsOptional()
   @IsString()
   ratio?: string;
+
+  @IsOptional()
+  @IsString()
+  aspectRatio?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  count?: number;
 
   @IsOptional()
   @IsString()

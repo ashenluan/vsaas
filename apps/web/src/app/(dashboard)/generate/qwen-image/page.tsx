@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ModelGenerationPage, OptionSelector } from '@/components/generation/model-generation-page';
+import { estimateModelCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { ImageIcon } from 'lucide-react';
 
 const MODELS = [
@@ -44,6 +45,7 @@ export default function QwenImagePage() {
   const [count, setCount] = useState(1);
   const [seed, setSeed] = useState('');
   const [promptExtend, setPromptExtend] = useState(true);
+  const pricingCatalog = useGenerationPricingCatalog();
 
   const [w, h] = size.split('x').map(Number);
 
@@ -133,7 +135,14 @@ export default function QwenImagePage() {
           </div>
         </>
       )}
-      estimateCost={() => count * (resolution === '2k' ? 8 : 5)}
+      estimateCost={() =>
+        estimateModelCredits(
+          pricingCatalog,
+          'qwen',
+          resolution === '2k' ? 'qwen-image-2k' : 'qwen-image-1k',
+          { count },
+        )
+      }
     />
   );
 }

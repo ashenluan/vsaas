@@ -18,6 +18,10 @@ function createMockPrisma() {
     creditPackage: {
       findMany: vi.fn(),
     },
+    modelConfig: {
+      findMany: vi.fn(),
+      update: vi.fn(),
+    },
     order: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -28,6 +32,13 @@ function createMockPrisma() {
 
 describe('AdminService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
+  let pricing: {
+    listEditableModelCatalog: ReturnType<typeof vi.fn>;
+    updateModelCatalogEntry: ReturnType<typeof vi.fn>;
+  };
+  let providers: {
+    listAdminProviderDiagnostics: ReturnType<typeof vi.fn>;
+  };
   let service: AdminService;
 
   beforeEach(() => {
@@ -35,7 +46,14 @@ describe('AdminService', () => {
     vi.setSystemTime(new Date('2026-04-06T08:30:00.000Z'));
 
     prisma = createMockPrisma();
-    service = new AdminService(prisma as any, {} as any, {} as any);
+    pricing = {
+      listEditableModelCatalog: vi.fn(),
+      updateModelCatalogEntry: vi.fn(),
+    };
+    providers = {
+      listAdminProviderDiagnostics: vi.fn(),
+    };
+    service = new AdminService(prisma as any, {} as any, providers as any, pricing as any);
   });
 
   afterEach(() => {
@@ -120,6 +138,85 @@ describe('AdminService', () => {
     expect(prisma.creditPackage.findMany).toHaveBeenCalledWith({
       orderBy: [{ sortOrder: 'asc' }, { credits: 'asc' }],
     });
+  });
+
+  it('lists editable model configs with provider availability context', async () => {
+    pricing.listEditableModelCatalog.mockResolvedValue([
+      {
+        id: 'qwen:qwen-image-2k',
+        persistedId: 'cfg-qwen-2k',
+        provider: 'qwen',
+        modelId: 'qwen-image-2k',
+        displayName: '通义万相 2K',
+        type: 'TEXT_TO_IMAGE',
+        creditCost: 7,
+        costUnit: 'per_image',
+        isActive: true,
+        capabilities: { resolution: '2k' },
+        maxDuration: null,
+        sortOrder: 20,
+      },
+    ]);
+    providers.listAdminProviderDiagnostics.mockResolvedValue([
+      {
+        provider: 'qwen',
+        name: '通义万相',
+        isEnabled: true,
+        available: true,
+      },
+    ]);
+
+    const models = await service.listModelConfigs();
+
+    expect(models).toEqual([
+      expect.objectContaining({
+        id: 'qwen:qwen-image-2k',
+        provider: 'qwen',
+        modelId: 'qwen-image-2k',
+        available: true,
+      }),
+    ]);
+  });
+
+  it('updates editable model config fields through the pricing catalog service', async () => {
+    pricing.updateModelCatalogEntry.mockResolvedValue({
+      id: 'sora:sora-2-pro',
+      provider: 'sora',
+      modelId: 'sora-2-pro',
+      displayName: 'Sora Pro',
+      type: 'TEXT_TO_VIDEO',
+      creditCost: 25,
+      costUnit: 'per_second',
+      isActive: false,
+      capabilities: null,
+      maxDuration: 25,
+      sortOrder: 40,
+      persistedId: 'cfg-sora-pro',
+    });
+
+    const updated = await service.updateModelConfig('sora', 'sora-2-pro', {
+      displayName: 'Sora Pro',
+      creditCost: 25,
+      isActive: false,
+      maxDuration: 25,
+      sortOrder: 40,
+    });
+
+    expect(pricing.updateModelCatalogEntry).toHaveBeenCalledWith('sora', 'sora-2-pro', {
+      displayName: 'Sora Pro',
+      creditCost: 25,
+      isActive: false,
+      maxDuration: 25,
+      sortOrder: 40,
+    });
+    expect(updated).toEqual(
+      expect.objectContaining({
+        provider: 'sora',
+        modelId: 'sora-2-pro',
+        creditCost: 25,
+        isActive: false,
+      }),
+    );
   });
 
   describe('updateOrderStatus', () => {

@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { generationApi } from '@/lib/api';
+import { getAdvancedCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { useJobUpdates } from '@/components/ws-provider';
 import { uploadToOSS } from '@/lib/upload';
 import { cn } from '@/lib/utils';
@@ -37,6 +38,8 @@ export default function StyleCopyPage() {
   const [error, setError] = useState('');
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pricingCatalog = useGenerationPricingCatalog();
+  const creditCost = getAdvancedCredits(pricingCatalog, 'style-copy') ?? 5;
 
   useJobUpdates(activeJobId, (data) => {
     setResult((prev: any) => ({ ...prev, ...data }));
@@ -199,8 +202,8 @@ export default function StyleCopyPage() {
              <><Wand2 size={18} /> 一键仿图</>}
           </Button>
           <p className="mt-2.5 text-center text-xs text-muted-foreground">
-            消耗 <span className="font-semibold text-primary">{5 * count}</span> 积分
-            {count > 1 && <span className="text-muted-foreground/60"> (5 × {count})</span>}
+            消耗 <span className="font-semibold text-primary">{creditCost * count}</span> 积分
+            {count > 1 && <span className="text-muted-foreground/60"> ({creditCost} × {count})</span>}
           </p>
         </div>
 

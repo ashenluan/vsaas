@@ -7,13 +7,15 @@ import { AdminConfigController } from './admin-config.controller';
 import { AdminOrdersController } from './admin-orders.controller';
 import { AdminAnalyticsController } from './admin-analytics.controller';
 import { AdminPricingController } from './admin-pricing.controller';
+import { AdminModelsController } from './admin-models.controller';
 import { AdminService } from './admin.service';
 import { UserModule } from '../user/user.module';
 import { AdminAuditInterceptor } from '../common/interceptors/admin-audit.interceptor';
 import { ProviderModule } from '../provider/provider.module';
+import { PricingModule } from '../pricing/pricing.module';
 
 @Module({
-  imports: [UserModule, ProviderModule],
+  imports: [UserModule, ProviderModule, PricingModule],
   controllers: [
     AdminUsersController,
     AdminJobsController,
@@ -22,6 +24,7 @@ import { ProviderModule } from '../provider/provider.module';
     AdminOrdersController,
     AdminAnalyticsController,
     AdminPricingController,
+    AdminModelsController,
   ],
   providers: [
     AdminService,

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ModelGenerationPage, OptionSelector } from '@/components/generation/model-generation-page';
+import { estimateModelCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { Video } from 'lucide-react';
 
 const MODELS = [
@@ -15,17 +16,10 @@ const ASPECT_RATIOS = [
   { label: '16:9 HD', value: '16:9', desc: '横屏视频' },
 ];
 
-const COUNTS = [
-  { label: '1 条', value: 1 },
-  { label: '3 条', value: 3 },
-  { label: '5 条', value: 5 },
-  { label: '10 条', value: 10 },
-];
-
 export default function VeoVideoPage() {
   const [model, setModel] = useState('fast');
   const [aspectRatio, setAspectRatio] = useState('9:16');
-  const [count, setCount] = useState(1);
+  const pricingCatalog = useGenerationPricingCatalog();
 
   return (
     <ModelGenerationPage
@@ -42,7 +36,6 @@ export default function VeoVideoPage() {
         providerId: 'veo',
         model,
         aspectRatio,
-        count,
         referenceImage,
       })}
       renderParameters={() => (
@@ -61,16 +54,15 @@ export default function VeoVideoPage() {
             value={aspectRatio}
             onChange={setAspectRatio}
           />
-          <OptionSelector
-            icon="🔢"
-            label="生成数量"
-            options={COUNTS}
-            value={count}
-            onChange={setCount}
-          />
         </>
       )}
-      estimateCost={() => count * (model === 'quality' ? 44 : model === 'standard' ? 30 : 20)}
+      estimateCost={() =>
+        estimateModelCredits(
+          pricingCatalog,
+          'veo',
+          model === 'quality' ? 'veo-quality' : model === 'standard' ? 'veo-standard' : 'veo-fast',
+        )
+      }
     />
   );
 }

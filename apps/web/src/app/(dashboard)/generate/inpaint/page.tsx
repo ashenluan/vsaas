@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { generationApi } from '@/lib/api';
+import { getAdvancedCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { useJobUpdates } from '@/components/ws-provider';
 import { uploadToOSS } from '@/lib/upload';
 import { cn } from '@/lib/utils';
@@ -52,8 +53,11 @@ export default function ImageEditPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
+  const pricingCatalog = useGenerationPricingCatalog();
 
-  const creditCost = editModel === 'wan2.7-image-pro' ? 10 : 5;
+  const baseEditCost = getAdvancedCredits(pricingCatalog, 'image-edit') ?? 5;
+  const proEditCost = getAdvancedCredits(pricingCatalog, 'image-edit-pro') ?? 10;
+  const creditCost = editModel === 'wan2.7-image-pro' ? proEditCost : baseEditCost;
 
   useJobUpdates(activeJobId, (data) => {
     setResult((prev: any) => ({ ...prev, ...data }));
@@ -267,7 +271,7 @@ export default function ImageEditPage() {
             >
               <div className="text-sm font-semibold text-foreground">标准版</div>
               <div className="mt-0.5 text-[11px] text-muted-foreground">wan2.7-image · 速度快</div>
-              <div className="mt-1.5 text-xs font-medium text-primary">5 积分</div>
+              <div className="mt-1.5 text-xs font-medium text-primary">{baseEditCost} 积分</div>
             </button>
             <button
               onClick={() => setEditModel('wan2.7-image-pro')}
@@ -283,7 +287,7 @@ export default function ImageEditPage() {
                 <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">4K</span>
               </div>
               <div className="mt-0.5 text-[11px] text-muted-foreground">wan2.7-image-pro · 高质量</div>
-              <div className="mt-1.5 text-xs font-medium text-primary">10 积分</div>
+              <div className="mt-1.5 text-xs font-medium text-primary">{proEditCost} 积分</div>
             </button>
           </div>
         </div>

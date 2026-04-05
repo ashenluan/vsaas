@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ModelGenerationPage, OptionSelector } from '@/components/generation/model-generation-page';
+import { estimateModelCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { Video } from 'lucide-react';
 
 const ASPECT_RATIOS = [
@@ -20,18 +21,11 @@ const DURATIONS = [
   { label: '10 秒', value: 10, desc: '更长时长' },
 ];
 
-const COUNTS = [
-  { label: '1 条', value: 1 },
-  { label: '3 条', value: 3 },
-  { label: '5 条', value: 5 },
-  { label: '10 条', value: 10 },
-];
-
 export default function JimengVideoPage() {
   const [aspectRatio, setAspectRatio] = useState('9:16');
   const [resolution, setResolution] = useState('720p');
   const [duration, setDuration] = useState(5);
-  const [count, setCount] = useState(1);
+  const pricingCatalog = useGenerationPricingCatalog();
 
   return (
     <ModelGenerationPage
@@ -48,7 +42,6 @@ export default function JimengVideoPage() {
         duration,
         resolution,
         aspectRatio,
-        count,
         referenceImage,
       })}
       renderParameters={() => (
@@ -74,16 +67,9 @@ export default function JimengVideoPage() {
             value={duration}
             onChange={setDuration}
           />
-          <OptionSelector
-            icon="🔢"
-            label="生成数量"
-            options={COUNTS}
-            value={count}
-            onChange={setCount}
-          />
         </>
       )}
-      estimateCost={() => duration * count * 5}
+      estimateCost={() => estimateModelCredits(pricingCatalog, 'jimeng', 'seedance-2.0', { duration })}
     />
   );
 }

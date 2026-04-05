@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ModelGenerationPage, OptionSelector } from '@/components/generation/model-generation-page';
+import { estimateModelCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { ImageIcon } from 'lucide-react';
 
 const SIZES = [
@@ -13,6 +14,7 @@ const SIZES = [
 
 export default function GrokImagePage() {
   const [size, setSize] = useState('auto');
+  const pricingCatalog = useGenerationPricingCatalog();
 
   const getWidthHeight = () => {
     if (size === 'auto') return { width: 1024, height: 1024 };
@@ -48,7 +50,7 @@ export default function GrokImagePage() {
           onChange={setSize}
         />
       )}
-      estimateCost={() => 10}
+      estimateCost={() => estimateModelCredits(pricingCatalog, 'grok', 'grok-image', { count: 2 })}
     />
   );
 }

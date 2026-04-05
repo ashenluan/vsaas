@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ModelGenerationPage, OptionSelector } from '@/components/generation/model-generation-page';
+import { estimateModelCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { ImageIcon } from 'lucide-react';
 
 const MODELS = [
@@ -38,6 +39,7 @@ export default function BananaImagePage() {
   const [size, setSize] = useState('1024x1024');
   const [outputSize, setOutputSize] = useState('1k');
   const [count, setCount] = useState(1);
+  const pricingCatalog = useGenerationPricingCatalog();
 
   const [w, h] = size.split('x').map(Number);
 
@@ -93,10 +95,14 @@ export default function BananaImagePage() {
           />
         </>
       )}
-      estimateCost={() => {
-        const base = outputSize === '4k' ? 15 : outputSize === '2k' ? 12 : 10;
-        return count * base;
-      }}
+      estimateCost={() =>
+        estimateModelCredits(
+          pricingCatalog,
+          'google-imagen',
+          outputSize === '4k' ? 'banana-4k' : outputSize === '2k' ? 'banana-2k' : 'banana-1k',
+          { count },
+        )
+      }
     />
   );
 }
