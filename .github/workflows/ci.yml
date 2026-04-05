@@ -60,6 +60,7 @@ jobs:
         run: pnpm turbo build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_STANDALONE: 'true'
 
   docker-build:
     runs-on: ubuntu-latest
