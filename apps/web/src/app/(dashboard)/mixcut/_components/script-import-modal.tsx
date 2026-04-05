@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { scriptApi } from '@/lib/api';
 import { useMixcutStore, createShotGroup } from '../_store/use-mixcut-store';
 import { FileText, X, Loader2, Search } from 'lucide-react';
@@ -20,7 +21,9 @@ export function ScriptImportModal({
   const [search, setSearch] = useState('');
   const [importing, setImporting] = useState(false);
 
-  const { project, loadProject, resetProject } = useMixcutStore();
+  const { project, loadProject, resetProject } = useMixcutStore(
+    useShallow((s) => ({ project: s.project, loadProject: s.loadProject, resetProject: s.resetProject })),
+  );
 
   useEffect(() => {
     if (!open) return;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useMixcutStore, createShotGroup } from '../_store/use-mixcut-store';
 import { ScriptImportModal } from './script-import-modal';
 import { mixcutApi } from '@/lib/api';
@@ -14,7 +15,9 @@ const STATUS_BADGES: Record<string, { label: string; className: string }> = {
 };
 
 export function ProjectList() {
-  const { setView, resetProject, loadProject } = useMixcutStore();
+  const { setView, resetProject, loadProject } = useMixcutStore(
+    useShallow((s) => ({ setView: s.setView, resetProject: s.resetProject, loadProject: s.loadProject })),
+  );
   const [scriptModalOpen, setScriptModalOpen] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { templateApi } from '@/lib/api';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { X, Loader2, Check, LayoutTemplate } from 'lucide-react';
@@ -14,7 +15,12 @@ interface Template {
 }
 
 export function TemplateModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { updateGlobalConfig, updateSubtitleStyle, updateTitleStyle, setHighlightWords } = useMixcutStore();
+  const { updateGlobalConfig, updateSubtitleStyle, updateTitleStyle, setHighlightWords } = useMixcutStore(
+    useShallow((s) => ({
+      updateGlobalConfig: s.updateGlobalConfig, updateSubtitleStyle: s.updateSubtitleStyle,
+      updateTitleStyle: s.updateTitleStyle, setHighlightWords: s.setHighlightWords,
+    })),
+  );
   const [templates, setTemplates] = useState<Template[]>([]);
   const [categories, setCategories] = useState<{ name: string; count: number }[]>([]);
   const [activeCategory, setActiveCategory] = useState('全部');

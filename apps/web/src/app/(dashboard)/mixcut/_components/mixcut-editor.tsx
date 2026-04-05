@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { ShotGroupCard } from './shot-group-card';
 import { GlobalConfigPanel } from './global-config-panel';
@@ -36,7 +37,15 @@ export function MixcutEditor({
   allMaterials: any[];
   onMaterialAdd: (m: any) => void;
 }) {
-  const { project, setProjectName, setView, activeDrawer, closeDrawer, subtitleStyle, titleStyle, globalConfig, highlightWords, reorderShotGroups } = useMixcutStore();
+  const { project, setProjectName, setView, activeDrawer, closeDrawer, subtitleStyle, titleStyle, globalConfig, highlightWords, reorderShotGroups } = useMixcutStore(
+    useShallow((s) => ({
+      project: s.project, setProjectName: s.setProjectName, setView: s.setView,
+      activeDrawer: s.activeDrawer, closeDrawer: s.closeDrawer,
+      subtitleStyle: s.subtitleStyle, titleStyle: s.titleStyle,
+      globalConfig: s.globalConfig, highlightWords: s.highlightWords,
+      reorderShotGroups: s.reorderShotGroups,
+    })),
+  );
   const setProjectId = useMixcutStore((s) => s.setProjectId);
 
   const sensors = useSensors(

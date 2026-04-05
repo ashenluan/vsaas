@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { voiceApi, mixcutApi } from '@/lib/api';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { Mic2, Globe, Volume2, Loader2, ChevronDown, Search } from 'lucide-react';
@@ -37,7 +38,9 @@ export function VoiceSelectSection() {
   const [activeTab, setActiveTab] = useState<'builtin' | 'cloned'>('builtin');
   const [activeModel, setActiveModel] = useState('emotion');
   const [searchQuery, setSearchQuery] = useState('');
-  const { globalConfig, updateGlobalConfig } = useMixcutStore();
+  const { globalConfig, updateGlobalConfig } = useMixcutStore(
+    useShallow((s) => ({ globalConfig: s.globalConfig, updateGlobalConfig: s.updateGlobalConfig })),
+  );
 
   const selectedVoiceId = (globalConfig as any).voiceId || '';
   const selectedVoiceType = (globalConfig as any).voiceType || 'builtin';

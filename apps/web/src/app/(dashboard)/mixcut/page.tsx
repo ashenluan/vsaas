@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useMixcutStore } from './_store/use-mixcut-store';
 import { MixcutEditor } from './_components/mixcut-editor';
 import { ProjectList } from './_components/project-list';
 import { mixcutApi, materialApi } from '@/lib/api';
 
 export default function MixcutPage() {
-  const { view } = useMixcutStore();
+  const { view } = useMixcutStore(
+    useShallow((s) => ({ view: s.view })),
+  );
   const [options, setOptions] = useState<any>(null);
   const [allMaterials, setAllMaterials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
