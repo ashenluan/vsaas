@@ -11,12 +11,19 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient } from 'redis';
+import { buildAllowedOrigins } from '../config/allowed-origins';
+
+const defaultAppUrl = process.env.APP_URL || 'http://localhost:3000';
+const defaultAdminUrl = process.env.ADMIN_URL || 'http://localhost:3002';
+const socketOrigins = buildAllowedOrigins(
+  defaultAppUrl,
+  defaultAdminUrl,
+  process.env.WS_CORS_ORIGIN || process.env.CORS_ORIGIN || '',
+);
 
 @WebSocketGateway({
   cors: {
-    origin: (process.env.WS_CORS_ORIGIN || process.env.CORS_ORIGIN || '')
-      .split(',')
-      .filter(Boolean),
+    origin: socketOrigins,
   },
   namespace: '/ws',
 })

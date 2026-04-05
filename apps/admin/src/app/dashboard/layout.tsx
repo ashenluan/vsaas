@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { clearAdminTokens } from '@/lib/admin-auth-storage';
 
 const adminNavItems = [
   { label: '概览', href: '/dashboard', icon: '📊' },
@@ -46,8 +47,8 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         <div className="border-t p-3">
           <button
             onClick={() => {
-              localStorage.removeItem('adminToken');
-              window.location.href = '/';
+              clearAdminTokens();
+              window.location.href = '/login';
             }}
             className="w-full rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent"
           >

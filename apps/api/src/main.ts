@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { buildAllowedOrigins } from './config/allowed-origins';
 import { resolveGoogleImagenKey, resolveLlmApiKey } from './config/env-resolver';
 
 async function bootstrap() {
@@ -95,14 +96,7 @@ async function bootstrap() {
   const adminUrl = config.get<string>('ADMIN_URL', 'http://localhost:3002');
   const corsOrigins = config.get<string>('CORS_ORIGIN', '');
 
-  const origins = corsOrigins
-    ? corsOrigins.split(',')
-    : [
-        appUrl,
-        appUrl.replace('localhost', '127.0.0.1'),
-        adminUrl,
-        adminUrl.replace('localhost', '127.0.0.1'),
-      ];
+  const origins = buildAllowedOrigins(appUrl, adminUrl, corsOrigins);
 
   app.enableCors({
     origin: origins,

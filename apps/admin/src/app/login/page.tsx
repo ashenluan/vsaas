@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { storeAdminTokens } from '@/lib/admin-auth-storage';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -37,8 +37,7 @@ export default function AdminLoginPage() {
         return;
       }
 
-      localStorage.setItem('adminAccessToken', data.accessToken);
-      localStorage.setItem('adminRefreshToken', data.refreshToken);
+      storeAdminTokens(data.accessToken, data.refreshToken);
       router.push('/dashboard');
     } catch {
       setError('\u7F51\u7EDC\u9519\u8BEF');

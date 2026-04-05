@@ -1,8 +1,9 @@
+import { clearAdminTokens, getAdminAccessToken } from './admin-auth-storage';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('adminAccessToken');
+  return getAdminAccessToken();
 }
 
 export async function adminFetch<T = any>(
@@ -23,8 +24,8 @@ export async function adminFetch<T = any>(
 
   if (res.status === 401 || res.status === 403) {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('adminToken');
-      window.location.href = '/';
+      clearAdminTokens();
+      window.location.href = '/login';
     }
     throw new Error('Unauthorized');
   }
