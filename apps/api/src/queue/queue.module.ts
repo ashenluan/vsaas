@@ -17,13 +17,13 @@ import { PrismaModule } from '../prisma/prisma.module';
 @Module({
   imports: [
     BullModule.registerQueue(
-      { name: 'image-generation' },
-      { name: 'video-generation' },
-      { name: 'voice-cloning' },
-      { name: 'digital-human-video' },
-      { name: 'mixcut-production' },
-      { name: 'dh-batch-v2' },
-      { name: 'storyboard-compose' },
+      { name: 'image-generation', defaultJobOptions: { attempts: 2, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 100, removeOnFail: 500 } },
+      { name: 'video-generation', defaultJobOptions: { attempts: 2, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 100, removeOnFail: 500 } },
+      { name: 'voice-cloning', defaultJobOptions: { attempts: 2, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 100, removeOnFail: 500 } },
+      { name: 'digital-human-video', defaultJobOptions: { attempts: 2, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 100, removeOnFail: 500 } },
+      { name: 'mixcut-production', defaultJobOptions: { attempts: 1, removeOnComplete: 50, removeOnFail: 200 } },
+      { name: 'dh-batch-v2', defaultJobOptions: { attempts: 1, removeOnComplete: 50, removeOnFail: 200 } },
+      { name: 'storyboard-compose', defaultJobOptions: { attempts: 2, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 100, removeOnFail: 500 } },
     ),
     GenerationModule,
     ProviderModule,

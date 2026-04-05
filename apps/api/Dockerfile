@@ -27,8 +27,23 @@ COPY apps/api/ ./apps/api/
 COPY tsconfig.base.json ./
 RUN cd apps/api && pnpm build
 
-# Run directly from build stage to preserve pnpm symlinks
+# Production runner
+FROM node:20-alpine AS runner
+WORKDIR /app
+
 ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nestjs
+
+# Copy built output and node_modules
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
+COPY --from=build --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build --chown=nestjs:nodejs /app/packages ./packages
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/
+
+USER nestjs
 EXPOSE 4000
 ENV PORT=4000
 

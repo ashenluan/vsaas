@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ProviderRegistry } from '../../provider/provider.registry';
 import { UserService } from '../../user/user.service';
 import { WsGateway } from '../../ws/ws.gateway';
+import { pollTaskStatus } from './poll-helper';
 
 interface DHVideoJobData {
   jobId: string;
@@ -244,44 +245,27 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
     userId: string,
     jobId: string,
   ): Promise<{ videoUrl: string }> {
-    const maxAttempts = 180; // 15 minutes
-    const interval = 5000;
-
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((r) => setTimeout(r, interval));
-
-      const status = await provider.checkTaskStatus(taskId);
-      const normalizedStatus = (status.status || '').toUpperCase();
-
-      if (normalizedStatus === 'SUCCEEDED') {
-        if (!status.videoUrl) {
-          throw new Error('视频生成完成但未返回视频地址');
-        }
-        return { videoUrl: status.videoUrl };
-      }
-
-      if (normalizedStatus === 'FAILED') {
-        throw new Error(`S2V 视频生成失败: ${status.errorMessage || status.message || '未知错误'}`);
-      }
-      if (normalizedStatus === 'CANCELED') {
-        throw new Error('S2V 视频生成任务已被取消');
-      }
-      if (normalizedStatus === 'UNKNOWN') {
-        throw new Error('S2V 任务已过期或不存在，请重新提交');
-      }
-
-      // Send progress updates every 30s
-      if (i > 0 && i % 6 === 0) {
-        const progress = Math.min(30 + Math.round((i / maxAttempts) * 65), 95);
-        this.ws.sendToUser(userId, 'digital-human:progress', {
-          jobId,
-          status: 'PROCESSING',
-          progress,
-          message: `数字人视频生成中... (${Math.round((i * 5) / 60)}分钟)`,
-        });
-      }
-    }
-
-    throw new Error('数字人视频生成超时（15分钟）');
+    return pollTaskStatus(taskId, {
+      interval: 5000,
+      maxAttempts: 180,
+      checkStatus: (tid) => provider.checkTaskStatus(tid),
+      normalizeStatus: (s) => (s.status || '').toUpperCase(),
+      extractResult: (s) => {
+        if (!s.videoUrl) throw new Error('视频生成完成但未返回视频地址');
+        return { videoUrl: s.videoUrl };
+      },
+      extractError: (s) => `S2V 视频生成失败: ${s.errorMessage || s.message || '未知错误'}`,
+      ws: this.ws,
+      userId,
+      jobId,
+      wsEvent: 'digital-human:progress',
+      progressInterval: 6,
+      buildProgressMessage: (i, max) => ({
+        progress: Math.min(30 + Math.round((i / max) * 65), 95),
+        message: `数字人视频生成中... (${Math.round((i * 5) / 60)}分钟)`,
+      }),
+      logger: this.logger,
+      timeoutMessage: '数字人视频生成超时（15分钟）',
+    });
   }
 }

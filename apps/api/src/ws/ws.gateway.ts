@@ -9,10 +9,14 @@ import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient } from 'redis';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.WS_CORS_ORIGIN?.split(',') || process.env.CORS_ORIGIN?.split(',') || '*',
+    origin: (process.env.WS_CORS_ORIGIN || process.env.CORS_ORIGIN || '')
+      .split(',')
+      .filter(Boolean),
   },
   namespace: '/ws',
 })
@@ -27,6 +31,23 @@ export class WsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {}
+
+  async afterInit(server: Server) {
+    const redisHost = this.config.get('REDIS_HOST');
+    const redisPassword = this.config.get('REDIS_PASSWORD');
+    if (redisHost) {
+      try {
+        const redisPort = this.config.get<number>('REDIS_PORT', 6379);
+        const pubClient = createClient({ url: `redis://${redisHost}:${redisPort}`, password: redisPassword || undefined });
+        const subClient = pubClient.duplicate();
+        await Promise.all([pubClient.connect(), subClient.connect()]);
+        server.adapter(createAdapter(pubClient, subClient));
+        this.logger.log('Socket.IO Redis adapter initialized');
+      } catch (err: any) {
+        this.logger.warn(`Redis adapter init failed, falling back to in-memory: ${err.message}`);
+      }
+    }
+  }
 
   async handleConnection(client: Socket) {
     try {

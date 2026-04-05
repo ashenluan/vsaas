@@ -6,6 +6,7 @@ import { ProviderRegistry } from '../../provider/provider.registry';
 import { UserService } from '../../user/user.service';
 import { StorageService } from '../../storage/storage.service';
 import { WsGateway } from '../../ws/ws.gateway';
+import { pollTaskStatus } from './poll-helper';
 
 interface StoryboardComposeData {
   jobId: string;
@@ -147,34 +148,24 @@ export class StoryboardComposeProcessor extends WorkerHost {
     userId: string,
     jobId: string,
   ): Promise<{ status: string; mediaUrl?: string; duration?: number }> {
-    const maxAttempts = 120; // 120 * 5s = 10 minutes
-    const interval = 5000;
-
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((r) => setTimeout(r, interval));
-
-      const result = await imsProvider.checkMediaProducingJobStatus(imsJobId);
-      const status = (result.status || '').toLowerCase();
-
-      if (status === 'success') {
-        return result;
-      }
-      if (status === 'failed') {
-        throw new Error(`合成失败: ${result.errorMessage || result.errorCode || '未知错误'}`);
-      }
-
-      // Send progress updates
-      if (i > 0 && i % 4 === 0) {
-        const progress = result.progress || Math.min(90, Math.round(i / maxAttempts * 100));
-        this.ws.sendToUser(userId, 'job:update', {
-          jobId,
-          status: 'PROCESSING',
-          message: `合成中... ${progress}%`,
-          progress,
-        });
-      }
-    }
-
-    throw new Error('视频合成超时，请稍后重试');
+    return pollTaskStatus(imsJobId, {
+      interval: 5000,
+      maxAttempts: 120,
+      checkStatus: (id) => imsProvider.checkMediaProducingJobStatus(id),
+      normalizeStatus: (s) => (s.status || '').toUpperCase(),
+      extractResult: (s) => s,
+      extractError: (s) => `合成失败: ${s.errorMessage || s.errorCode || '未知错误'}`,
+      ws: this.ws,
+      userId,
+      jobId,
+      wsEvent: 'job:update',
+      progressInterval: 4,
+      buildProgressMessage: (i, max) => {
+        const progress = Math.min(90, Math.round(i / max * 100));
+        return { message: `合成中... ${progress}%`, progress };
+      },
+      logger: this.logger,
+      timeoutMessage: '视频合成超时，请稍后重试',
+    });
   }
 }

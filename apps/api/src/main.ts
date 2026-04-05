@@ -1,8 +1,11 @@
 import './instrument';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -14,6 +17,8 @@ async function bootstrap() {
     'JWT_REFRESH_SECRET',
     'DATABASE_URL',
     'IMS_CALLBACK_TOKEN',
+    'ALIYUN_ACCESS_KEY_ID',
+    'ALIYUN_ACCESS_KEY_SECRET',
   ];
   const missing = requiredEnvVars.filter((v) => !config.get(v));
   if (missing.length > 0) {
@@ -21,6 +26,12 @@ async function bootstrap() {
       `Missing required environment variables: ${missing.join(', ')}`,
     );
   }
+
+  app.use(cookieParser());
+  app.enableShutdownHooks();
+
+  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -52,6 +63,6 @@ async function bootstrap() {
 
   const port = config.get<number>('PORT', 4000);
   await app.listen(port);
-  console.log(`API running on http://localhost:${port}`);
+  new Logger('Bootstrap').log(`API running on http://localhost:${port}`);
 }
 bootstrap();

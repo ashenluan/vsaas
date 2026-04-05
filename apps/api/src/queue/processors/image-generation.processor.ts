@@ -5,6 +5,7 @@ import { GenerationService } from '../../generation/generation.service';
 import { ProviderRegistry } from '../../provider/provider.registry';
 import { UserService } from '../../user/user.service';
 import { WsGateway } from '../../ws/ws.gateway';
+import { pollTaskStatus } from './poll-helper';
 
 @Processor('image-generation', { concurrency: 10 })
 export class ImageGenerationProcessor extends WorkerHost {
@@ -90,8 +91,6 @@ export class ImageGenerationProcessor extends WorkerHost {
     userId: string,
     jobId: string,
   ): Promise<any> {
-    const maxAttempts = 60; // 60 * 3s = 3 minutes
-    const interval = 3000;
     const providerId = input.providerId || 'qwen';
     const provider = this.providers.getImageProvider(providerId) as any;
 
@@ -99,34 +98,21 @@ export class ImageGenerationProcessor extends WorkerHost {
       return initialResult;
     }
 
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((r) => setTimeout(r, interval));
-
-      const status = await provider.checkTaskStatus(initialResult.taskId);
-      const normalizedStatus = (status.status || '').toUpperCase();
-
-      if (normalizedStatus === 'SUCCEEDED') {
-        return status;
-      }
-      if (normalizedStatus === 'FAILED') {
-        throw new Error(`图片生成失败: ${status.errorMessage || status.message || '未知错误'}`);
-      }
-      if (normalizedStatus === 'CANCELED') {
-        throw new Error('图片生成任务已被取消');
-      }
-      if (normalizedStatus === 'UNKNOWN') {
-        throw new Error('图片生成任务已过期或不存在，请重新提交');
-      }
-
-      if (i > 0 && i % 10 === 0) {
-        this.ws.sendToUser(userId, 'job:update', {
-          jobId,
-          status: 'PROCESSING',
-          message: `图片生成中... (${Math.round(i * 3 / 60)}分钟)`,
-        });
-      }
-    }
-
-    throw new Error('Image generation timed out');
+    return pollTaskStatus(initialResult.taskId, {
+      interval: 3000,
+      maxAttempts: 60,
+      checkStatus: (taskId) => provider.checkTaskStatus(taskId),
+      normalizeStatus: (s) => (s.status || '').toUpperCase(),
+      extractResult: (s) => s,
+      extractError: (s) => `图片生成失败: ${s.errorMessage || s.message || '未知错误'}`,
+      ws: this.ws,
+      userId,
+      jobId,
+      wsEvent: 'job:update',
+      progressInterval: 10,
+      buildProgressMessage: (i) => ({ message: `图片生成中... (${Math.round(i * 3 / 60)}分钟)` }),
+      logger: this.logger,
+      timeoutMessage: 'Image generation timed out',
+    });
   }
 }

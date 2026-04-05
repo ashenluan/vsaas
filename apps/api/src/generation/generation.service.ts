@@ -4,6 +4,7 @@ import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProviderRegistry } from '../provider/provider.registry';
 import { UserService } from '../user/user.service';
+import { CREDIT_COSTS } from '../common/credit-costs';
 
 const VALID_GENERATION_JOB_TYPES = new Set([
   'TEXT_TO_IMAGE',
@@ -89,6 +90,9 @@ export class GenerationService {
         jobId: job.id,
         userId,
         input,
+      }, {
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5000 },
       });
     } catch (error) {
       this.logger.error(`Image generation failed to enqueue, refunding ${estimatedCost} credits`);
@@ -150,6 +154,9 @@ export class GenerationService {
         jobId: job.id,
         userId,
         input,
+      }, {
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5000 },
       });
     } catch (error) {
       this.logger.error(`Video generation failed to enqueue, refunding ${estimatedCost} credits`);
@@ -165,15 +172,15 @@ export class GenerationService {
 
   // Cost map for advanced image types (per image)
   private readonly advancedCostMap: Record<string, number> = {
-    STYLE_COPY: 5,
-    TEXT_EDIT: 5,
-    HANDHELD_PRODUCT: 5,
-    MULTI_FUSION: 10,
-    VIRTUAL_TRYON: 8,
-    VIRTUAL_TRYON_PLUS: 12,
-    INPAINT: 5,
-    IMAGE_EDIT: 5,
-    IMAGE_EDIT_PRO: 10,
+    STYLE_COPY: CREDIT_COSTS.STYLE_COPY,
+    TEXT_EDIT: CREDIT_COSTS.TEXT_EDIT,
+    HANDHELD_PRODUCT: CREDIT_COSTS.HANDHELD_PRODUCT,
+    MULTI_FUSION: CREDIT_COSTS.MULTI_FUSION,
+    VIRTUAL_TRYON: CREDIT_COSTS.VIRTUAL_TRYON,
+    VIRTUAL_TRYON_PLUS: CREDIT_COSTS.VIRTUAL_TRYON_PLUS,
+    INPAINT: CREDIT_COSTS.INPAINT,
+    IMAGE_EDIT: CREDIT_COSTS.IMAGE_EDIT,
+    IMAGE_EDIT_PRO: CREDIT_COSTS.IMAGE_EDIT_PRO,
   };
 
   async createAdvancedImageGeneration(userId: string, input: {
@@ -203,7 +210,7 @@ export class GenerationService {
     } else if (input.type === 'IMAGE_EDIT' && (input as any).editModel === 'wan2.7-image-pro') {
       costKey = 'IMAGE_EDIT_PRO';
     }
-    const baseCost = this.advancedCostMap[costKey] || 5;
+    const baseCost = this.advancedCostMap[costKey] || CREDIT_COSTS.ADVANCED_IMAGE_DEFAULT;
     const totalCost = baseCost * count;
 
     const descriptions: Record<string, string> = {
@@ -241,6 +248,9 @@ export class GenerationService {
         jobId: job.id,
         userId,
         input,
+      }, {
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5000 },
       });
     } catch (error) {
       this.logger.error(`Advanced image generation failed to enqueue, refunding ${totalCost} credits`);
@@ -346,7 +356,7 @@ export class GenerationService {
       throw new BadRequestException('至少需要 2 个分镜视频才能合成');
     }
 
-    const creditCost = 10; // flat cost for composition
+    const creditCost = CREDIT_COSTS.STORYBOARD_COMPOSE;
     await this.userService.deductCredits(userId, creditCost, `成片合成: ${input.videos.length} 个分镜`);
 
     let job: any;
@@ -375,6 +385,9 @@ export class GenerationService {
         jobId: job.id,
         userId,
         ...input,
+      }, {
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5000 },
       });
     } catch (error) {
       this.logger.error(`Storyboard compose failed to enqueue, refunding ${creditCost} credits`);

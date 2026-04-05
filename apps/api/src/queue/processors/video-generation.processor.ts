@@ -5,6 +5,7 @@ import { GenerationService } from '../../generation/generation.service';
 import { ProviderRegistry } from '../../provider/provider.registry';
 import { UserService } from '../../user/user.service';
 import { WsGateway } from '../../ws/ws.gateway';
+import { pollTaskStatus } from './poll-helper';
 
 @Processor('video-generation', { concurrency: 5 })
 export class VideoGenerationProcessor extends WorkerHost {
@@ -78,44 +79,25 @@ export class VideoGenerationProcessor extends WorkerHost {
     userId: string,
     jobId: string,
   ): Promise<any> {
-    const maxAttempts = 180; // 180 * 5s = 15 minutes
-    const interval = 5000;
-
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((r) => setTimeout(r, interval));
-
-      if (typeof provider.checkTaskStatus !== 'function') {
-        // Provider 不支持轮询，直接返回初始结果
-        return { taskId, status: 'completed', message: 'Provider does not support polling' };
-      }
-
-      const status = await provider.checkTaskStatus(taskId);
-
-      // 不同 Provider 的完成状态名称不同
-      const normalizedStatus = (status.status || '').toLowerCase();
-      if (normalizedStatus === 'completed' || normalizedStatus === 'succeeded') {
-        return status;
-      }
-      if (normalizedStatus === 'failed') {
-        throw new Error(`视频生成失败: ${status.error || status.message || '未知错误'}`);
-      }
-      if (normalizedStatus === 'canceled' || normalizedStatus === 'cancelled') {
-        throw new Error('视频生成任务已被取消');
-      }
-      if (normalizedStatus === 'unknown') {
-        throw new Error('视频生成任务已过期或不存在，请重新提交');
-      }
-
-      // 每 30 秒发一次进度通知
-      if (i > 0 && i % 6 === 0) {
-        this.ws.sendToUser(userId, 'job:update', {
-          jobId,
-          status: 'PROCESSING',
-          message: `视频生成中... (${Math.round(i * 5 / 60)}分钟)`,
-        });
-      }
+    if (typeof provider.checkTaskStatus !== 'function') {
+      return { taskId, status: 'completed', message: 'Provider does not support polling' };
     }
 
-    throw new Error('Video generation timed out after 15 minutes');
+    return pollTaskStatus(taskId, {
+      interval: 5000,
+      maxAttempts: 180,
+      checkStatus: (tid) => provider.checkTaskStatus(tid),
+      normalizeStatus: (s) => (s.status || '').toUpperCase(),
+      extractResult: (s) => s,
+      extractError: (s) => `视频生成失败: ${s.error || s.message || '未知错误'}`,
+      ws: this.ws,
+      userId,
+      jobId,
+      wsEvent: 'job:update',
+      progressInterval: 6,
+      buildProgressMessage: (i) => ({ message: `视频生成中... (${Math.round(i * 5 / 60)}分钟)` }),
+      logger: this.logger,
+      timeoutMessage: 'Video generation timed out after 15 minutes',
+    });
   }
 }

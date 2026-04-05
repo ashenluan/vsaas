@@ -12,7 +12,7 @@ import { ProviderModule } from './provider/provider.module';
 import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
 import { WsModule } from './ws/ws.module';
-import { HealthController } from './health.controller';
+import { HealthModule } from './health/health.module';
 import { AdminModule } from './admin/admin.module';
 import { DigitalHumanModule } from './digital-human/digital-human.module';
 import { TemplateModule } from './template/template.module';
@@ -57,8 +57,9 @@ import { AiModule } from './ai/ai.module';
     DigitalHumanModule,
     TemplateModule,
     AiModule,
+    HealthModule,
   ],
-  controllers: [HealthController],
+  controllers: [],
   providers: [
     {
       provide: APP_GUARD,

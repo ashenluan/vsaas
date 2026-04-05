@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProviderRegistry } from '../provider/provider.registry';
 import { UserService } from '../user/user.service';
 import { StorageService } from '../storage/storage.service';
+import { CREDIT_COSTS } from '../common/credit-costs';
 import {
   TRANSITION_LIST,
   ADVANCED_TRANSITION_LIST,
@@ -47,7 +48,7 @@ export class DigitalHumanService {
   }
 
   async cloneVoice(userId: string, name: string, sampleUrl: string) {
-    const cost = 10;
+    const cost = CREDIT_COSTS.VOICE_CLONE;
     await this.userService.deductCredits(userId, cost, `声音克隆: ${name}`);
 
     let voice: any;
@@ -421,7 +422,7 @@ export class DigitalHumanService {
     }
 
     // Deduct credits
-    const costPerVideo = 20;
+    const costPerVideo = CREDIT_COSTS.MIXCUT_PER_VIDEO;
     const totalCost = costPerVideo * data.videoCount;
     await this.userService.deductCredits(
       userId,
@@ -722,7 +723,7 @@ export class DigitalHumanService {
     }
 
     // Deduct credits
-    const cost = 15;
+    const cost = CREDIT_COSTS.DH_VIDEO;
     await this.userService.deductCredits(
       userId,
       cost,
@@ -865,7 +866,7 @@ export class DigitalHumanService {
     }
 
     // Deduct credits
-    const costPerVideo = 20;
+    const costPerVideo = CREDIT_COSTS.MIXCUT_PER_VIDEO;
     const totalCost = data.videoCount * costPerVideo;
     await this.userService.deductCredits(userId, totalCost, `数字人交错混剪 x${data.videoCount}`);
 
