@@ -8,12 +8,14 @@ FROM base AS deps
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY apps/admin/package.json ./apps/admin/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/ui/package.json ./packages/ui/
 RUN pnpm install --frozen-lockfile --filter @vsaas/admin... --filter @vsaas/ui... --filter @vsaas/shared...
 
 # Build
 FROM deps AS build
 COPY packages/shared/ ./packages/shared/
+COPY packages/shared-types/ ./packages/shared-types/
 COPY packages/ui/ ./packages/ui/
 COPY apps/admin/ ./apps/admin/
 COPY tsconfig.base.json ./
