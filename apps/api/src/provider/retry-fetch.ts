@@ -59,7 +59,7 @@ export async function retryFetch(
       // 400 errors: check if it's a non-retryable DashScope business error
       if (response.status === 400) {
         // Clone response so caller can still read the body
-        const cloned = response.clone();
+        const cloned = typeof response.clone === 'function' ? response.clone() : response;
         try {
           const body = await cloned.json() as { code?: string; message?: string };
           if (body.code && NON_RETRYABLE_ERROR_CODES.has(body.code)) {
@@ -85,8 +85,8 @@ export async function retryFetch(
           const parsed = parseInt(retryAfter, 10);
           if (!isNaN(parsed)) {
             delay = Math.min(parsed * 1000, maxDelayMs);
-          }
         }
+      }
 
         // Add jitter (±25%)
         delay = delay * (0.75 + Math.random() * 0.5);

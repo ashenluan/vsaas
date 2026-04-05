@@ -26,11 +26,17 @@ jobs:
       - name: Generate Prisma client
         run: cd packages/database && npx prisma generate
 
-      - name: Type check
-        run: pnpm turbo type-check
+      - name: Database type check
+        run: pnpm --filter @vsaas/database type-check
 
-      - name: Test
+      - name: UI type check
+        run: pnpm --filter @vsaas/ui type-check
+
+      - name: API tests
         run: cd apps/api && pnpm test
+
+      - name: Admin tests
+        run: cd apps/admin && pnpm exec vitest run
 
       - name: Lint
         run: pnpm turbo lint

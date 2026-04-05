@@ -15,6 +15,20 @@ vi.mock('@nestjs/common', () => ({
 }));
 
 function makeResponse(status: number, body: any = {}, headers: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'content-type': 'application/json',
+      ...headers,
+    },
+  });
+}
+
+function makeResponseLikeWithoutClone(
+  status: number,
+  body: any = {},
+  headers: Record<string, string> = {},
+): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
@@ -53,6 +67,33 @@ describe('retryFetch', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
+  it('400 的 DashScope 业务错误码直接返回，不重试', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeResponse(400, { code: 'InvalidParameter', message: 'bad request' }),
+    );
+
+    const res = await retryFetch('https://api.example.com/test');
+
+    expect(res.status).toBe(400);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('没有 clone 的非标准 400 响应对象也会直接返回', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeResponseLikeWithoutClone(400, {
+        code: 'InvalidParameter',
+        message: 'bad request',
+      }),
+    );
+
+    const res = await retryFetch('https://api.example.com/test', undefined, {
+      maxRetries: 0,
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('遇到 500 后重试并最终成功', async () => {
     mockFetch
       .mockResolvedValueOnce(makeResponse(500))
@@ -69,6 +110,9 @@ describe('retryFetch', () => {
   });
 
   it('遇到 429 后重试并最终成功', async () => {
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
     mockFetch
       .mockResolvedValueOnce(makeResponse(429, {}, { 'retry-after': '1' }))
       .mockResolvedValueOnce(makeResponse(200, { ok: true }));
@@ -81,6 +125,10 @@ describe('retryFetch', () => {
 
     expect(res.status).toBe(200);
     expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1000);
+
+    setTimeoutSpy.mockRestore();
+    randomSpy.mockRestore();
   });
 
   it('网络错误后重试并成功', async () => {
