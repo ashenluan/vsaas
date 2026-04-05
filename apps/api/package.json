@@ -11,10 +11,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
-    "db:seed": "prisma db seed",
-    "db:generate": "prisma generate"
+    "db:migrate": "pnpm --dir ../.. --filter @vsaas/database migrate",
+    "db:push": "pnpm --dir ../.. --filter @vsaas/database exec prisma db push --schema src/schema.prisma",
+    "db:seed": "pnpm --dir ../.. --filter @vsaas/database seed",
+    "db:generate": "pnpm --dir ../.. --filter @vsaas/database generate"
   },
   "dependencies": {
     "@alicloud/ice20201109": "^6.15.0",

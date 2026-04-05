@@ -23,7 +23,7 @@ case "$1" in
     echo "Starting services..."
     docker compose -f $COMPOSE_FILE up -d
     echo "Running database migrations..."
-    docker compose -f $COMPOSE_FILE exec api npx prisma migrate deploy --schema=packages/database/src/schema.prisma
+    docker compose -f $COMPOSE_FILE exec api pnpm --filter @vsaas/database migrate:prod
     echo "Services are up!"
     docker compose -f $COMPOSE_FILE ps
     ;;
@@ -33,7 +33,7 @@ case "$1" in
     ;;
   migrate)
     echo "Running database migrations..."
-    docker compose -f $COMPOSE_FILE exec api npx prisma migrate deploy --schema=packages/database/src/schema.prisma
+    docker compose -f $COMPOSE_FILE exec api pnpm --filter @vsaas/database migrate:prod
     ;;
   logs)
     docker compose -f $COMPOSE_FILE logs -f ${2:-}
@@ -44,7 +44,7 @@ case "$1" in
     ;;
   seed)
     echo "Seeding database..."
-    docker compose -f $COMPOSE_FILE exec api npx prisma db seed
+    docker compose -f $COMPOSE_FILE exec api pnpm --filter @vsaas/database seed
     ;;
   *)
     echo "Usage: $0 {build|up|down|migrate|logs|restart|seed}"

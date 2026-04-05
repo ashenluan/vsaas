@@ -61,7 +61,7 @@ jobs:
             sleep 10
 
             echo "=== 执行数据库迁移 ==="
-            docker compose -f docker-compose.prod.yml exec -T api pnpm --filter @vsaas/api exec prisma migrate deploy --schema packages/database/src/schema.prisma 2>/dev/null || echo "迁移跳过（无新迁移或已最新）"
+            docker compose -f docker-compose.prod.yml exec -T api pnpm --filter @vsaas/database migrate:prod 2>/dev/null || echo "迁移跳过（无新迁移或已最新）"
 
             echo "=== 健康检查 ==="
             curl -sf http://127.0.0.1:4000/api/health || echo "警告: API 健康检查失败"

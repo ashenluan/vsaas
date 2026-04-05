@@ -1,2 +1,0 @@
--- AlterEnum
-ALTER TYPE "JobType" ADD VALUE 'DH_BATCH_V2';

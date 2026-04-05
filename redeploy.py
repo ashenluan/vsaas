@@ -85,7 +85,7 @@ def main():
         time.sleep(10)
         code, _, _ = ssh_exec(
             client,
-            f'cd {DEPLOY_DIR} && {COMPOSE} exec -T api sh -c "cd /app/packages/database && npx prisma migrate deploy" 2>&1',
+            f'cd {DEPLOY_DIR} && {COMPOSE} exec -T api pnpm --filter @vsaas/database migrate:prod 2>&1',
             timeout=180,
         )
         if code != 0:

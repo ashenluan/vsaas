@@ -4,6 +4,20 @@ import * as bcryptModule from 'bcryptjs';
 const bcrypt = bcryptModule as any;
 const prisma = new PrismaClient();
 
+async function updateOrCreate<T extends { id: string }>(
+  findExisting: () => Promise<T | null>,
+  createRecord: () => Promise<T>,
+  updateRecord: (id: string) => Promise<T>,
+) {
+  const existing = await findExisting();
+
+  if (existing) {
+    return updateRecord(existing.id);
+  }
+
+  return createRecord();
+}
+
 async function main() {
   console.log('Seeding database...');
 
@@ -11,7 +25,13 @@ async function main() {
   const adminPasswordHash = await bcrypt.hash('admin123456', 12);
   const admin = await prisma.user.upsert({
     where: { email: 'admin@vsaas.com' },
-    update: {},
+    update: {
+      passwordHash: adminPasswordHash,
+      displayName: '系统管理员',
+      role: 'SUPER_ADMIN',
+      status: 'ACTIVE',
+      creditBalance: 99999,
+    },
     create: {
       email: 'admin@vsaas.com',
       passwordHash: adminPasswordHash,
@@ -27,7 +47,13 @@ async function main() {
   const userPasswordHash = await bcrypt.hash('user123456', 12);
   const user = await prisma.user.upsert({
     where: { email: 'demo@vsaas.com' },
-    update: {},
+    update: {
+      passwordHash: userPasswordHash,
+      displayName: '演示用户',
+      role: 'USER',
+      status: 'ACTIVE',
+      creditBalance: 100,
+    },
     create: {
       email: 'demo@vsaas.com',
       passwordHash: userPasswordHash,
@@ -48,7 +74,11 @@ async function main() {
   ];
 
   for (const pkg of packages) {
-    await prisma.creditPackage.create({ data: pkg });
+    await updateOrCreate(
+      () => prisma.creditPackage.findFirst({ where: { name: pkg.name } }),
+      () => prisma.creditPackage.create({ data: pkg }),
+      (id) => prisma.creditPackage.update({ where: { id }, data: pkg }),
+    );
   }
   console.log(`Created ${packages.length} credit packages`);
 
@@ -66,7 +96,7 @@ async function main() {
   for (const p of providers) {
     await prisma.providerConfig.upsert({
       where: { provider: p.provider },
-      update: {},
+      update: p,
       create: p,
     });
   }
@@ -89,7 +119,7 @@ async function main() {
   for (const m of models) {
     await prisma.modelConfig.upsert({
       where: { provider_modelId: { provider: m.provider, modelId: m.modelId } },
-      update: {},
+      update: m,
       create: m,
     });
   }
@@ -128,7 +158,11 @@ async function main() {
   ];
 
   for (const t of templates) {
-    await prisma.template.create({ data: t });
+    await updateOrCreate(
+      () => prisma.template.findFirst({ where: { name: t.name } }),
+      () => prisma.template.create({ data: t }),
+      (id) => prisma.template.update({ where: { id }, data: t }),
+    );
   }
   console.log(`Created ${templates.length} templates`);
 
@@ -143,12 +177,22 @@ async function main() {
   ];
 
   for (const v of presetVoices) {
-    await prisma.voice.create({
-      data: {
-        userId: admin.id,
-        ...v,
-      },
-    });
+    const voiceData = {
+      userId: admin.id,
+      ...v,
+    };
+
+    await updateOrCreate(
+      () => prisma.voice.findFirst({
+        where: {
+          userId: admin.id,
+          provider: v.provider,
+          voiceId: v.voiceId,
+        },
+      }),
+      () => prisma.voice.create({ data: voiceData }),
+      (id) => prisma.voice.update({ where: { id }, data: voiceData }),
+    );
   }
   console.log(`Created ${presetVoices.length} public preset voices`);
 
@@ -193,18 +237,29 @@ async function main() {
   ];
 
   for (const a of presetAvatars) {
-    await prisma.material.create({
-      data: {
-        userId: admin.id,
-        name: a.name,
-        type: a.type,
-        url: a.url,
-        isPublic: a.isPublic,
-        category: a.category,
-        mimeType: a.mimeType,
-        metadata: a.metadata,
-      },
-    });
+    const materialData = {
+      userId: admin.id,
+      name: a.name,
+      type: a.type,
+      url: a.url,
+      isPublic: a.isPublic,
+      category: a.category,
+      mimeType: a.mimeType,
+      metadata: a.metadata,
+    };
+
+    await updateOrCreate(
+      () => prisma.material.findFirst({
+        where: {
+          userId: admin.id,
+          name: a.name,
+          type: a.type,
+          url: a.url,
+        },
+      }),
+      () => prisma.material.create({ data: materialData }),
+      (id) => prisma.material.update({ where: { id }, data: materialData }),
+    );
   }
   console.log(`Created ${presetAvatars.length} public preset avatars`);
 
