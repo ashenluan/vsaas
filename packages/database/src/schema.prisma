@@ -7,7 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==================== Users & Auth ====================
+// ==================== Enums ====================
 
 enum UserRole {
   USER
@@ -20,6 +20,90 @@ enum UserStatus {
   SUSPENDED
   DELETED
 }
+
+enum JobType {
+  // Active types
+  TEXT_TO_IMAGE
+  IMAGE_TO_IMAGE
+  TEXT_TO_VIDEO
+  IMAGE_TO_VIDEO
+  VOICE_CLONE
+  DIGITAL_HUMAN_VIDEO
+  BATCH_COMPOSE
+  STYLE_COPY
+  TEXT_EDIT
+  HANDHELD_PRODUCT
+  DH_BATCH_V2
+  MULTI_FUSION
+  VIRTUAL_TRYON
+  INPAINT
+  IMAGE_EDIT
+  STORYBOARD
+  // Legacy types (kept for backwards compatibility)
+  IMAGE
+  VIDEO
+  TTS
+  DIGITAL_HUMAN
+  VIDEO_EDIT
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum MaterialType {
+  IMAGE
+  VIDEO
+  AUDIO
+  TEMPLATE
+  BACKGROUND
+  STICKER
+  AVATAR
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  VOICE_SAMPLE
+}
+
+enum VoiceCloneStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum TransactionType {
+  PURCHASE
+  USAGE
+  REFUND
+  ADMIN_ADJUSTMENT
+  BONUS
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ComposeStatus {
+  DRAFT
+  SUBMITTED
+  PROCESSING
+  COMPLETED
+  PARTIALLY_COMPLETED
+  FAILED
+}
+
+// ==================== Users & Auth ====================
 
 model User {
   id            String     @id @default(cuid())
@@ -34,33 +118,41 @@ model User {
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @updatedAt @map("updated_at")
 
+  oauthAccounts      OAuthAccount[]
   generations        Generation[]
-  creditTransactions CreditTransaction[]
   voices             Voice[]
+  materials          Material[]
+  scripts            Script[]
+  creditTransactions CreditTransaction[]
+  orders             Order[]
+  favorites          Favorite[]
   avatars            DigitalHumanAvatar[]
   composeProjects    ComposeProject[]
-  orders             Order[]
   assets             Asset[]
-  scripts            Script[]
-  materials          Material[]
+  auditLogsPerformed AuditLog[] @relation("performer")
+  auditLogsTargeted  AuditLog[] @relation("target")
 
   @@map("users")
 }
 
-// ==================== Credits & Billing ====================
+model OAuthAccount {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  provider   String
+  providerId String   @map("provider_id")
+  createdAt  DateTime @default(now()) @map("created_at")
 
-enum TransactionType {
-  USAGE
-  PURCHASE
-  REFUND
-  ADMIN_ADJUSTMENT
-  BONUS
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@map("oauth_accounts")
 }
+
+// ==================== Credits & Billing ====================
 
 model CreditTransaction {
   id           String          @id @default(cuid())
   userId       String          @map("user_id")
-  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   amount       Int
   type         TransactionType
   description  String?
@@ -68,6 +160,9 @@ model CreditTransaction {
   balanceAfter Int             @map("balance_after")
   createdAt    DateTime        @default(now()) @map("created_at")
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([referenceId, type])
   @@index([userId])
   @@index([referenceId])
   @@map("credit_transactions")
@@ -85,17 +180,9 @@ model CreditPackage {
   @@map("credit_packages")
 }
 
-enum OrderStatus {
-  PENDING
-  PAID
-  FAILED
-  REFUNDED
-}
-
 model Order {
   id            String      @id @default(cuid())
   userId        String      @map("user_id")
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   packageId     String?     @map("package_id")
   amount        Decimal     @db.Decimal(10, 2)
   credits       Int
@@ -103,55 +190,32 @@ model Order {
   status        OrderStatus @default(PENDING)
   paymentMethod String?     @map("payment_method")
   externalPayId String?     @map("external_pay_id")
-  createdAt     DateTime    @default(now()) @map("created_at")
   paidAt        DateTime?   @map("paid_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([status])
   @@map("orders")
 }
 
 // ==================== Generation ====================
 
-enum JobType {
-  TEXT_TO_IMAGE
-  IMAGE_TO_IMAGE
-  TEXT_TO_VIDEO
-  IMAGE_TO_VIDEO
-  VOICE_CLONE
-  DIGITAL_HUMAN_VIDEO
-  BATCH_COMPOSE
-  STYLE_COPY
-  TEXT_EDIT
-  HANDHELD_PRODUCT
-  MULTI_FUSION
-  VIRTUAL_TRYON
-  INPAINT
-  STORYBOARD
-  DH_BATCH_V2
-}
-
-enum JobStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
 model Generation {
   id             String    @id @default(cuid())
   userId         String    @map("user_id")
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   type           JobType
   status         JobStatus @default(PENDING)
   provider       String
   model          String    @default("")
   prompt         String?
   negativePrompt String?   @map("negative_prompt")
+  input          Json?
+  output         Json?
   inputAssetId   String?   @map("input_asset_id")
-  inputAsset     Asset?    @relation("JobInput", fields: [inputAssetId], references: [id])
   outputAssetId  String?   @map("output_asset_id")
-  outputAsset    Asset?    @relation("JobOutput", fields: [outputAssetId], references: [id])
   outputUrl      String?   @map("output_url")
   externalId     String?   @map("external_id")
   progress       Int       @default(0)
@@ -160,17 +224,35 @@ model Generation {
   errorMessage   String?   @map("error_message")
   errorMsg       String?   @map("error_msg")
   parameters     Json?
-  input          Json?
   metadata       Json?
   result         Json?
-  output         Json?
   createdAt      DateTime  @default(now()) @map("created_at")
   startedAt      DateTime? @map("started_at")
   completedAt    DateTime? @map("completed_at")
 
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  favorites   Favorite[]
+  inputAsset  Asset?     @relation("JobInput", fields: [inputAssetId], references: [id])
+  outputAsset Asset?     @relation("JobOutput", fields: [outputAssetId], references: [id])
+
+  @@index([userId, type])
   @@index([userId, status])
+  @@index([status])
   @@index([externalId])
   @@map("generations")
+}
+
+model Favorite {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  generationId String   @map("generation_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, generationId])
+  @@map("favorites")
 }
 
 // ==================== Templates ====================
@@ -188,22 +270,16 @@ model Template {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  @@index([category])
+  @@index([isPublic])
   @@map("templates")
 }
 
 // ==================== Assets ====================
 
-enum AssetType {
-  IMAGE
-  VIDEO
-  AUDIO
-  VOICE_SAMPLE
-}
-
 model Asset {
   id        String    @id @default(cuid())
   userId    String    @map("user_id")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      AssetType
   filename  String
   mimeType  String    @map("mime_type")
@@ -217,8 +293,9 @@ model Asset {
   metadata  Json?
   createdAt DateTime  @default(now()) @map("created_at")
 
-  inputJobs  Generation[] @relation("JobInput")
-  outputJobs Generation[] @relation("JobOutput")
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inputJobs  Generation[]   @relation("JobInput")
+  outputJobs Generation[]   @relation("JobOutput")
 
   @@index([userId, type])
   @@index([mediaId])
@@ -227,17 +304,9 @@ model Asset {
 
 // ==================== Digital Human ====================
 
-enum VoiceCloneStatus {
-  PENDING
-  PROCESSING
-  READY
-  FAILED
-}
-
 model Voice {
   id            String           @id @default(cuid())
   userId        String           @map("user_id")
-  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   name          String
   voiceId       String           @default("") @map("voice_id")
   sampleUrl     String?          @map("sample_url")
@@ -252,24 +321,16 @@ model Voice {
   metadata      Json?
   createdAt     DateTime         @default(now()) @map("created_at")
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([isPublic])
   @@map("voices")
 }
 
-enum MaterialType {
-  IMAGE
-  VIDEO
-  AUDIO
-  BACKGROUND
-  STICKER
-  AVATAR
-}
-
 model Material {
   id           String       @id @default(cuid())
   userId       String       @map("user_id")
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String
   type         MaterialType
   url          String
@@ -281,6 +342,8 @@ model Material {
   metadata     Json?
   createdAt    DateTime     @default(now()) @map("created_at")
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, type])
   @@index([isPublic, type])
   @@map("materials")
@@ -289,13 +352,14 @@ model Material {
 model DigitalHumanAvatar {
   id           String   @id @default(cuid())
   userId       String   @map("user_id")
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String
   assetId      String   @map("asset_id")
   assetUrl     String?  @map("asset_url")
   detectResult Json?    @map("detect_result")
   isValid      Boolean  @default(false) @map("is_valid")
   createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("digital_human_avatars")
@@ -304,36 +368,30 @@ model DigitalHumanAvatar {
 model Script {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   content   String
   tags      Json     @default("[]")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@map("scripts")
 }
 
-enum ComposeStatus {
-  DRAFT
-  SUBMITTED
-  PROCESSING
-  COMPLETED
-  PARTIALLY_COMPLETED
-  FAILED
-}
+// ==================== Compose ====================
 
 model ComposeProject {
   id        String        @id @default(cuid())
   userId    String        @map("user_id")
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   config    Json
   status    ComposeStatus @default(DRAFT)
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobs ComposeJob[]
 
   @@index([userId])
@@ -343,7 +401,6 @@ model ComposeProject {
 model ComposeJob {
   id            String         @id @default(cuid())
   projectId     String         @map("project_id")
-  project       ComposeProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   externalJobId String?        @map("external_job_id")
   status        JobStatus      @default(PENDING)
   progress      Int            @default(0)
@@ -353,21 +410,32 @@ model ComposeJob {
   createdAt     DateTime       @default(now()) @map("created_at")
   completedAt   DateTime?      @map("completed_at")
 
+  project ComposeProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   @@index([externalJobId])
   @@map("compose_jobs")
 }
 
 // ==================== Admin Config ====================
 
+model SystemConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value Json
+
+  @@map("system_configs")
+}
+
 model ProviderConfig {
   id          String   @id @default(cuid())
   name        String
   provider    String   @unique
-  apiKey      String   @map("api_key")
+  apiKey      String   @default("") @map("api_key")
   apiEndpoint String?  @map("api_endpoint")
   isEnabled   Boolean  @default(true) @map("is_enabled")
   rateLimit   Int?     @map("rate_limit")
   config      Json?
+  createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("provider_configs")
@@ -400,7 +468,11 @@ model AuditLog {
   details     Json?
   createdAt   DateTime @default(now()) @map("created_at")
 
+  performer User  @relation("performer", fields: [performerId], references: [id], onDelete: Cascade)
+  target    User? @relation("target", fields: [targetId], references: [id], onDelete: SetNull)
+
   @@index([performerId])
   @@index([targetId])
+  @@index([action])
   @@map("audit_logs")
 }

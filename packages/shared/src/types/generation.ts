@@ -5,7 +5,22 @@ export type JobType =
   | 'IMAGE_TO_VIDEO'
   | 'VOICE_CLONE'
   | 'DIGITAL_HUMAN_VIDEO'
-  | 'BATCH_COMPOSE';
+  | 'BATCH_COMPOSE'
+  | 'STYLE_COPY'
+  | 'TEXT_EDIT'
+  | 'HANDHELD_PRODUCT'
+  | 'DH_BATCH_V2'
+  | 'MULTI_FUSION'
+  | 'VIRTUAL_TRYON'
+  | 'INPAINT'
+  | 'IMAGE_EDIT'
+  | 'STORYBOARD'
+  // Legacy types
+  | 'IMAGE'
+  | 'VIDEO'
+  | 'TTS'
+  | 'DIGITAL_HUMAN'
+  | 'VIDEO_EDIT';
 
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
