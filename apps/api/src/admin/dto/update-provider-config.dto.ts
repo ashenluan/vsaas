@@ -1,4 +1,4 @@
-import { IsBoolean, IsObject, IsOptional } from 'class-validator';
+import { IsBoolean, IsObject, IsOptional, IsString } from 'class-validator';
 
 export class UpdateProviderConfigDto {
   @IsOptional()
@@ -8,4 +8,8 @@ export class UpdateProviderConfigDto {
   @IsOptional()
   @IsObject()
   config?: Record<string, any>;
+
+  @IsOptional()
+  @IsString()
+  apiKey?: string;
 }

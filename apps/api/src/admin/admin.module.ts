@@ -9,9 +9,10 @@ import { AdminAnalyticsController } from './admin-analytics.controller';
 import { AdminService } from './admin.service';
 import { UserModule } from '../user/user.module';
 import { AdminAuditInterceptor } from '../common/interceptors/admin-audit.interceptor';
+import { ProviderModule } from '../provider/provider.module';
 
 @Module({
-  imports: [UserModule],
+  imports: [UserModule, ProviderModule],
   controllers: [
     AdminUsersController,
     AdminJobsController,

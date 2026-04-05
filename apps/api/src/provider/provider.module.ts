@@ -12,10 +12,12 @@ import { QwenVoiceProvider } from './qwen/qwen-voice.provider';
 import { WanS2VProvider } from './aliyun-wan/wan-s2v.provider';
 import { WanR2VProvider } from './aliyun-wan/wan-r2v.provider';
 import { AliyunIMSProvider } from './aliyun-ims/ims-compose.provider';
+import { ProviderConfigService } from './provider-config.service';
 
 @Module({
   providers: [
     ProviderRegistry,
+    ProviderConfigService,
     // 图像生成
     QwenImageProvider,
     GrokImageProvider,
@@ -35,6 +37,6 @@ import { AliyunIMSProvider } from './aliyun-ims/ims-compose.provider';
     // 批量混剪
     AliyunIMSProvider,
   ],
-  exports: [ProviderRegistry],
+  exports: [ProviderRegistry, ProviderConfigService],
 })
 export class ProviderModule {}

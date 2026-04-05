@@ -51,11 +51,14 @@ export class GenerationService {
     promptExtend?: boolean;
     referenceImage?: string;
   }) {
-    const provider = this.providers.getImageProvider(input.providerId);
-    if (!provider) throw new BadRequestException(`Unknown provider: ${input.providerId}`);
+    const providerStatus = await this.providers.getImageProviderStatus(input.providerId);
+    if (!providerStatus.provider) throw new BadRequestException(`Unknown provider: ${input.providerId}`);
+    if (!providerStatus.isEnabled) {
+      throw new BadRequestException(`Provider ${input.providerId} is disabled by admin configuration`);
+    }
+    if (!providerStatus.available) throw new BadRequestException(`Provider ${input.providerId} is not available`);
 
-    const available = await provider.isAvailable();
-    if (!available) throw new BadRequestException(`Provider ${input.providerId} is not available`);
+    const provider = providerStatus.provider;
 
     const estimatedCost = provider.estimateCost(input);
     await this.userService.deductCredits(userId, estimatedCost, `图片生成: ${input.prompt?.slice(0, 50)}`);
@@ -117,11 +120,14 @@ export class GenerationService {
     negativePrompt?: string;
     promptExtend?: boolean;
   }) {
-    const provider = this.providers.getVideoProvider(input.providerId);
-    if (!provider) throw new BadRequestException(`Unknown provider: ${input.providerId}`);
+    const providerStatus = await this.providers.getVideoProviderStatus(input.providerId);
+    if (!providerStatus.provider) throw new BadRequestException(`Unknown provider: ${input.providerId}`);
+    if (!providerStatus.isEnabled) {
+      throw new BadRequestException(`Provider ${input.providerId} is disabled by admin configuration`);
+    }
+    if (!providerStatus.available) throw new BadRequestException(`Provider ${input.providerId} is not available`);
 
-    const available = await provider.isAvailable();
-    if (!available) throw new BadRequestException(`Provider ${input.providerId} is not available`);
+    const provider = providerStatus.provider;
 
     const estimatedCost = provider.estimateCost(input);
     await this.userService.deductCredits(userId, estimatedCost, `视频生成: ${input.prompt?.slice(0, 50)}`);
@@ -337,8 +343,8 @@ export class GenerationService {
 
   async getProviders() {
     return {
-      image: this.providers.listImageProviders(),
-      video: this.providers.listVideoProviders(),
+      image: await this.providers.listPublicImageProviders(),
+      video: await this.providers.listPublicVideoProviders(),
     };
   }
 

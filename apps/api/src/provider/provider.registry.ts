@@ -1,5 +1,4 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { QwenImageProvider } from './qwen/qwen-image.provider';
 import { GrokImageProvider } from './grok/grok-image.provider';
 import { GoogleImagenProvider } from './google-imagen/google-imagen.provider';
@@ -12,6 +11,7 @@ import { QwenVoiceProvider } from './qwen/qwen-voice.provider';
 import { WanS2VProvider } from './aliyun-wan/wan-s2v.provider';
 import { WanR2VProvider } from './aliyun-wan/wan-r2v.provider';
 import { AliyunIMSProvider } from './aliyun-ims/ims-compose.provider';
+import { ProviderConfigService, RegisteredProvider } from './provider-config.service';
 
 export interface ImageProvider {
   readonly providerId: string;
@@ -35,7 +35,7 @@ export class ProviderRegistry implements OnModuleInit {
   private videoProviders = new Map<string, VideoProvider>();
 
   constructor(
-    private readonly config: ConfigService,
+    private readonly providerConfigs: ProviderConfigService,
     private readonly qwen: QwenImageProvider,
     private readonly grok: GrokImageProvider,
     private readonly googleImagen: GoogleImagenProvider,
@@ -78,29 +78,116 @@ export class ProviderRegistry implements OnModuleInit {
     return this.videoProviders.get(id);
   }
 
+  async getImageProviderStatus(id: string): Promise<{
+    provider?: ImageProvider;
+    isEnabled: boolean;
+    available: boolean;
+    configProvider: string;
+  }> {
+    return this.getProviderStatus(this.imageProviders, id);
+  }
+
+  async getVideoProviderStatus(id: string): Promise<{
+    provider?: VideoProvider;
+    isEnabled: boolean;
+    available: boolean;
+    configProvider: string;
+  }> {
+    return this.getProviderStatus(this.videoProviders, id);
+  }
+
   async getAvailableImageProviders(): Promise<ImageProvider[]> {
-    const providers = Array.from(this.imageProviders.values());
-    const checks = await Promise.all(providers.map(async (p) => ({ provider: p, available: await p.isAvailable() })));
-    return checks.filter((c) => c.available).map((c) => c.provider);
+    return this.filterAvailableProviders(this.getRegisteredImageProviders());
   }
 
   async getAvailableVideoProviders(): Promise<VideoProvider[]> {
-    const providers = Array.from(this.videoProviders.values());
-    const checks = await Promise.all(providers.map(async (p) => ({ provider: p, available: await p.isAvailable() })));
-    return checks.filter((c) => c.available).map((c) => c.provider);
+    return this.filterAvailableProviders(this.getRegisteredVideoProviders());
   }
 
-  listImageProviders(): { id: string; name: string }[] {
-    return Array.from(this.imageProviders.values()).map((p) => ({
-      id: p.providerId,
-      name: p.displayName,
-    }));
+  async listPublicImageProviders(): Promise<{ id: string; name: string }[]> {
+    return this.providerConfigs.listPublicImageProviders(this.getRegisteredImageProviders());
   }
 
-  listVideoProviders(): { id: string; name: string }[] {
-    return Array.from(this.videoProviders.values()).map((p) => ({
-      id: p.providerId,
-      name: p.displayName,
-    }));
+  async listPublicVideoProviders(): Promise<{ id: string; name: string }[]> {
+    return this.providerConfigs.listPublicVideoProviders(this.getRegisteredVideoProviders());
+  }
+
+  async listAdminProviderDiagnostics() {
+    return this.providerConfigs.listAdminProviderDiagnostics(this.getRegisteredAdminProviders());
+  }
+
+  private getRegisteredImageProviders(): ImageProvider[] {
+    return Array.from(this.imageProviders.values());
+  }
+
+  private getRegisteredVideoProviders(): VideoProvider[] {
+    return Array.from(this.videoProviders.values());
+  }
+
+  private getRegisteredAdminProviders(): RegisteredProvider[] {
+    return [
+      ...this.getRegisteredImageProviders(),
+      ...this.getRegisteredVideoProviders(),
+      this.voiceProvider,
+      this.digitalHumanProvider,
+      this.batchComposeProvider,
+    ];
+  }
+
+  private async filterAvailableProviders<T extends RegisteredProvider>(providers: T[]): Promise<T[]> {
+    const states = await this.providerConfigs.getAllRuntimeState(providers.map((provider) => provider.providerId));
+    const availableProviders: T[] = [];
+
+    for (const provider of providers) {
+      const state = states.get(provider.providerId)!;
+
+      if (!state.isEnabled) {
+        continue;
+      }
+
+      if (await provider.isAvailable()) {
+        availableProviders.push(provider);
+      }
+    }
+
+    return availableProviders;
+  }
+
+  private async getProviderStatus<T extends RegisteredProvider>(
+    providers: Map<string, T>,
+    id: string,
+  ): Promise<{
+    provider?: T;
+    isEnabled: boolean;
+    available: boolean;
+    configProvider: string;
+  }> {
+    const provider = providers.get(id);
+    const runtimeState = await this.providerConfigs.getRuntimeState(id);
+
+    if (!provider) {
+      return {
+        provider: undefined,
+        isEnabled: runtimeState.isEnabled,
+        available: false,
+        configProvider: runtimeState.provider,
+      };
+    }
+
+    if (!runtimeState.isEnabled) {
+      return {
+        provider,
+        isEnabled: false,
+        available: false,
+        configProvider: runtimeState.provider,
+      };
+    }
+
+    return {
+      provider,
+      isEnabled: true,
+      available: await provider.isAvailable(),
+      configProvider: runtimeState.provider,
+    };
   }
 }

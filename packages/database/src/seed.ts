@@ -88,6 +88,7 @@ async function main() {
     { name: 'OpenAI Sora', provider: 'sora', apiKey: 'placeholder', apiEndpoint: 'https://api.openai.com/v1' },
     { name: '即梦 Jimeng', provider: 'jimeng', apiKey: 'placeholder', apiEndpoint: 'https://ark.cn-beijing.volces.com/api/v3' },
     { name: '通义万相 Qwen', provider: 'qwen', apiKey: 'placeholder', apiEndpoint: 'https://dashscope.aliyuncs.com/api/v1' },
+    { name: 'Google Imagen', provider: 'google-imagen', apiKey: 'placeholder', apiEndpoint: 'https://generativelanguage.googleapis.com' },
     { name: '阿里云 wan2.2-s2v', provider: 'aliyun_wan', apiKey: 'placeholder', apiEndpoint: 'https://dashscope.aliyuncs.com/api/v1' },
     { name: '阿里云 IMS', provider: 'aliyun_ims', apiKey: 'placeholder', apiEndpoint: 'https://ice.cn-shanghai.aliyuncs.com' },
     { name: 'Google Veo', provider: 'veo', apiKey: 'placeholder', apiEndpoint: 'https://generativelanguage.googleapis.com' },

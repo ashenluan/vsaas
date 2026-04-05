@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProviderConfigService } from '../provider/provider-config.service';
+import { ProviderRegistry } from '../provider/provider.registry';
 
 @Injectable()
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly providerConfigs: ProviderConfigService,
+    private readonly providers: ProviderRegistry,
+  ) {}
 
   async listUsers(query: { page?: number; pageSize?: number; search?: string; role?: string; status?: string }) {
     const { page = 1, pageSize = 20, search, role, status } = query;
@@ -250,21 +256,28 @@ export class AdminService {
   }
 
   async listProviderConfigs() {
-    const configs = await this.prisma.providerConfig.findMany({
-      orderBy: { name: 'asc' },
-    });
-    // 遮蔽 API Key，只显示前 4 位和后 4 位
-    return configs.map((c) => {
-      const cfg = (c.config as any) || {};
-      const apiKey = cfg.apiKey || '';
-      return {
-        ...c,
-        apiKey: apiKey ? `${apiKey.slice(0, 4)}****${apiKey.slice(-4)}` : '',
-      };
-    });
+    const [configs, diagnostics] = await Promise.all([
+      this.providerConfigs.listAdminProviderConfigs(),
+      this.providers.listAdminProviderDiagnostics(),
+    ]);
+    const diagnosticsByProvider = new Map(diagnostics.map((diagnostic) => [diagnostic.provider, diagnostic]));
+
+    return configs.map((config) => ({
+      ...config,
+      available: diagnosticsByProvider.get(config.provider)?.available ?? false,
+      reason: diagnosticsByProvider.get(config.provider)?.reason,
+    }));
   }
 
-  async updateProviderConfig(id: string, data: { isEnabled?: boolean; config?: any }) {
+  async updateProviderConfig(id: string, data: { isEnabled?: boolean; config?: any; apiKey?: string }) {
+    if (data.apiKey !== undefined) {
+      throw new BadRequestException('API keys remain environment-managed in this repair pass');
+    }
+
+    if (data.config && typeof data.config === 'object' && 'apiKey' in data.config) {
+      throw new BadRequestException('config 仅支持非敏感运行配置，不能写入 API Key');
+    }
+
     return this.prisma.providerConfig.update({
       where: { id },
       data: {

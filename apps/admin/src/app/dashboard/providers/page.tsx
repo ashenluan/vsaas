@@ -74,8 +74,16 @@ export default function ProvidersConfigPage() {
                   }`}>
                     {provider.isEnabled ? '已启用' : '已禁用'}
                   </span>
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                    provider.available ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {provider.available ? '环境就绪' : '环境未就绪'}
+                  </span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">ID: {provider.providerId}</p>
+                <p className="mt-1 text-xs text-muted-foreground">ID: {provider.provider}</p>
+                {!provider.available && provider.reason ? (
+                  <p className="mt-1 text-xs text-amber-700">{provider.reason}</p>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -108,7 +116,7 @@ export default function ProvidersConfigPage() {
               <h3 className="text-lg font-semibold">编辑配置</h3>
               <button onClick={() => setEditingId(null)} className="text-muted-foreground hover:text-foreground">✕</button>
             </div>
-            <p className="mb-2 text-xs text-muted-foreground">配置信息（JSON格式，包含 API Key 等）</p>
+            <p className="mb-2 text-xs text-muted-foreground">非敏感运行配置（JSON 格式，不包含 API Key 等密钥）</p>
             <textarea
               value={configJson}
               onChange={(e) => setConfigJson(e.target.value)}

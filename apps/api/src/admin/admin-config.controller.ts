@@ -14,12 +14,12 @@ export class AdminConfigController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get('providers')
-  listProviders() {
+  async listProviders() {
     return this.adminService.listProviderConfigs();
   }
 
   @Patch('providers/:id')
-  updateProvider(
+  async updateProvider(
     @Param('id') id: string,
     @Body() body: UpdateProviderConfigDto,
   ) {
