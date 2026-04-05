@@ -14,6 +14,10 @@ USER = os.environ.get("VSAAS_DEPLOY_USER")
 PASS = os.environ.get("VSAAS_DEPLOY_PASSWORD")
 DEPLOY_DIR = "/www/wwwroot/vsaas"
 COMPOSE = "docker compose --env-file .env.production -f docker-compose.prod.yml"
+MIGRATE_COMMAND = (
+    "sh -lc 'cd /app && ./node_modules/.bin/prisma migrate deploy "
+    "--schema packages/database/src/schema.prisma'"
+)
 
 
 def require_env(name):
@@ -85,7 +89,7 @@ def main():
         time.sleep(10)
         code, _, _ = ssh_exec(
             client,
-            f'cd {DEPLOY_DIR} && {COMPOSE} exec -T api pnpm --filter @vsaas/database migrate:prod 2>&1',
+            f"cd {DEPLOY_DIR} && {COMPOSE} exec -T api {MIGRATE_COMMAND} 2>&1",
             timeout=180,
         )
         if code != 0:

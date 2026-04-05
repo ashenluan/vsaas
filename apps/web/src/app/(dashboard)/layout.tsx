@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
   { label: '手持产品', desc: 'AI生成真人手持产品图', href: '/generate/handheld', icon: Hand },
   { label: '多图融合', desc: '多张图片AI智能融合', href: '/generate/multi-fusion', icon: Blend },
   { label: '数字人', desc: '克隆声音，生成数字人视频', href: '/digital-human', icon: UserCircle, badge: 'new', badgeColor: 'bg-emerald-500' },
-  { label: '批量混剪', desc: '批量合成数字人视频', href: '/digital-human/compose', icon: Clapperboard },
+  { label: '批量混剪', desc: '批量合成数字人视频', href: '/digital-human/dh-batch-v2', icon: Clapperboard },
   { label: '素材中心', desc: '管理图片视频音频素材', href: '/materials', icon: FolderOpen },
   { label: '视频拆分', desc: '长视频拆分为短片段', href: '/video-split', icon: Scissors },
   { label: '智能混剪', desc: '素材智能组合批量出片', href: '/mixcut', icon: Scissors, badge: 'new', badgeColor: 'bg-violet-500' },

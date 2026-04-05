@@ -14,6 +14,10 @@ fi
 
 export $(grep -v '^#' $ENV_FILE | xargs)
 
+run_migrations() {
+  docker compose -f "$COMPOSE_FILE" exec -T api sh -lc 'cd /app && ./node_modules/.bin/prisma migrate deploy --schema packages/database/src/schema.prisma'
+}
+
 case "$1" in
   build)
     echo "Building Docker images..."
@@ -23,7 +27,7 @@ case "$1" in
     echo "Starting services..."
     docker compose -f $COMPOSE_FILE up -d
     echo "Running database migrations..."
-    docker compose -f $COMPOSE_FILE exec api pnpm --filter @vsaas/database migrate:prod
+    run_migrations
     echo "Services are up!"
     docker compose -f $COMPOSE_FILE ps
     ;;
@@ -33,7 +37,7 @@ case "$1" in
     ;;
   migrate)
     echo "Running database migrations..."
-    docker compose -f $COMPOSE_FILE exec api pnpm --filter @vsaas/database migrate:prod
+    run_migrations
     ;;
   logs)
     docker compose -f $COMPOSE_FILE logs -f ${2:-}

@@ -141,7 +141,6 @@ export function ModelGenerationPage({
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState<string | null>(null);
-  const [historyTab, setHistoryTab] = useState<'mine' | 'public'>('mine');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const genType = type === 'image' ? 'IMAGE' : 'VIDEO';
@@ -557,26 +556,10 @@ export function ModelGenerationPage({
 
         {/* ===== History / 我的作品 ===== */}
         <div className="rounded-xl border border-border bg-card shadow-sm">
-          <div className="flex items-center border-b border-border">
-            <h3 className="px-5 py-3 text-sm font-semibold text-foreground">
+          <div className="border-b border-border px-5 py-3">
+            <h3 className="text-sm font-semibold text-foreground">
               {type === 'image' ? '我的作品' : '生成记录'}
             </h3>
-            <div className="ml-auto flex">
-              {(['mine', 'public'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setHistoryTab(tab)}
-                  className={cn(
-                    'cursor-pointer px-4 py-3 text-xs font-medium transition-colors',
-                    historyTab === tab
-                      ? 'border-b-2 border-primary text-primary'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {tab === 'mine' ? '我的' : '公共'}
-                </button>
-              ))}
-            </div>
           </div>
           <div className="p-4">
             {history.length === 0 ? (

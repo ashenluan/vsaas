@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { adminFetch } from '@/lib/api';
+import { formatOrderAmount } from '@/lib/order-amount';
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -60,7 +61,7 @@ export default function AdminOrdersPage() {
                 <tr key={order.id} className="border-b last:border-b-0">
                   <td className="px-4 py-3 font-mono text-xs">{order.id.slice(0, 8)}...</td>
                   <td className="px-4 py-3 text-xs">{order.user?.email || order.userId}</td>
-                  <td className="px-4 py-3 font-medium">¥{(order.amount / 100).toFixed(2)}</td>
+                  <td className="px-4 py-3 font-medium">¥{formatOrderAmount(order.amount)}</td>
                   <td className="px-4 py-3">{order.credits}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[order.status] || ''}`}>

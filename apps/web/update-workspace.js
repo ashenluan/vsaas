@@ -71,7 +71,7 @@ const toolCards = [
   {
     title: '批量混剪',
     desc: '批量合成数字人视频',
-    href: '/digital-human/compose',
+    href: '/digital-human/dh-batch-v2',
     icon: Clapperboard,
     gradient: 'from-violet-500/10 to-violet-500/5',
     iconColor: 'text-violet-600 bg-violet-100',

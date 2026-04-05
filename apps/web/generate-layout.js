@@ -45,7 +45,7 @@ const navItems: NavItem[] = [
   { label: '文生视频', desc: 'AI视频生成，创意无限', href: '/generate/text-to-video', icon: Video, badge: '热门', badgeColor: 'bg-blue-600' },
   { label: '图生视频', desc: '图片驱动生成动态视频', href: '/generate/image-to-video', icon: Film },
   { label: '数字人', desc: '克隆声音，生成数字人视频', href: '/digital-human', icon: UserCircle, badge: 'new', badgeColor: 'bg-emerald-500' },
-  { label: '批量混剪', desc: '批量合成数字人视频', href: '/digital-human/compose', icon: Clapperboard },
+  { label: '批量混剪', desc: '批量合成数字人视频', href: '/digital-human/dh-batch-v2', icon: Clapperboard },
   { label: '模板广场', desc: '浏览和使用创作模板', href: '/templates', icon: Layers },
 ];
 
