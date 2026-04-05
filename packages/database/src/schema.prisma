@@ -39,6 +39,7 @@ enum JobType {
   INPAINT
   IMAGE_EDIT
   STORYBOARD
+  MIXCUT
   // Legacy types (kept for backwards compatibility)
   IMAGE
   VIDEO

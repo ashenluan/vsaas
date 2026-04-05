@@ -15,6 +15,7 @@ export type JobType =
   | 'INPAINT'
   | 'IMAGE_EDIT'
   | 'STORYBOARD'
+  | 'MIXCUT'
   // Legacy types
   | 'IMAGE'
   | 'VIDEO'
