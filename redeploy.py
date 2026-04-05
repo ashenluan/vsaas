@@ -14,6 +14,7 @@ USER = os.environ.get("VSAAS_DEPLOY_USER")
 PASS = os.environ.get("VSAAS_DEPLOY_PASSWORD")
 DEPLOY_DIR = "/www/wwwroot/vsaas"
 COMPOSE = "docker compose --env-file .env.production -f docker-compose.prod.yml"
+SERVICES = "web api admin"
 MIGRATE_COMMAND = (
     "sh -lc 'cd /app/packages/database && ./node_modules/.bin/prisma "
     "migrate deploy --schema src/schema.prisma'"
@@ -74,7 +75,7 @@ def main():
         print("This will take 5-10 minutes...")
         code, _, _ = ssh_exec(
             client,
-            f"cd {DEPLOY_DIR} && {COMPOSE} up -d --build web api 2>&1",
+            f"cd {DEPLOY_DIR} && {COMPOSE} up -d --build {SERVICES} 2>&1",
             timeout=900,
         )
         if code != 0:
@@ -104,6 +105,10 @@ def main():
         ssh_exec(
             client,
             'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/workspace || echo WEB_NOT_READY',
+        )
+        ssh_exec(
+            client,
+            'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/login || echo ADMIN_NOT_READY',
         )
         ssh_exec(client, f"cd {DEPLOY_DIR} && {COMPOSE} ps")
         ssh_exec(client, f"cd {DEPLOY_DIR} && {COMPOSE} logs --tail 30 api")

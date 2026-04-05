@@ -14,6 +14,7 @@ USER = os.environ.get("VSAAS_DEPLOY_USER")
 PASS = os.environ.get("VSAAS_DEPLOY_PASSWORD")
 DEPLOY_DIR = "/www/wwwroot/vsaas"
 COMPOSE = "docker compose --env-file .env.production -f docker-compose.prod.yml"
+SERVICES = "web api admin"
 MIGRATE_COMMAND = (
     "sh -lc 'cd /app/packages/database && ./node_modules/.bin/prisma "
     "migrate deploy --schema src/schema.prisma'"
@@ -80,24 +81,24 @@ def main():
 
         run_cmd(ssh, f"cd {DEPLOY_DIR} && git log --oneline -3")
 
-        print("\n=== Rebuilding web + api ===")
+        print("\n=== Rebuilding web + api + admin ===")
         code, _, _ = run_cmd(
             ssh,
-            f"cd {DEPLOY_DIR} && {COMPOSE} build web api",
+            f"cd {DEPLOY_DIR} && {COMPOSE} build {SERVICES}",
             timeout=900,
         )
         if code != 0:
-            print("Web/API build failed!")
+            print("Service build failed!")
             raise SystemExit(1)
 
-        print("\n=== Restarting web + api ===")
+        print("\n=== Restarting web + api + admin ===")
         code, _, _ = run_cmd(
             ssh,
-            f"cd {DEPLOY_DIR} && {COMPOSE} up -d web api",
+            f"cd {DEPLOY_DIR} && {COMPOSE} up -d {SERVICES}",
             timeout=180,
         )
         if code != 0:
-            print("Web/API restart failed!")
+            print("Service restart failed!")
             raise SystemExit(1)
 
         print("\n=== Running database migrations ===")
@@ -116,6 +117,10 @@ def main():
         time.sleep(5)
         run_cmd(ssh, f"cd {DEPLOY_DIR} && {COMPOSE} ps")
         run_cmd(ssh, "curl -s http://127.0.0.1:4000/api/health")
+        run_cmd(
+            ssh,
+            'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/login || echo ADMIN_NOT_READY',
+        )
     finally:
         ssh.close()
 
