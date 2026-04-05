@@ -18,6 +18,13 @@ function createMockPrisma() {
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    creditPackage: {
+      findMany: vi.fn(),
+    },
+    order: {
+      findMany: vi.fn(),
+      count: vi.fn(),
+    },
     creditTransaction: {
       create: vi.fn(),
       findMany: vi.fn(),
@@ -189,6 +196,87 @@ describe('UserService - 积分系统', () => {
           referenceId: 'job-456',
         }),
       });
+    });
+  });
+
+  describe('billing data', () => {
+    it('lists active credit packages in sort order', async () => {
+      prisma.creditPackage.findMany.mockResolvedValue([
+        {
+          id: 'pkg-1',
+          name: '基础包',
+          credits: 200,
+          price: { toString: () => '29.90' },
+          currency: 'CNY',
+          isActive: true,
+          sortOrder: 2,
+        },
+      ]);
+
+      const packages = await service.listCreditPackages();
+
+      expect(packages).toEqual([
+        {
+          id: 'pkg-1',
+          name: '基础包',
+          credits: 200,
+          price: 29.9,
+          currency: 'CNY',
+          isActive: true,
+          sortOrder: 2,
+        },
+      ]);
+      expect(prisma.creditPackage.findMany).toHaveBeenCalledWith({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { credits: 'asc' }],
+      });
+    });
+
+    it('lists only the current user orders sorted by newest first', async () => {
+      prisma.order.findMany.mockResolvedValue([
+        {
+          id: 'order-1',
+          userId: 'user-1',
+          packageId: 'pkg-1',
+          amount: { toString: () => '29.90' },
+          credits: 200,
+          currency: 'CNY',
+          status: 'PAID',
+          paymentMethod: null,
+          createdAt: new Date('2026-04-06T09:00:00.000Z'),
+          paidAt: new Date('2026-04-06T09:01:00.000Z'),
+        },
+      ]);
+      prisma.order.count.mockResolvedValue(1);
+
+      const result = await service.getOrders('user-1', 1, 10);
+
+      expect(result).toEqual({
+        items: [
+          {
+            id: 'order-1',
+            userId: 'user-1',
+            packageId: 'pkg-1',
+            amount: 29.9,
+            credits: 200,
+            currency: 'CNY',
+            status: 'PAID',
+            paymentMethod: null,
+            createdAt: new Date('2026-04-06T09:00:00.000Z'),
+            paidAt: new Date('2026-04-06T09:01:00.000Z'),
+          },
+        ],
+        total: 1,
+        page: 1,
+        pageSize: 10,
+      });
+      expect(prisma.order.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        orderBy: { createdAt: 'desc' },
+        skip: 0,
+        take: 10,
+      });
+      expect(prisma.order.count).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
     });
   });
 });

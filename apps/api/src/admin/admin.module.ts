@@ -6,6 +6,7 @@ import { AdminCreditsController } from './admin-credits.controller';
 import { AdminConfigController } from './admin-config.controller';
 import { AdminOrdersController } from './admin-orders.controller';
 import { AdminAnalyticsController } from './admin-analytics.controller';
+import { AdminPricingController } from './admin-pricing.controller';
 import { AdminService } from './admin.service';
 import { UserModule } from '../user/user.module';
 import { AdminAuditInterceptor } from '../common/interceptors/admin-audit.interceptor';
@@ -20,6 +21,7 @@ import { ProviderModule } from '../provider/provider.module';
     AdminConfigController,
     AdminOrdersController,
     AdminAnalyticsController,
+    AdminPricingController,
   ],
   providers: [
     AdminService,

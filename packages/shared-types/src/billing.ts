@@ -28,3 +28,26 @@ export interface CreditTransactionRecord {
   balanceAfter: number;
   createdAt: string;
 }
+
+export interface CreditPackage {
+  id: string;
+  name: string;
+  credits: number;
+  price: number;
+  currency: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface Order {
+  id: string;
+  userId: string;
+  packageId: string | null;
+  amount: number;
+  credits: number;
+  currency: string;
+  status: OrderStatus;
+  paymentMethod: string | null;
+  createdAt: string;
+  paidAt: string | null;
+}

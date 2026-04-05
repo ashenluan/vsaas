@@ -13,6 +13,9 @@ function createMockPrisma() {
     creditTransaction: {
       aggregate: vi.fn(),
     },
+    creditPackage: {
+      findMany: vi.fn(),
+    },
   };
 }
 
@@ -78,6 +81,37 @@ describe('AdminService', () => {
     });
     expect(prisma.user.aggregate).toHaveBeenCalledWith({
       _sum: { creditBalance: true },
+    });
+  });
+
+  it('lists all credit packages for admin pricing screens', async () => {
+    prisma.creditPackage.findMany.mockResolvedValue([
+      {
+        id: 'pkg-1',
+        name: '专业包',
+        credits: 1000,
+        price: { toString: () => '99.90' },
+        currency: 'CNY',
+        isActive: false,
+        sortOrder: 3,
+      },
+    ]);
+
+    const packages = await service.listCreditPackages();
+
+    expect(packages).toEqual([
+      {
+        id: 'pkg-1',
+        name: '专业包',
+        credits: 1000,
+        price: 99.9,
+        currency: 'CNY',
+        isActive: false,
+        sortOrder: 3,
+      },
+    ]);
+    expect(prisma.creditPackage.findMany).toHaveBeenCalledWith({
+      orderBy: [{ sortOrder: 'asc' }, { credits: 'asc' }],
     });
   });
 });

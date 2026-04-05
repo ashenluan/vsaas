@@ -54,4 +54,22 @@ export class UserController {
       pageSize ? parseInt(pageSize, 10) : 20,
     );
   }
+
+  @Get('billing/packages')
+  getCreditPackages() {
+    return this.userService.listCreditPackages();
+  }
+
+  @Get('orders')
+  getOrders(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.userService.getOrders(
+      req.user.sub,
+      page ? parseInt(page, 10) : 1,
+      pageSize ? parseInt(pageSize, 10) : 20,
+    );
+  }
 }

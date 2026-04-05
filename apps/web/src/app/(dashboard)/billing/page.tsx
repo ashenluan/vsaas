@@ -2,34 +2,54 @@
 
 import { useState, useEffect } from 'react';
 import { userApi } from '@/lib/api';
-import { Wallet, Sparkles, CreditCard, ChevronRight, Check } from 'lucide-react';
+import type { CreditPackage, Order } from '@vsaas/shared-types';
+import { Wallet, Sparkles, CreditCard, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-const creditPackages = [
-  { id: 'pack1', credits: 100, price: '¥9.9', popular: false, highlight: false },
-  { id: 'pack2', credits: 500, price: '¥39.9', popular: true, highlight: true },
-  { id: 'pack3', credits: 1000, price: '¥69.9', popular: false, highlight: false },
-  { id: 'pack4', credits: 5000, price: '¥299.9', popular: false, highlight: false },
-];
+function formatPrice(price: number) {
+  return `¥${price.toFixed(price % 1 === 0 ? 0 : 1)}`;
+}
+
+function getPackageFlags(packages: CreditPackage[], currentId: string) {
+  const sorted = [...packages].sort((a, b) => a.price - b.price);
+  const median = sorted[Math.floor(sorted.length / 2)]?.id;
+  return {
+    popular: currentId === median,
+    highlight: currentId === median,
+  };
+}
+
+const orderStatusLabels: Record<string, string> = {
+  PENDING: '待处理',
+  PAID: '已入账',
+  FAILED: '失败',
+  REFUNDED: '已退款',
+};
 
 export default function BillingPage() {
   const [balance, setBalance] = useState<number | null>(null);
+  const [packages, setPackages] = useState<CreditPackage[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    userApi.getCredits()
-      .then((res: any) => {
+    Promise.all([
+      userApi.getCredits().catch(() => null),
+      userApi.getBillingPackages().catch(() => []),
+      userApi.getOrders(1, 6).catch(() => ({ items: [] })),
+    ])
+      .then(([res, pkgRes, orderRes]: any) => {
         setBalance(typeof res === 'number' ? res : res?.balance ?? 0);
-        setLoading(false);
+        setPackages(Array.isArray(pkgRes) ? pkgRes : []);
+        setOrders(Array.isArray(orderRes?.items) ? orderRes.items : []);
       })
-      .catch(() => setLoading(false));
+      .finally(() => setLoading(false));
   }, []);
 
-  const handleTopUp = (pack: any) => {
-    // In a real app, this would redirect to payment
-    alert(`正在为您充值 ${pack.credits} 积分，价格 ${pack.price}`);
+  const handleTopUp = (pack: CreditPackage) => {
+    alert(`当前为人工充值模式，请联系管理员为您充值「${pack.name}」：${pack.credits} 积分，价格 ${formatPrice(pack.price)}。`);
   };
 
   return (
@@ -76,38 +96,53 @@ export default function BillingPage() {
         <div>
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900 tracking-tight">充值积分</h2>
-            <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 font-bold px-3 py-1 text-xs">安全支付</Badge>
+            <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 font-bold px-3 py-1 text-xs">人工充值</Badge>
           </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {creditPackages.map((pack) => (
+
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Card key={index} className="rounded-2xl border border-slate-200 shadow-sm bg-white">
+                  <CardContent className="p-6">
+                    <div className="h-6 w-20 animate-pulse rounded bg-slate-100" />
+                    <div className="mt-4 h-10 w-28 animate-pulse rounded bg-slate-100" />
+                    <div className="mt-6 h-24 animate-pulse rounded bg-slate-50" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : packages.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {packages.map((pack) => {
+                const { popular, highlight } = getPackageFlags(packages, pack.id);
+                return (
               <Card 
                 key={pack.id} 
                 className={`relative overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
-                  pack.highlight 
+                  highlight 
                     ? 'border-2 border-primary shadow-md bg-blue-50/30' 
                     : 'border border-slate-200 shadow-sm bg-white'
                 }`}
               >
-                {pack.popular && (
+                {popular && (
                   <div className="absolute top-0 inset-x-0 bg-primary text-white text-[10px] font-bold uppercase tracking-wider py-1 text-center">
                     最受欢迎
                   </div>
                 )}
 
-                <CardHeader className={`pb-4 ${pack.popular ? 'pt-8' : 'pt-6'}`}>
+                <CardHeader className={`pb-4 ${popular ? 'pt-8' : 'pt-6'}`}>
                   <CardTitle className="flex justify-between items-start">
                     <div className="flex items-center gap-1.5">
-                      <Sparkles size={18} className={pack.highlight ? 'text-primary' : 'text-slate-400'} />
+                      <Sparkles size={18} className={highlight ? 'text-primary' : 'text-slate-400'} />
                       <span className="text-2xl font-extrabold tracking-tight text-slate-900">{pack.credits}</span>
                     </div>
                   </CardTitle>
-                  <CardDescription className="font-semibold text-slate-500">积分</CardDescription>
+                  <CardDescription className="font-semibold text-slate-500">{pack.name}</CardDescription>
                 </CardHeader>
                 
                 <CardContent className="pb-6 pt-0">
                   <div className="flex items-end gap-1 mb-4">
-                    <span className="text-3xl font-extrabold tracking-tight text-slate-900">{pack.price}</span>
+                    <span className="text-3xl font-extrabold tracking-tight text-slate-900">{formatPrice(pack.price)}</span>
                   </div>
                   
                   <ul className="space-y-2 mb-6 text-sm">
@@ -127,30 +162,63 @@ export default function BillingPage() {
                   
                   <Button 
                     className={`w-full h-11 rounded-xl font-bold transition-all shadow-sm ${
-                      pack.highlight 
+                      highlight 
                         ? 'bg-primary hover:bg-blue-700 text-white hover:shadow-md' 
                         : 'bg-slate-100 text-slate-900 hover:bg-slate-200 hover:shadow-md border border-slate-200'
                     }`}
                     onClick={() => handleTopUp(pack)}
                   >
-                    立即购买
+                    人工充值
                   </Button>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <Card className="border-slate-200/60 shadow-sm bg-white rounded-2xl">
+              <CardContent className="p-12 text-center text-sm text-slate-500">
+                当前还没有可用积分包，请先在管理后台配置套餐。
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Transaction History Placeholder */}
+        {/* Transaction History */}
         <div className="mt-4">
           <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-4">最近交易</h2>
           <Card className="border-slate-200/60 shadow-sm bg-white rounded-2xl">
-            <CardContent className="p-12 flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
-                <CreditCard size={28} className="text-slate-300" />
-              </div>
-              <h3 className="text-base font-semibold text-slate-700 mb-1">暂无交易记录</h3>
-              <p className="text-sm text-slate-500 max-w-[250px]">当您购买积分后，交易记录将显示在此处。</p>
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="p-12 text-center text-sm text-slate-500">正在加载交易记录...</div>
+              ) : orders.length === 0 ? (
+                <div className="p-12 flex flex-col items-center justify-center text-center">
+                  <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
+                    <CreditCard size={28} className="text-slate-300" />
+                  </div>
+                  <h3 className="text-base font-semibold text-slate-700 mb-1">暂无交易记录</h3>
+                  <p className="text-sm text-slate-500 max-w-[250px]">管理员为您充值后，最近订单会显示在这里。</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {orders.map((order) => (
+                    <div key={order.id} className="flex flex-col gap-3 p-5 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{orderStatusLabels[order.status] || order.status}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          订单 {order.id.slice(0, 8)}... · {new Date(order.createdAt).toLocaleString('zh-CN')}
+                        </p>
+                      </div>
+                      <div className="text-left md:text-right">
+                        <p className="text-sm font-semibold text-slate-900">+{order.credits} 积分</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {formatPrice(order.amount)} · {order.paymentMethod || '人工充值'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

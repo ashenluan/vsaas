@@ -1,4 +1,5 @@
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from './auth';
+import type { CreditPackage, Order } from '@vsaas/shared-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 export const API_UNAUTHORIZED_EVENT = 'api:unauthorized';
@@ -131,6 +132,11 @@ export const userApi = {
   getCredits: () => apiFetch<number>('/user/credits'),
   getCreditHistory: (page = 1, pageSize = 20) =>
     apiFetch(`/user/credits/history?page=${page}&pageSize=${pageSize}`),
+  getBillingPackages: () => apiFetch<CreditPackage[]>('/user/billing/packages'),
+  getOrders: (page = 1, pageSize = 20) =>
+    apiFetch<{ items: Order[]; total: number; page: number; pageSize: number }>(
+      `/user/orders?page=${page}&pageSize=${pageSize}`,
+    ),
 };
 
 // Generation

@@ -12,6 +12,15 @@ export class AdminService {
     private readonly providers: ProviderRegistry,
   ) {}
 
+  private normalizeAmount(amount: unknown): number {
+    if (typeof amount === 'number') return amount;
+    if (typeof amount === 'string') return Number(amount);
+    if (amount && typeof amount === 'object' && 'toString' in amount) {
+      return Number(amount.toString());
+    }
+    return Number.NaN;
+  }
+
   async listUsers(query: { page?: number; pageSize?: number; search?: string; role?: string; status?: string }) {
     const { page = 1, pageSize = 20, search, role, status } = query;
     const where: any = {};
@@ -218,6 +227,17 @@ export class AdminService {
       where: { id },
       data: { status: status as any, ...(status === 'PAID' ? { paidAt: new Date() } : {}) },
     });
+  }
+
+  async listCreditPackages() {
+    const packages = await this.prisma.creditPackage.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { credits: 'asc' }],
+    });
+
+    return packages.map((pkg) => ({
+      ...pkg,
+      price: this.normalizeAmount(pkg.price),
+    }));
   }
 
   async getDailyStats(days: number = 30) {

@@ -7,6 +7,15 @@ export class UserService {
   private readonly logger = new Logger(UserService.name);
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeAmount(amount: unknown): number {
+    if (typeof amount === 'number') return amount;
+    if (typeof amount === 'string') return Number(amount);
+    if (amount && typeof amount === 'object' && 'toString' in amount) {
+      return Number(amount.toString());
+    }
+    return Number.NaN;
+  }
+
   async getProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -129,5 +138,39 @@ export class UserService {
       this.prisma.creditTransaction.count({ where: { userId } }),
     ]);
     return { items, total, page, pageSize };
+  }
+
+  async listCreditPackages() {
+    const packages = await this.prisma.creditPackage.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { credits: 'asc' }],
+    });
+
+    return packages.map((pkg) => ({
+      ...pkg,
+      price: this.normalizeAmount(pkg.price),
+    }));
+  }
+
+  async getOrders(userId: string, page: number = 1, pageSize: number = 20) {
+    const [items, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.order.count({ where: { userId } }),
+    ]);
+
+    return {
+      items: items.map((order) => ({
+        ...order,
+        amount: this.normalizeAmount(order.amount),
+      })),
+      total,
+      page,
+      pageSize,
+    };
   }
 }
