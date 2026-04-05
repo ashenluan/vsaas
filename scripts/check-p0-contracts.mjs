@@ -24,12 +24,20 @@ for (const file of migrationFiles) {
     `${file} still depends on pnpm inside the api runtime container`,
   );
   assert(
-    content.includes('prisma migrate deploy'),
-    `${file} must invoke prisma migrate deploy during deployment`,
+    content.includes('./node_modules/.bin/prisma'),
+    `${file} must invoke the bundled Prisma CLI during deployment`,
   );
   assert(
-    content.includes('packages/database/src/schema.prisma'),
-    `${file} must target packages/database/src/schema.prisma`,
+    content.includes('migrate deploy'),
+    `${file} must run prisma migrate deploy during deployment`,
+  );
+  assert(
+    content.includes('cd /app/packages/database'),
+    `${file} must run prisma from /app/packages/database inside the api container`,
+  );
+  assert(
+    content.includes('--schema src/schema.prisma'),
+    `${file} must target src/schema.prisma from the database package directory`,
   );
 }
 

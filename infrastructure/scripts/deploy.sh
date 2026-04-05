@@ -15,7 +15,7 @@ fi
 export $(grep -v '^#' $ENV_FILE | xargs)
 
 run_migrations() {
-  docker compose -f "$COMPOSE_FILE" exec -T api sh -lc 'cd /app && ./node_modules/.bin/prisma migrate deploy --schema packages/database/src/schema.prisma'
+  docker compose -f "$COMPOSE_FILE" exec -T api sh -lc 'cd /app/packages/database && ./node_modules/.bin/prisma migrate deploy --schema src/schema.prisma'
 }
 
 case "$1" in

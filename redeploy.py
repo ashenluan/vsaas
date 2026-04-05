@@ -15,8 +15,8 @@ PASS = os.environ.get("VSAAS_DEPLOY_PASSWORD")
 DEPLOY_DIR = "/www/wwwroot/vsaas"
 COMPOSE = "docker compose --env-file .env.production -f docker-compose.prod.yml"
 MIGRATE_COMMAND = (
-    "sh -lc 'cd /app && ./node_modules/.bin/prisma migrate deploy "
-    "--schema packages/database/src/schema.prisma'"
+    "sh -lc 'cd /app/packages/database && ./node_modules/.bin/prisma "
+    "migrate deploy --schema src/schema.prisma'"
 )
 
 

@@ -27,10 +27,12 @@ Use this path when GitHub Actions is blocked but production still needs to be up
 4. Rebuild and restart services:
    - Full rollout: `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api web admin`
    - API-only fix: `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api`
-5. Clear Nginx cache and reload:
+5. Run database migrations from inside the API container:
+   - `docker compose --env-file .env.production -f docker-compose.prod.yml exec -T api sh -lc 'cd /app/packages/database && ./node_modules/.bin/prisma migrate deploy --schema src/schema.prisma'`
+6. Clear Nginx cache and reload:
    - `rm -rf /www/server/nginx/proxy_cache_dir/vsaas* 2>/dev/null || true`
    - `/www/server/nginx/sbin/nginx -s reload 2>/dev/null || true`
-6. Run health checks:
+7. Run health checks:
    - `curl -sf http://127.0.0.1:4000/api/health`
    - `curl -I https://a.newcn.cc/`
    - `curl https://a.newcn.cc/api/health`
@@ -46,5 +48,5 @@ Use this path when GitHub Actions is blocked but production still needs to be up
 ## Known Caveats
 
 - The current GitHub Actions account may be blocked by billing issues. If Actions jobs fail before any steps run, use the manual fallback.
-- `deploy.yml` currently tries to run `pnpm --filter @vsaas/database migrate:prod` inside the API runtime container. That container does not include `pnpm`, so the migration step can be skipped/fail even when the rollout succeeds.
+- The API runtime container exposes Prisma under `/app/packages/database/node_modules/.bin/prisma`, not `/app/node_modules/.bin/prisma`.
 - Do not commit production passwords or secret values into the repository. Keep credentials in environment variables or out-of-band notes only.
