@@ -152,7 +152,7 @@ export const generationApi = {
     apiFetch('/generations/video', { method: 'POST', body: JSON.stringify(data) }),
   composeStoryboard: (data: any) =>
     apiFetch('/generations/storyboard/compose', { method: 'POST', body: JSON.stringify(data) }),
-  getPricingCatalog: () => apiFetch<PublicPricingCatalog>('/generations/pricing'),
+  getPricingCatalog: () => apiFetch<PublicPricingCatalog>('/catalog/generation-pricing'),
   list: (params?: { type?: string; status?: string; page?: number; provider?: string }) => {
     const qs = new URLSearchParams();
     if (params?.type) qs.set('type', params.type);
