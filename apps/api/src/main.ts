@@ -8,6 +8,20 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
+  // 启动时校验必需环境变量
+  const requiredEnvVars = [
+    'JWT_SECRET',
+    'JWT_REFRESH_SECRET',
+    'DATABASE_URL',
+    'IMS_CALLBACK_TOKEN',
+  ];
+  const missing = requiredEnvVars.filter((v) => !config.get(v));
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables: ${missing.join(', ')}`,
+    );
+  }
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

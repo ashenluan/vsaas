@@ -44,6 +44,7 @@ export default function VideoSplitPage() {
       return;
     }
     setVideoFile(file);
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(URL.createObjectURL(file));
     setSplitPoints([]);
     setSegments([]);

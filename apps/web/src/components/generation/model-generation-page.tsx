@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { generationApi } from '@/lib/api';
-import { useJobUpdates } from '@/components/ws-provider';
+import { useJobUpdates, useWs } from '@/components/ws-provider';
 import { uploadToOSS } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -146,6 +146,8 @@ export function ModelGenerationPage({
 
   const genType = type === 'image' ? 'IMAGE' : 'VIDEO';
 
+  const { connected: wsConnected } = useWs();
+
   /* ---- WebSocket updates ---- */
   useJobUpdates(activeJobId, (data) => {
     setResult((prev: any) => ({ ...prev, ...data }));
@@ -251,7 +253,8 @@ export function ModelGenerationPage({
       setResult(job);
       setActiveJobId(job.id);
       setLoading(false);
-      pollJob(job.id);
+      // Only start polling if WebSocket is not connected
+      if (!wsConnected) pollJob(job.id);
     } catch (err: any) {
       setError(err.message || '生成失败');
       setLoading(false);

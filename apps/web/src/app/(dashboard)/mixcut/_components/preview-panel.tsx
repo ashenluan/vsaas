@@ -42,14 +42,20 @@ export function PreviewPanel() {
       message: data.message || '',
     });
     if (data.status === 'COMPLETED') {
-      if (data.isPreviewOnly) {
+      if (data.isPreviewOnly && data.outputVideos?.length) {
+        setOutputVideos(data.outputVideos);
         setJobStatus('COMPLETED');
-        toast.success('快速预览完成（预览模式不生成视频文件）');
+        toast.success('快速预览完成');
+      } else if (data.isPreviewOnly) {
+        setJobStatus('COMPLETED');
+        toast.success('快速预览完成');
       } else if (data.outputVideos?.length) {
         setOutputVideos(data.outputVideos);
         setJobStatus('COMPLETED');
+        toast.success(`智能混剪完成，生成 ${data.outputVideos.length} 个视频`);
       } else {
         setJobStatus('COMPLETED');
+        toast.success('智能混剪任务完成');
       }
     }
   });
@@ -84,10 +90,11 @@ export function PreviewPanel() {
 
   const estimatedCount = Math.min(shotCombinations, 100);
 
-  // Estimate per-video duration
+  // Estimate per-video duration: each group contributes one material's average duration
   const totalDuration = enabledGroups.reduce((acc, group) => {
-    const groupDuration = group.materials.reduce((sum, m) => sum + (m.duration || 3), 0);
-    return acc + (groupDuration > 0 ? groupDuration / Math.max(group.materials.length, 1) : 3);
+    if (group.materials.length === 0) return acc + 3;
+    const avgDuration = group.materials.reduce((sum, m) => sum + (m.duration || 3), 0) / group.materials.length;
+    return acc + avgDuration;
   }, 0);
 
   // Check if ready to submit
@@ -210,8 +217,19 @@ export function PreviewPanel() {
         ...(globalConfig.singleShotDuration > 0 && { singleShotDuration: globalConfig.singleShotDuration }),
         ...(globalConfig.imageDuration > 0 && { imageDuration: globalConfig.imageDuration }),
         ...(globalConfig.alignmentMode && { alignmentMode: globalConfig.alignmentMode }),
-        // 快速预览
-        ...(previewOnly && { generatePreviewOnly: true }),
+        // 快速预览: 生成1个低分辨率视频作为预览
+        ...(previewOnly && {
+          videoCount: 1,
+          resolution: (() => {
+            // 降低分辨率用于预览
+            const parts = globalConfig.resolution.split('x').map(Number);
+            if (parts.length === 2) {
+              const scale = 0.5;
+              return `${Math.round(parts[0] * scale)}x${Math.round(parts[1] * scale)}`;
+            }
+            return '540x960';
+          })(),
+        }),
         // Background
         ...(globalConfig.bgType !== 'none' && { bgType: globalConfig.bgType }),
         ...(globalConfig.bgType === 'color' && { bgColor: globalConfig.bgColor }),
@@ -266,7 +284,7 @@ export function PreviewPanel() {
 
       const job = await mixcutApi.create(payload);
       setResult({ success: true, jobId: job.id });
-      toast.success(previewOnly ? '预览任务已提交' : '混剪任务已提交');
+      toast.success(previewOnly ? '预览任务已提交（生成1条预览视频）' : '混剪任务已提交');
     } catch (err: any) {
       setResult({ success: false, error: err.message || '提交失败' });
       toast.error(err?.message || '提交混剪任务失败');
@@ -402,13 +420,31 @@ export function PreviewPanel() {
             })(),
           }}
         >
-          {/* Preview placeholder */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {/* Preview: show first material thumbnail or placeholder */}
+          {(() => {
+            const firstMat = enabledGroups[0]?.materials[0];
+            if (firstMat?.type === 'VIDEO') {
+              return (
+                <video
+                  src={firstMat.thumbnailUrl || firstMat.url}
+                  preload="metadata"
+                  muted
+                  playsInline
+                  className="absolute inset-0 h-full w-full object-cover"
+                  onLoadedData={(e) => { (e.target as HTMLVideoElement).currentTime = 0.1; }}
+                />
+              );
+            }
+            if (firstMat?.type === 'IMAGE') {
+              return <img src={firstMat.thumbnailUrl || firstMat.url} alt="" className="absolute inset-0 h-full w-full object-cover" />;
+            }
+            return null;
+          })()}
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30">
             <button className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-colors">
               <Play size={20} className="text-white ml-0.5" />
             </button>
-            <p className="text-[11px] text-white/60">请点击查看</p>
-            <p className="text-[10px] text-white/40">模拟效果</p>
+            <p className="text-[11px] text-white/60">{enabledGroups[0]?.materials[0] ? '素材预览' : '请添加素材'}</p>
           </div>
 
           {/* Watermark preview */}
@@ -616,7 +652,7 @@ export function PreviewPanel() {
           </span>
         ) : (
           <span className="inline-flex items-center gap-2">
-            <Zap size={14} /> 快速预览（低消耗）
+            <Zap size={14} /> 快速预览（生成1条低分辨率视频）
           </span>
         )}
       </button>

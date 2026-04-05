@@ -2,25 +2,48 @@
 
 import { useState, useEffect } from 'react';
 import { userApi } from '@/lib/api';
+import { logout } from '@/lib/auth';
 import { UserCircle, Mail, Key, Shield, LogOut, Save, Sparkles, Phone, CreditCard, ChevronRight, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
+  const [displayName, setDisplayName] = useState('');
 
   useEffect(() => {
     userApi.getProfile()
       .then(data => {
         setProfile(data);
+        setDisplayName(data.displayName || '');
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!displayName.trim()) {
+      toast.error('显示名称不能为空');
+      return;
+    }
+    setSaving(true);
+    try {
+      await userApi.updateProfile({ displayName: displayName.trim() });
+      setProfile((prev: any) => ({ ...prev, displayName: displayName.trim() }));
+      toast.success('个人资料已更新');
+    } catch (err: any) {
+      toast.error(err?.message || '更新失败');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-4xl w-full">
@@ -57,10 +80,7 @@ export default function SettingsPage() {
             <div className="h-px bg-slate-100 my-2 mx-3"></div>
             
             <button
-              onClick={() => {
-                localStorage.removeItem('accessToken');
-                window.location.href = '/login';
-              }}
+              onClick={logout}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-all"
             >
               <LogOut size={18} />
@@ -91,21 +111,21 @@ export default function SettingsPage() {
                       <p className="text-sm text-slate-500 font-medium">{profile?.email}</p>
                     </div>
                     
-                    <form className="space-y-4">
+                    <form className="space-y-4" onSubmit={handleSaveProfile}>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <label className="text-xs font-bold text-slate-700 tracking-wider">显示名称</label>
-                          <Input defaultValue={profile?.displayName} className="h-11 rounded-xl border-slate-200 bg-slate-50 focus-visible:ring-primary focus-visible:bg-white transition-all px-4 font-medium" />
+                          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-11 rounded-xl border-slate-200 bg-slate-50 focus-visible:ring-primary focus-visible:bg-white transition-all px-4 font-medium" />
                         </div>
                         <div className="space-y-1.5">
                           <label className="text-xs font-bold text-slate-700 tracking-wider">邮箱地址</label>
                           <Input defaultValue={profile?.email} readOnly className="h-11 rounded-xl border-slate-200 bg-slate-100 text-slate-500 px-4 font-medium" />
                         </div>
                       </div>
-                      
+
                       <div className="pt-4 flex justify-end">
-                        <Button className="h-11 px-6 rounded-xl font-bold shadow-md hover:shadow-lg transition-all" variant="default">
-                          <Save size={16} className="mr-2" /> 保存修改
+                        <Button type="submit" disabled={saving} className="h-11 px-6 rounded-xl font-bold shadow-md hover:shadow-lg transition-all" variant="default">
+                          <Save size={16} className="mr-2" /> {saving ? '保存中...' : '保存修改'}
                         </Button>
                       </div>
                     </form>

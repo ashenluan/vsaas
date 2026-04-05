@@ -50,25 +50,36 @@ export class DigitalHumanService {
     const cost = 10;
     await this.userService.deductCredits(userId, cost, `声音克隆: ${name}`);
 
-    const voice = await this.prisma.voice.create({
-      data: {
-        userId,
-        name,
-        voiceId: '',
-        sampleUrl,
-        status: 'PENDING',
-      },
-    });
+    let voice: any;
+    try {
+      voice = await this.prisma.voice.create({
+        data: {
+          userId,
+          name,
+          voiceId: '',
+          sampleUrl,
+          status: 'PENDING',
+        },
+      });
 
-    // Dispatch to BullMQ queue for reliable processing
-    await this.voiceQueue.add('clone', {
-      voiceId: voice.id,
-      userId,
-      sampleUrl,
-    }, {
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 5000 },
-    });
+      // Dispatch to BullMQ queue for reliable processing
+      await this.voiceQueue.add('clone', {
+        voiceId: voice.id,
+        userId,
+        sampleUrl,
+        creditCost: cost,
+      }, {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+      });
+    } catch (error) {
+      this.logger.error(`Voice clone failed to enqueue, refunding ${cost} credits`);
+      await this.userService.addCredits(userId, cost, 'REFUND', '退款: 声音克隆入队失败');
+      if (voice) {
+        await this.prisma.voice.update({ where: { id: voice.id }, data: { status: 'FAILED', metadata: { error: '入队失败' } } }).catch(() => {});
+      }
+      throw error;
+    }
 
     this.logger.log(`Voice clone job queued: ${voice.id}`);
     return voice;
@@ -578,53 +589,63 @@ export class DigitalHumanService {
     }
 
     // Create generation record
-    const job = await this.prisma.generation.create({
-      data: {
-        userId,
-        type: 'BATCH_COMPOSE',
-        status: delay ? 'PENDING' : 'PENDING',
-        provider: 'aliyun-ims',
-        creditsUsed: totalCost,
-        input: {
-          mode: 'mixcut',
-          name: data.name,
-          shotGroups: data.shotGroups,
-          speechMode: data.speechMode,
-          speechTexts: data.speechTexts,
-          voiceId: data.voiceId,
-          videoCount: data.videoCount,
-          resolution: data.resolution,
-          bgMusic: data.bgMusic,
-          subtitleConfig: data.subtitleConfig,
-          titleConfig: data.titleConfig,
-          highlightWords: data.highlightWords,
-          ...(data.scheduledAt && { scheduledAt: data.scheduledAt }),
-          ...(data.publishPlatforms?.length && { publishPlatforms: data.publishPlatforms }),
-          ...(data.coverType && { coverType: data.coverType, coverUrl: data.coverUrl, coverConfig: data.coverConfig }),
-          ...(data.dedupConfig && { dedupConfig: data.dedupConfig }),
-          ...(data.watermarkText && {
-            watermarkText: data.watermarkText,
-            watermarkPosition: data.watermarkPosition,
-            watermarkOpacity: data.watermarkOpacity,
-          }),
+    let job: any;
+    try {
+      job = await this.prisma.generation.create({
+        data: {
+          userId,
+          type: 'BATCH_COMPOSE',
+          status: 'PENDING',
+          provider: 'aliyun-ims',
+          creditsUsed: totalCost,
+          input: {
+            mode: 'mixcut',
+            name: data.name,
+            shotGroups: data.shotGroups,
+            speechMode: data.speechMode,
+            speechTexts: data.speechTexts,
+            voiceId: data.voiceId,
+            videoCount: data.videoCount,
+            resolution: data.resolution,
+            bgMusic: data.bgMusic,
+            subtitleConfig: data.subtitleConfig,
+            titleConfig: data.titleConfig,
+            highlightWords: data.highlightWords,
+            ...(data.scheduledAt && { scheduledAt: data.scheduledAt }),
+            ...(data.publishPlatforms?.length && { publishPlatforms: data.publishPlatforms }),
+            ...(data.coverType && { coverType: data.coverType, coverUrl: data.coverUrl, coverConfig: data.coverConfig }),
+            ...(data.dedupConfig && { dedupConfig: data.dedupConfig }),
+            ...(data.watermarkText && {
+              watermarkText: data.watermarkText,
+              watermarkPosition: data.watermarkPosition,
+              watermarkOpacity: data.watermarkOpacity,
+            }),
+          },
         },
-      },
-    });
+      });
 
-    // Dispatch to mixcut queue — goes directly to IMS (no TTS/S2V)
-    // If scheduled, use BullMQ delay to defer processing
-    await this.mixcutQueue.add('mixcut', {
-      jobId: job.id,
-      userId,
-      inputConfig,
-      editingConfig,
-      outputConfig,
-      videoCount: data.videoCount,
-    }, {
-      attempts: 2,
-      backoff: { type: 'exponential', delay: 10000 },
-      ...(delay && { delay }),
-    });
+      // Dispatch to mixcut queue — goes directly to IMS (no TTS/S2V)
+      // If scheduled, use BullMQ delay to defer processing
+      await this.mixcutQueue.add('mixcut', {
+        jobId: job.id,
+        userId,
+        inputConfig,
+        editingConfig,
+        outputConfig,
+        videoCount: data.videoCount,
+      }, {
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 10000 },
+        ...(delay && { delay }),
+      });
+    } catch (error) {
+      this.logger.error(`Mixcut job failed to enqueue, refunding ${totalCost} credits`);
+      await this.userService.addCredits(userId, totalCost, 'REFUND', '退款: 混剪任务入队失败');
+      if (job) {
+        await this.prisma.generation.update({ where: { id: job.id }, data: { status: 'FAILED', errorMsg: '任务入队失败' } }).catch(() => {});
+      }
+      throw error;
+    }
 
     this.logger.log(`Mixcut job ${job.id} queued: ${data.videoCount} videos, ${data.shotGroups.length} shot groups`);
     return job;
@@ -709,41 +730,51 @@ export class DigitalHumanService {
     );
 
     // Create generation record
-    const job = await this.prisma.generation.create({
-      data: {
-        userId,
-        type: 'DIGITAL_HUMAN_VIDEO',
-        status: 'PENDING',
-        provider: 'aliyun-wan',
-        creditsUsed: cost,
-        input: {
-          name: data.name,
-          avatarId: data.avatarId,
-          avatarUrl: avatar.url,
-          driveMode: data.driveMode,
-          resolution: data.resolution,
-          ...(data.driveMode === 'text'
-            ? { voiceId: data.voiceId, text: data.text, speechRate: data.speechRate || 1.0 }
-            : data.driveMode === 'video'
-              ? { videoUrl: data.videoUrl, animateMode: data.animateMode || 'wan-std' }
-              : { audioUrl: data.audioUrl }),
+    let job: any;
+    try {
+      job = await this.prisma.generation.create({
+        data: {
+          userId,
+          type: 'DIGITAL_HUMAN_VIDEO',
+          status: 'PENDING',
+          provider: 'aliyun-wan',
+          creditsUsed: cost,
+          input: {
+            name: data.name,
+            avatarId: data.avatarId,
+            avatarUrl: avatar.url,
+            driveMode: data.driveMode,
+            resolution: data.resolution,
+            ...(data.driveMode === 'text'
+              ? { voiceId: data.voiceId, text: data.text, speechRate: data.speechRate || 1.0 }
+              : data.driveMode === 'video'
+                ? { videoUrl: data.videoUrl, animateMode: data.animateMode || 'wan-std' }
+                : { audioUrl: data.audioUrl }),
+          },
         },
-      },
-    });
+      });
 
-    // Dispatch to queue
-    await this.dhVideoQueue.add(
-      'create-video',
-      {
-        jobId: job.id,
-        userId,
-        input: job.input,
-      },
-      {
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 10000 },
-      },
-    );
+      // Dispatch to queue
+      await this.dhVideoQueue.add(
+        'create-video',
+        {
+          jobId: job.id,
+          userId,
+          input: job.input,
+        },
+        {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 10000 },
+        },
+      );
+    } catch (error) {
+      this.logger.error(`DH video failed to enqueue, refunding ${cost} credits`);
+      await this.userService.addCredits(userId, cost, 'REFUND', '退款: 数字人视频入队失败');
+      if (job) {
+        await this.prisma.generation.update({ where: { id: job.id }, data: { status: 'FAILED', errorMsg: '任务入队失败' } }).catch(() => {});
+      }
+      throw error;
+    }
 
     this.logger.log(`Digital human video job ${job.id} queued for user ${userId}`);
     return job;
@@ -839,49 +870,59 @@ export class DigitalHumanService {
     await this.userService.deductCredits(userId, totalCost, `数字人交错混剪 x${data.videoCount}`);
 
     // Create generation record
-    const job = await this.prisma.generation.create({
-      data: {
-        userId,
-        type: 'DH_BATCH_V2',
-        status: 'PENDING',
-        provider: data.channel === 'A' ? 'aliyun-ims-avatar' : 'aliyun-wan+ims',
-        creditsUsed: totalCost,
-        input: {
-          channel: data.channel,
-          builtinAvatarId: data.builtinAvatarId,
-          avatarUrl,
-          voiceId: data.voiceId,
-          scripts: scripts.map((s) => ({ id: s.id, title: s.title, content: s.content })),
-          materials: materials.map((m) => ({ id: m.id, name: m.name, type: m.type, url: m.url })),
-          bgMusic: data.bgMusic,
-          videoCount: data.videoCount,
-          resolution: data.resolution,
-          subtitleConfig: data.subtitleConfig,
-          transitionId: data.transitionId,
-          speechRate: data.speechRate,
-          mediaVolume: data.mediaVolume,
-          speechVolume: data.speechVolume,
-          bgMusicVolume: data.bgMusicVolume,
-          maxDuration: data.maxDuration,
-          crf: data.crf,
+    let job: any;
+    try {
+      job = await this.prisma.generation.create({
+        data: {
+          userId,
+          type: 'DH_BATCH_V2',
+          status: 'PENDING',
+          provider: data.channel === 'A' ? 'aliyun-ims-avatar' : 'aliyun-wan+ims',
+          creditsUsed: totalCost,
+          input: {
+            channel: data.channel,
+            builtinAvatarId: data.builtinAvatarId,
+            avatarUrl,
+            voiceId: data.voiceId,
+            scripts: scripts.map((s) => ({ id: s.id, title: s.title, content: s.content })),
+            materials: materials.map((m) => ({ id: m.id, name: m.name, type: m.type, url: m.url })),
+            bgMusic: data.bgMusic,
+            videoCount: data.videoCount,
+            resolution: data.resolution,
+            subtitleConfig: data.subtitleConfig,
+            transitionId: data.transitionId,
+            speechRate: data.speechRate,
+            mediaVolume: data.mediaVolume,
+            speechVolume: data.speechVolume,
+            bgMusicVolume: data.bgMusicVolume,
+            maxDuration: data.maxDuration,
+            crf: data.crf,
+          },
         },
-      },
-    });
+      });
 
-    // Dispatch to queue
-    await this.dhBatchV2Queue.add(
-      'dh-batch-v2',
-      {
-        jobId: job.id,
-        userId,
-        channel: data.channel,
-        input: job.input,
-      },
-      {
-        attempts: 1,
-        backoff: { type: 'exponential', delay: 10000 },
-      },
-    );
+      // Dispatch to queue
+      await this.dhBatchV2Queue.add(
+        'dh-batch-v2',
+        {
+          jobId: job.id,
+          userId,
+          channel: data.channel,
+          input: job.input,
+        },
+        {
+          attempts: 1,
+          backoff: { type: 'exponential', delay: 10000 },
+        },
+      );
+    } catch (error) {
+      this.logger.error(`DH batch v2 failed to enqueue, refunding ${totalCost} credits`);
+      await this.userService.addCredits(userId, totalCost, 'REFUND', '退款: 数字人交错混剪入队失败');
+      if (job) {
+        await this.prisma.generation.update({ where: { id: job.id }, data: { status: 'FAILED', errorMsg: '任务入队失败' } }).catch(() => {});
+      }
+      throw error;
+    }
 
     this.logger.log(`DhBatchV2 job ${job.id} queued: channel=${data.channel}, videos=${data.videoCount}`);
     return job;

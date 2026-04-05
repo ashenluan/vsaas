@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { setTokens } from '@/lib/auth';
+import { authApi } from '@/lib/api';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
@@ -16,23 +18,12 @@ export default function RegisterPage() {
     setError('');
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, displayName: name || email.split('@')[0] }),
-      });
-      const data = await res.json();
+      const data = await authApi.register(email, password, name || email.split('@')[0]);
 
-      if (!res.ok) {
-        setError(data.message || '注册失败');
-        return;
-      }
-
-      localStorage.setItem('accessToken', data.accessToken);
-      localStorage.setItem('refreshToken', data.refreshToken);
+      setTokens(data.accessToken, data.refreshToken);
       window.location.href = '/workspace';
-    } catch {
-      setError('网络错误，请稍后重试');
+    } catch (err: any) {
+      setError(err?.message || '网络错误，请稍后重试');
     } finally {
       setLoading(false);
     }

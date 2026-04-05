@@ -236,6 +236,10 @@ export default function StoryboardPage() {
   const removeMedia = (sceneId: string, mediaIdx: number) => {
     setScenes(prev => prev.map(s => {
       if (s.id !== sceneId) return s;
+      const removed = s.media[mediaIdx];
+      if (removed?.preview && removed.file?.type.startsWith('video/')) {
+        URL.revokeObjectURL(removed.preview);
+      }
       return { ...s, media: s.media.filter((_, i) => i !== mediaIdx) };
     }));
   };

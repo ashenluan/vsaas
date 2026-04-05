@@ -25,7 +25,7 @@ export class VideoGenerationProcessor extends WorkerHost {
 
     try {
       await this.generationService.updateStatus(jobId, 'PROCESSING');
-      this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'PROCESSING' });
+      this.ws.sendToUser(userId, 'job:update', { jobId, status: 'PROCESSING' });
 
       const provider = this.providers.getVideoProvider(input.providerId);
       if (!provider) throw new Error(`Provider ${input.providerId} not found`);
@@ -36,7 +36,7 @@ export class VideoGenerationProcessor extends WorkerHost {
       // 如果返回了 taskId（异步模式），需要轮询等待完成
       let finalResult = result;
       if (result.taskId && result.status !== 'completed') {
-        this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'PROCESSING', message: '视频生成中，等待完成...' });
+        this.ws.sendToUser(userId, 'job:update', { jobId, status: 'PROCESSING', message: '视频生成中，等待完成...' });
 
         // 保存 externalId 以便追踪
         await this.generationService.updateExternalId(jobId, result.taskId);
@@ -50,14 +50,14 @@ export class VideoGenerationProcessor extends WorkerHost {
       };
 
       await this.generationService.updateStatus(jobId, 'COMPLETED', metadata);
-      this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'COMPLETED', result: metadata });
+      this.ws.sendToUser(userId, 'job:update', { jobId, status: 'COMPLETED', result: metadata });
 
       return metadata;
     } catch (error: any) {
       this.logger.error(`Video generation ${jobId} failed: ${error.message}`);
 
       await this.generationService.updateStatus(jobId, 'FAILED', { error: error.message });
-      this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'FAILED', error: error.message });
+      this.ws.sendToUser(userId, 'job:update', { jobId, status: 'FAILED', error: error.message });
 
       try {
         const gen = await this.generationService.findById(jobId);
@@ -108,7 +108,7 @@ export class VideoGenerationProcessor extends WorkerHost {
 
       // 每 30 秒发一次进度通知
       if (i > 0 && i % 6 === 0) {
-        this.ws.sendToUser(userId, 'generation:status', {
+        this.ws.sendToUser(userId, 'job:update', {
           jobId,
           status: 'PROCESSING',
           message: `视频生成中... (${Math.round(i * 5 / 60)}分钟)`,

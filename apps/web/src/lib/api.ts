@@ -1,3 +1,5 @@
+import { getAccessToken, getRefreshToken, setTokens, clearTokens } from './auth';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 export const API_UNAUTHORIZED_EVENT = 'api:unauthorized';
 
@@ -16,16 +18,46 @@ function dispatchUnauthorizedEvent() {
   window.dispatchEvent(new CustomEvent(API_UNAUTHORIZED_EVENT));
 }
 
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('accessToken');
+// Token refresh state — prevent concurrent refresh requests
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) return false;
+
+      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!res.ok) return false;
+
+      const data = await res.json();
+      if (data.accessToken && data.refreshToken) {
+        setTokens(data.accessToken, data.refreshToken);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export async function apiFetch<T = any>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const token = getToken();
+  const token = getAccessToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...((options.headers as Record<string, string>) || {}),
@@ -33,10 +65,23 @@ export async function apiFetch<T = any>(
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   try {
-    const res = await fetch(`${API_BASE}/api${path}`, {
+    let res = await fetch(`${API_BASE}/api${path}`, {
       ...options,
       headers,
     });
+
+    // On 401, attempt token refresh then retry once
+    if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login') {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) {
+        const newToken = getAccessToken();
+        if (newToken) headers['Authorization'] = `Bearer ${newToken}`;
+        res = await fetch(`${API_BASE}/api${path}`, {
+          ...options,
+          headers,
+        });
+      }
+    }
 
     // Parse JSON defensively so upstream UI gets a useful error instead of a syntax failure.
     let data: any;
@@ -79,7 +124,7 @@ export const authApi = {
 // User
 export const userApi = {
   getProfile: () => apiFetch('/user/profile'),
-  updateProfile: (data: { name?: string; avatar?: string }) =>
+  updateProfile: (data: { displayName?: string; avatar?: string }) =>
     apiFetch('/user/profile', { method: 'PATCH', body: JSON.stringify(data) }),
   changePassword: (currentPassword: string, newPassword: string) =>
     apiFetch('/user/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),

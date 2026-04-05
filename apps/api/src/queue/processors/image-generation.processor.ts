@@ -26,7 +26,7 @@ export class ImageGenerationProcessor extends WorkerHost {
 
     try {
       await this.generationService.updateStatus(jobId, 'PROCESSING');
-      this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'PROCESSING' });
+      this.ws.sendToUser(userId, 'job:update', { jobId, status: 'PROCESSING' });
 
       let result: any;
 
@@ -51,7 +51,7 @@ export class ImageGenerationProcessor extends WorkerHost {
 
       // 如果返回了 taskId（异步模式，如 wan2.5），需要轮询等待完成
       if (result.taskId && !result.images?.length) {
-        this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'PROCESSING', message: '图片生成中，等待完成...' });
+        this.ws.sendToUser(userId, 'job:update', { jobId, status: 'PROCESSING', message: '图片生成中，等待完成...' });
         await this.generationService.updateExternalId(jobId, result.taskId);
         result = await this.pollImageTask(result, input, userId, jobId);
       }
@@ -62,14 +62,14 @@ export class ImageGenerationProcessor extends WorkerHost {
       };
 
       await this.generationService.updateStatus(jobId, 'COMPLETED', metadata);
-      this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'COMPLETED', output: metadata, result: metadata });
+      this.ws.sendToUser(userId, 'job:update', { jobId, status: 'COMPLETED', output: metadata, result: metadata });
 
       return metadata;
     } catch (error: any) {
       this.logger.error(`Image generation ${jobId} failed: ${error.message}`);
 
       await this.generationService.updateStatus(jobId, 'FAILED', { error: error.message });
-      this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'FAILED', errorMsg: error.message });
+      this.ws.sendToUser(userId, 'job:update', { jobId, status: 'FAILED', errorMsg: error.message });
 
       try {
         const gen = await this.generationService.findById(jobId);
@@ -119,7 +119,7 @@ export class ImageGenerationProcessor extends WorkerHost {
       }
 
       if (i > 0 && i % 10 === 0) {
-        this.ws.sendToUser(userId, 'generation:status', {
+        this.ws.sendToUser(userId, 'job:update', {
           jobId,
           status: 'PROCESSING',
           message: `图片生成中... (${Math.round(i * 3 / 60)}分钟)`,

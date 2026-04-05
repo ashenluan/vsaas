@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserService } from '../user/user.service';
 import { WsGateway } from '../ws/ws.gateway';
 
 /**
@@ -23,10 +24,16 @@ export class CallbackController {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly userService: UserService,
     private readonly ws: WsGateway,
     private readonly config: ConfigService,
   ) {
-    this.callbackToken = this.config.get<string>('IMS_CALLBACK_TOKEN') || '';
+    this.callbackToken = this.config.get<string>('IMS_CALLBACK_TOKEN', '');
+    if (!this.callbackToken) {
+      this.logger.error(
+        'IMS_CALLBACK_TOKEN is not configured! Callback endpoint will reject ALL requests.',
+      );
+    }
   }
 
   /**
@@ -52,13 +59,14 @@ export class CallbackController {
       }
     } catch { /* ignore parse errors */ }
 
-    // 验证回调来源（如果配置了 token）
-    if (this.callbackToken) {
-      const incomingToken = headerToken || userData.CallbackToken || body.CallbackToken || body.Token;
-      if (incomingToken !== this.callbackToken) {
-        this.logger.warn('IMS callback rejected: invalid token');
-        throw new ForbiddenException('Invalid callback token');
-      }
+    // 验证回调来源 — 必须携带有效 token
+    const incomingToken =
+      headerToken || userData.CallbackToken || body.CallbackToken || body.Token;
+    if (!this.callbackToken || incomingToken !== this.callbackToken) {
+      this.logger.warn(
+        `IMS callback rejected: ${!this.callbackToken ? 'IMS_CALLBACK_TOKEN not configured' : 'invalid token'}`,
+      );
+      throw new ForbiddenException('Invalid callback token');
     }
 
     try {
@@ -144,6 +152,21 @@ export class CallbackController {
           });
 
           this.logger.error(`Timeline job ${jobId} failed via callback: ${errorMsg}`);
+
+          // Refund credits
+          if (generation.creditsUsed) {
+            try {
+              await this.userService.addCredits(
+                generation.userId,
+                generation.creditsUsed,
+                'REFUND',
+                `退款: Timeline合成失败 - ${errorMsg.slice(0, 100)}`,
+                generation.id,
+              );
+            } catch (refundErr: any) {
+              this.logger.error(`Refund failed for ${generation.id}: ${refundErr.message}`);
+            }
+          }
         }
 
         return { success: true };
@@ -212,6 +235,21 @@ export class CallbackController {
         });
 
         this.logger.error(`IMS job ${jobId} failed: ${errorMsg}`);
+
+        // Refund credits
+        if (generation.creditsUsed) {
+          try {
+            await this.userService.addCredits(
+              generation.userId,
+              generation.creditsUsed,
+              'REFUND',
+              `退款: 批量成片失败 - ${errorMsg.slice(0, 100)}`,
+              generation.id,
+            );
+          } catch (refundErr: any) {
+            this.logger.error(`Refund failed for ${generation.id}: ${refundErr.message}`);
+          }
+        }
       }
 
       return { success: true };

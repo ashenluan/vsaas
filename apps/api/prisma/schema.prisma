@@ -39,6 +39,7 @@ enum GenerationType {
   MULTI_FUSION
   VIRTUAL_TRYON
   INPAINT
+  IMAGE_EDIT
   STORYBOARD
 }
 
@@ -55,6 +56,9 @@ enum MaterialType {
   VIDEO
   AUDIO
   TEMPLATE
+  BACKGROUND
+  STICKER
+  AVATAR
 }
 
 enum TransactionType {
@@ -131,6 +135,7 @@ model Generation {
 
   @@index([userId, type])
   @@index([status])
+  @@index([externalId])
   @@map("generations")
 }
 
@@ -223,6 +228,7 @@ model Order {
   status        OrderStatus @default(PENDING)
   paymentMethod String?     @map("payment_method")
   paymentId     String?     @map("payment_id")
+  paidAt        DateTime?   @map("paid_at")
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
 

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from 'react';
 import { connectSocket, disconnectSocket, getSocket, type JobUpdateEvent } from '@/lib/socket';
+import { getAccessToken } from '@/lib/auth';
 import type { Socket } from 'socket.io-client';
 
 type WsContextValue = {
@@ -19,7 +20,7 @@ export function WsProvider({ children }: { children: ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (!token) return;
 
     try {

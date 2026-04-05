@@ -51,6 +51,7 @@ export default function VoicesPage() {
     if (file.size > 20 * 1024 * 1024) { setError('音频文件不能超过20MB'); return; }
     setError('');
     setAudioFile(file);
+    if (audioPreview) URL.revokeObjectURL(audioPreview);
     setAudioPreview(URL.createObjectURL(file));
   };
 
@@ -66,6 +67,7 @@ export default function VoicesPage() {
       setShowClone(false);
       setCloneName('');
       setAudioFile(null);
+      if (audioPreview) URL.revokeObjectURL(audioPreview);
       setAudioPreview(null);
       loadVoices();
     } catch (err: any) {

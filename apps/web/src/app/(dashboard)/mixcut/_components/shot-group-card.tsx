@@ -161,7 +161,7 @@ export function ShotGroupCard({
             <Copy size={12} />
           </button>
           <button
-            onClick={() => removeShotGroup(group.id)}
+            onClick={() => { if (confirm('确定要删除这个镜头组吗？')) removeShotGroup(group.id); }}
             className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors"
           >
             <Trash2 size={12} />
@@ -243,33 +243,11 @@ export function ShotGroupCard({
 
         {/* Material picker dropdown */}
         {showMaterialPicker && (
-          <div className="mb-3 max-h-40 overflow-y-auto rounded-lg border bg-popover p-2 shadow-md">
-            <div className="grid grid-cols-4 gap-1.5">
-              {allMaterials
-                .filter((m) => m.type === 'IMAGE' || m.type === 'VIDEO')
-                .slice(0, 20)
-                .map((mat) => (
-                  <button
-                    key={mat.id}
-                    onClick={() => handleAddFromLibrary(mat)}
-                    disabled={group.materials.some((m) => m.id === mat.id)}
-                    className="group relative overflow-hidden rounded border text-left hover:border-primary/50 disabled:opacity-40 transition-colors"
-                  >
-                    {mat.type === 'IMAGE' && mat.url ? (
-                      <img src={mat.thumbnailUrl || mat.url} alt={mat.name} className="aspect-square w-full object-cover" />
-                    ) : (
-                      <div className="flex aspect-square items-center justify-center bg-muted">
-                        <Film size={14} className="text-muted-foreground/50" />
-                      </div>
-                    )}
-                    <p className="truncate px-1 py-0.5 text-[9px]">{mat.name}</p>
-                  </button>
-                ))}
-            </div>
-            {allMaterials.length === 0 && (
-              <p className="py-2 text-center text-[11px] text-muted-foreground">暂无素材</p>
-            )}
-          </div>
+          <MaterialPickerDropdown
+            allMaterials={allMaterials.filter((m) => m.type === 'IMAGE' || m.type === 'VIDEO')}
+            existingIds={new Set(group.materials.map((m) => m.id))}
+            onAdd={handleAddFromLibrary}
+          />
         )}
 
         {/* Material list */}
@@ -404,10 +382,17 @@ function SortableMaterialThumb({ material, onRemove, onPreview, selected, onTogg
       <div onClick={onPreview} className="cursor-pointer">
         {material.type === 'IMAGE' ? (
           <img src={material.thumbnailUrl || material.url} alt={material.name} className="aspect-square w-full object-cover" />
+        ) : material.thumbnailUrl ? (
+          <img src={material.thumbnailUrl} alt={material.name} className="aspect-square w-full object-cover" />
         ) : (
-          <div className="flex aspect-square items-center justify-center bg-muted">
-            <Film size={16} className="text-muted-foreground/50" />
-          </div>
+          <video
+            src={material.url}
+            preload="metadata"
+            muted
+            playsInline
+            className="aspect-square w-full object-cover"
+            onLoadedData={(e) => { (e.target as HTMLVideoElement).currentTime = 0.1; }}
+          />
         )}
       </div>
       <div className="px-1.5 py-1">
@@ -452,6 +437,7 @@ function ActionBtn({ icon: Icon, label, sublabel, onClick, active }: { icon: any
     >
       <Icon size={12} />
       <span>{label}</span>
+      {sublabel && <span className="text-[9px] opacity-70">{sublabel}</span>}
     </button>
   );
 }
@@ -460,6 +446,63 @@ function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}:${String(Math.floor((seconds % 1) * 100)).padStart(2, '0')}`;
+}
+
+/* ========== Material Picker Dropdown (with pagination) ========== */
+
+function MaterialPickerDropdown({
+  allMaterials,
+  existingIds,
+  onAdd,
+}: {
+  allMaterials: any[];
+  existingIds: Set<string>;
+  onAdd: (mat: any) => void;
+}) {
+  const PAGE_SIZE = 20;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  const visible = allMaterials.slice(0, visibleCount);
+  const hasMore = visibleCount < allMaterials.length;
+
+  return (
+    <div className="mb-3 max-h-52 overflow-y-auto rounded-lg border bg-popover p-2 shadow-md">
+      <div className="grid grid-cols-4 gap-1.5">
+        {visible.map((mat) => (
+          <button
+            key={mat.id}
+            onClick={() => onAdd(mat)}
+            disabled={existingIds.has(mat.id)}
+            className="group relative overflow-hidden rounded border text-left hover:border-primary/50 disabled:opacity-40 transition-colors"
+          >
+            {mat.thumbnailUrl ? (
+              <img src={mat.thumbnailUrl} alt={mat.name} className="aspect-square w-full object-cover" />
+            ) : mat.type === 'VIDEO' && mat.url ? (
+              <video src={mat.url} preload="metadata" muted playsInline className="aspect-square w-full object-cover" onLoadedData={(e) => { (e.target as HTMLVideoElement).currentTime = 0.1; }} />
+            ) : mat.type === 'IMAGE' && mat.url ? (
+              <img src={mat.url} alt={mat.name} className="aspect-square w-full object-cover" />
+            ) : (
+              <div className="flex aspect-square items-center justify-center bg-muted">
+                <Film size={14} className="text-muted-foreground/50" />
+              </div>
+            )}
+            <p className="truncate px-1 py-0.5 text-[9px]">{mat.name}</p>
+          </button>
+        ))}
+      </div>
+      {allMaterials.length === 0 && (
+        <p className="py-2 text-center text-[11px] text-muted-foreground">暂无素材</p>
+      )}
+      {hasMore && (
+        <button
+          onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+          className="mt-2 w-full rounded-md border py-1.5 text-[10px] text-primary hover:bg-primary/5 transition-colors"
+        >
+          加载更多（还有 {allMaterials.length - visibleCount} 条）
+        </button>
+      )}
+    </div>
+  );
 }
 
 /* ========== Hot Materials Panel ========== */
@@ -538,8 +581,10 @@ function HotMaterialsPanel({
               <div className="flex aspect-video items-center justify-center bg-muted overflow-hidden">
                 {mat.thumbnailUrl ? (
                   <img src={mat.thumbnailUrl} alt={mat.name} className="h-full w-full object-cover" />
-                ) : mat.type === 'VIDEO' ? (
-                  <Film size={14} className="text-muted-foreground/50" />
+                ) : mat.type === 'VIDEO' && mat.url ? (
+                  <video src={mat.url} preload="metadata" muted playsInline className="h-full w-full object-cover" onLoadedData={(e) => { (e.target as HTMLVideoElement).currentTime = 0.1; }} />
+                ) : mat.type === 'IMAGE' && mat.url ? (
+                  <img src={mat.url} alt={mat.name} className="h-full w-full object-cover" />
                 ) : (
                   <ImageIcon size={14} className="text-muted-foreground/50" />
                 )}

@@ -21,6 +21,7 @@ const VALID_GENERATION_JOB_TYPES = new Set([
   'INPAINT',
   'IMAGE_EDIT',
   'STORYBOARD',
+  'DH_BATCH_V2',
 ]);
 
 @Injectable()
@@ -56,39 +57,47 @@ export class GenerationService {
     if (!available) throw new BadRequestException(`Provider ${input.providerId} is not available`);
 
     const estimatedCost = provider.estimateCost(input);
-    // 先扣费再入队，避免竞态条件
     await this.userService.deductCredits(userId, estimatedCost, `图片生成: ${input.prompt?.slice(0, 50)}`);
 
-    const job = await this.prisma.generation.create({
-      data: {
-        userId,
-        type: 'TEXT_TO_IMAGE',
-        status: 'PENDING',
-        provider: input.providerId,
-        creditsUsed: estimatedCost,
-        input: {
-          prompt: input.prompt,
-          negativePrompt: input.negativePrompt,
-          width: input.width,
-          height: input.height,
-          count: input.count,
-          model: input.model,
-          style: input.style,
-          seed: input.seed,
-          promptExtend: input.promptExtend,
-          referenceImage: input.referenceImage,
+    let job: any;
+    try {
+      job = await this.prisma.generation.create({
+        data: {
+          userId,
+          type: 'TEXT_TO_IMAGE',
+          status: 'PENDING',
+          provider: input.providerId,
+          creditsUsed: estimatedCost,
+          input: {
+            prompt: input.prompt,
+            negativePrompt: input.negativePrompt,
+            width: input.width,
+            height: input.height,
+            count: input.count,
+            model: input.model,
+            style: input.style,
+            seed: input.seed,
+            promptExtend: input.promptExtend,
+            referenceImage: input.referenceImage,
+          },
         },
-      },
-    });
+      });
 
-    this.logger.log(`Created image generation ${job.id} for user ${userId}`);
+      this.logger.log(`Created image generation ${job.id} for user ${userId}`);
 
-    // Dispatch to BullMQ
-    await this.imageQueue.add('generate', {
-      jobId: job.id,
-      userId,
-      input,
-    });
+      await this.imageQueue.add('generate', {
+        jobId: job.id,
+        userId,
+        input,
+      });
+    } catch (error) {
+      this.logger.error(`Image generation failed to enqueue, refunding ${estimatedCost} credits`);
+      await this.userService.addCredits(userId, estimatedCost, 'REFUND', '退款: 任务入队失败');
+      if (job) {
+        await this.prisma.generation.update({ where: { id: job.id }, data: { status: 'FAILED', errorMsg: '任务入队失败' } }).catch(() => {});
+      }
+      throw error;
+    }
 
     return job;
   }
@@ -111,37 +120,45 @@ export class GenerationService {
     if (!available) throw new BadRequestException(`Provider ${input.providerId} is not available`);
 
     const estimatedCost = provider.estimateCost(input);
-    // 先扣费再入队，避免竞态条件
     await this.userService.deductCredits(userId, estimatedCost, `视频生成: ${input.prompt?.slice(0, 50)}`);
 
-    const job = await this.prisma.generation.create({
-      data: {
-        userId,
-        type: 'TEXT_TO_VIDEO',
-        status: 'PENDING',
-        provider: input.providerId,
-        creditsUsed: estimatedCost,
-        input: {
-          prompt: input.prompt,
-          duration: input.duration,
-          resolution: input.resolution,
-          referenceImage: input.referenceImage,
-          ...(input.media && { media: input.media }),
-          ...(input.ratio && { ratio: input.ratio }),
-          ...(input.negativePrompt && { negativePrompt: input.negativePrompt }),
-          ...(input.promptExtend !== undefined && { promptExtend: input.promptExtend }),
+    let job: any;
+    try {
+      job = await this.prisma.generation.create({
+        data: {
+          userId,
+          type: 'TEXT_TO_VIDEO',
+          status: 'PENDING',
+          provider: input.providerId,
+          creditsUsed: estimatedCost,
+          input: {
+            prompt: input.prompt,
+            duration: input.duration,
+            resolution: input.resolution,
+            referenceImage: input.referenceImage,
+            ...(input.media && { media: input.media }),
+            ...(input.ratio && { ratio: input.ratio }),
+            ...(input.negativePrompt && { negativePrompt: input.negativePrompt }),
+            ...(input.promptExtend !== undefined && { promptExtend: input.promptExtend }),
+          },
         },
-      },
-    });
+      });
 
-    this.logger.log(`Created video generation ${job.id} for user ${userId}`);
+      this.logger.log(`Created video generation ${job.id} for user ${userId}`);
 
-    // Dispatch to BullMQ
-    await this.videoQueue.add('generate', {
-      jobId: job.id,
-      userId,
-      input,
-    });
+      await this.videoQueue.add('generate', {
+        jobId: job.id,
+        userId,
+        input,
+      });
+    } catch (error) {
+      this.logger.error(`Video generation failed to enqueue, refunding ${estimatedCost} credits`);
+      await this.userService.addCredits(userId, estimatedCost, 'REFUND', '退款: 任务入队失败');
+      if (job) {
+        await this.prisma.generation.update({ where: { id: job.id }, data: { status: 'FAILED', errorMsg: '任务入队失败' } }).catch(() => {});
+      }
+      throw error;
+    }
 
     return job;
   }
@@ -205,24 +222,34 @@ export class GenerationService {
       `${descriptions[input.type] || '高级图片生成'}: ${(input.prompt || '').slice(0, 50)}`,
     );
 
-    const job = await this.prisma.generation.create({
-      data: {
+    let job: any;
+    try {
+      job = await this.prisma.generation.create({
+        data: {
+          userId,
+          type: input.type as any,
+          status: 'PENDING',
+          provider: 'auto',
+          creditsUsed: totalCost,
+          input: input as any,
+        },
+      });
+
+      this.logger.log(`Created advanced image generation ${job.id} (${input.type}) for user ${userId}`);
+
+      await this.imageQueue.add('generate-advanced', {
+        jobId: job.id,
         userId,
-        type: input.type as any,
-        status: 'PENDING',
-        provider: 'auto',
-        creditsUsed: totalCost,
-        input: input as any,
-      },
-    });
-
-    this.logger.log(`Created advanced image generation ${job.id} (${input.type}) for user ${userId}`);
-
-    await this.imageQueue.add('generate-advanced', {
-      jobId: job.id,
-      userId,
-      input,
-    });
+        input,
+      });
+    } catch (error) {
+      this.logger.error(`Advanced image generation failed to enqueue, refunding ${totalCost} credits`);
+      await this.userService.addCredits(userId, totalCost, 'REFUND', '退款: 任务入队失败');
+      if (job) {
+        await this.prisma.generation.update({ where: { id: job.id }, data: { status: 'FAILED', errorMsg: '任务入队失败' } }).catch(() => {});
+      }
+      throw error;
+    }
 
     return job;
   }
@@ -322,31 +349,41 @@ export class GenerationService {
     const creditCost = 10; // flat cost for composition
     await this.userService.deductCredits(userId, creditCost, `成片合成: ${input.videos.length} 个分镜`);
 
-    const job = await this.prisma.generation.create({
-      data: {
-        userId,
-        type: 'STORYBOARD',
-        status: 'PENDING',
-        provider: 'aliyun-ims',
-        creditsUsed: creditCost,
-        input: {
-          videos: input.videos,
-          transition: input.transition,
-          transitionDuration: input.transitionDuration,
-          width: input.width,
-          height: input.height,
-          bgMusicUrl: input.bgMusicUrl,
+    let job: any;
+    try {
+      job = await this.prisma.generation.create({
+        data: {
+          userId,
+          type: 'STORYBOARD',
+          status: 'PENDING',
+          provider: 'aliyun-ims',
+          creditsUsed: creditCost,
+          input: {
+            videos: input.videos,
+            transition: input.transition,
+            transitionDuration: input.transitionDuration,
+            width: input.width,
+            height: input.height,
+            bgMusicUrl: input.bgMusicUrl,
+          },
         },
-      },
-    });
+      });
 
-    this.logger.log(`Created storyboard compose ${job.id} for user ${userId}`);
+      this.logger.log(`Created storyboard compose ${job.id} for user ${userId}`);
 
-    await this.storyboardQueue.add('compose', {
-      jobId: job.id,
-      userId,
-      ...input,
-    });
+      await this.storyboardQueue.add('compose', {
+        jobId: job.id,
+        userId,
+        ...input,
+      });
+    } catch (error) {
+      this.logger.error(`Storyboard compose failed to enqueue, refunding ${creditCost} credits`);
+      await this.userService.addCredits(userId, creditCost, 'REFUND', '退款: 任务入队失败');
+      if (job) {
+        await this.prisma.generation.update({ where: { id: job.id }, data: { status: 'FAILED', errorMsg: '任务入队失败' } }).catch(() => {});
+      }
+      throw error;
+    }
 
     return job;
   }

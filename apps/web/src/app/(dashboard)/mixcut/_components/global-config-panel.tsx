@@ -197,13 +197,35 @@ export function GlobalConfigPanel({ options }: { options: any }) {
 
       {/* 背景音乐 */}
       <ConfigSection icon={Music} label="背景音乐">
-        <input
-          type="text"
-          value={globalConfig.bgMusic}
-          onChange={(e) => updateGlobalConfig({ bgMusic: e.target.value })}
-          placeholder="输入音乐 URL 或选择"
-          className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        />
+        <div className="flex gap-1.5">
+          <input
+            type="text"
+            value={globalConfig.bgMusic}
+            onChange={(e) => updateGlobalConfig({ bgMusic: e.target.value })}
+            placeholder="输入音乐 URL 或选择"
+            className="flex h-8 flex-1 rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-dashed px-2 text-[10px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
+            <Music size={10} /> 上传
+            <input
+              type="file"
+              accept="audio/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const { uploadToOSS } = await import('@/lib/upload');
+                  const { url } = await uploadToOSS(file);
+                  updateGlobalConfig({ bgMusic: url });
+                  (await import('sonner')).toast.success('音乐上传成功');
+                } catch (err: any) {
+                  (await import('sonner')).toast.error(err?.message || '上传失败');
+                }
+              }}
+            />
+          </label>
+        </div>
         {globalConfig.bgMusic && (
           <div className="mt-1.5 flex items-center gap-2">
             <audio src={globalConfig.bgMusic} controls className="h-7 w-full" />

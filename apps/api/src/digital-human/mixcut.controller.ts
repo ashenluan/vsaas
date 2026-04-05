@@ -13,6 +13,7 @@ import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DigitalHumanService } from './digital-human.service';
 import { CreateMixcutDto } from './dto/create-mixcut.dto';
+import { SaveMixcutDraftDto } from './dto/save-mixcut-draft.dto';
 
 @Controller('mixcut')
 @UseGuards(JwtAuthGuard)
@@ -26,7 +27,7 @@ export class MixcutController {
   }
 
   @Put('draft')
-  saveDraft(@Req() req: any, @Body() body: any) {
+  saveDraft(@Req() req: any, @Body() body: SaveMixcutDraftDto) {
     return this.service.saveMixcutDraft(req.user.sub, body);
   }
 

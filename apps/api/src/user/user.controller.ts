@@ -24,7 +24,7 @@ export class UserController {
   @Patch('profile')
   updateProfile(
     @Req() req: any,
-    @Body() body: { name?: string; avatar?: string },
+    @Body() body: { displayName?: string; avatar?: string },
   ) {
     return this.userService.updateProfile(req.user.sub, body);
   }

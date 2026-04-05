@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { getAccessToken } from './auth';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -11,7 +12,7 @@ export function getSocket(): Socket | null {
 export function connectSocket(): Socket {
   if (socket?.connected) return socket;
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const token = getAccessToken();
   if (!token) {
     throw new Error('No auth token');
   }

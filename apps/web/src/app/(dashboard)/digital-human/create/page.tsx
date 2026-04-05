@@ -80,8 +80,9 @@ function CreateContent() {
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   // WebSocket
-  const { subscribe } = useWs();
+  const { subscribe, connected: wsConnected } = useWs();
   useEffect(() => {
+    if (!result?.id) return;
     return subscribe('digital-human:progress', (data: any) => {
       if (result?.id === data.jobId) {
         setResult((prev: any) => ({ ...prev, ...data }));
@@ -89,9 +90,9 @@ function CreateContent() {
     });
   }, [subscribe, result?.id]);
 
-  // HTTP polling fallback (in case WebSocket is disconnected)
+  // HTTP polling fallback (only when WebSocket is disconnected)
   useEffect(() => {
-    if (!result?.id) return;
+    if (!result?.id || wsConnected) return;
     const status = (result.status || '').toUpperCase();
     if (status === 'COMPLETED' || status === 'SUCCEEDED' || status === 'FAILED') return;
 
@@ -169,6 +170,7 @@ function CreateContent() {
     if (f.size > 20 * 1024 * 1024) { setError('音频不能超过20MB'); return; }
     setError('');
     setAudioFile(f);
+    if (audioPreview) URL.revokeObjectURL(audioPreview);
     setAudioPreview(URL.createObjectURL(f));
   };
 
@@ -179,6 +181,7 @@ function CreateContent() {
     if (f.size > 200 * 1024 * 1024) { setError('视频不能超过200MB'); return; }
     setError('');
     setVideoFile(f);
+    if (videoPreview) URL.revokeObjectURL(videoPreview);
     setVideoPreview(URL.createObjectURL(f));
   };
 

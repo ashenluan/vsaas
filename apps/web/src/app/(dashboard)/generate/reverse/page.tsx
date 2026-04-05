@@ -55,11 +55,13 @@ export default function VideoReversePage() {
       reader.onload = () => setPreview(reader.result as string);
       reader.readAsDataURL(f);
     } else {
+      if (preview) URL.revokeObjectURL(preview);
       setPreview(URL.createObjectURL(f));
     }
   };
 
   const clearFile = () => {
+    if (preview && file?.type.startsWith('video/')) URL.revokeObjectURL(preview);
     setFile(null);
     setPreview(null);
     setResult(null);

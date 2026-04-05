@@ -37,6 +37,7 @@ export function ProjectList() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!confirm('确定要删除这个混剪项目吗？')) return;
     try {
       await mixcutApi.delete(id);
       setProjects((prev) => prev.filter((p) => p.id !== id));
@@ -64,12 +65,16 @@ export function ProjectList() {
       // Open completed/in-progress job as read-only view
       const shotGroups = (input.shotGroups || []).map((g: any, i: number) => {
         const group = createShotGroup(g.name || `视频组_${i + 1}`);
-        group.materials = (g.materialUrls || []).map((url: string, j: number) => ({
-          id: `m_${i}_${j}`,
-          name: `素材_${j + 1}`,
-          type: 'VIDEO' as const,
-          url,
-        }));
+        group.materials = (g.materialUrls || []).map((url: string, j: number) => {
+          const ext = url.split('?')[0].split('.').pop()?.toLowerCase() || '';
+          const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
+          return {
+            id: `m_${i}_${j}`,
+            name: `素材_${j + 1}`,
+            type: (isImage ? 'IMAGE' : 'VIDEO') as 'IMAGE' | 'VIDEO',
+            url,
+          };
+        });
         if (g.speechTexts?.length) {
           group.subtitles = g.speechTexts.map((t: string) => ({ text: t }));
         }

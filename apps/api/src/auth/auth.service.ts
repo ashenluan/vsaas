@@ -13,17 +13,24 @@ export class AuthService {
   ) {}
 
   async register(email: string, password: string, displayName: string) {
-    const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing) throw new ConflictException('Email already registered');
-
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        displayName,
-      },
-    });
+
+    let user: any;
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          passwordHash,
+          displayName,
+        },
+      });
+    } catch (error: any) {
+      // Prisma P2002 = unique constraint violation (email already exists)
+      if (error?.code === 'P2002') {
+        throw new ConflictException('Email already registered');
+      }
+      throw error;
+    }
 
     return this.generateTokens(user.id, user.role);
   }

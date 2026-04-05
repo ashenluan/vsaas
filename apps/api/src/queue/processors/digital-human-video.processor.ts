@@ -43,7 +43,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
       data: { status: 'PROCESSING' },
     });
 
-    this.ws.sendToUser(userId, 'compose:progress', {
+    this.ws.sendToUser(userId, 'digital-human:progress', {
       jobId,
       status: 'PROCESSING',
       progress: 5,
@@ -55,7 +55,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
       if (input.driveMode === 'video') {
         if (!input.videoUrl) throw new Error('缺少参考视频');
 
-        this.ws.sendToUser(userId, 'compose:progress', {
+        this.ws.sendToUser(userId, 'digital-human:progress', {
           jobId,
           status: 'PROCESSING',
           progress: 20,
@@ -97,7 +97,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
           },
         });
 
-        this.ws.sendToUser(userId, 'compose:progress', {
+        this.ws.sendToUser(userId, 'digital-human:progress', {
           jobId,
           status: 'COMPLETED',
           progress: 100,
@@ -113,7 +113,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
 
       // Step 1: TTS if text drive mode
       if (input.driveMode === 'text' && input.voiceId && input.text) {
-        this.ws.sendToUser(userId, 'compose:progress', {
+        this.ws.sendToUser(userId, 'digital-human:progress', {
           jobId,
           status: 'PROCESSING',
           progress: 10,
@@ -136,7 +136,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
       }
 
       // Step 2: Generate S2V video
-      this.ws.sendToUser(userId, 'compose:progress', {
+      this.ws.sendToUser(userId, 'digital-human:progress', {
         jobId,
         status: 'PROCESSING',
         progress: 30,
@@ -189,7 +189,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
         },
       });
 
-      this.ws.sendToUser(userId, 'compose:progress', {
+      this.ws.sendToUser(userId, 'digital-human:progress', {
         jobId,
         status: 'COMPLETED',
         progress: 100,
@@ -211,7 +211,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
         },
       });
 
-      this.ws.sendToUser(userId, 'compose:progress', {
+      this.ws.sendToUser(userId, 'digital-human:progress', {
         jobId,
         status: 'FAILED',
         progress: 0,
@@ -273,7 +273,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
       // Send progress updates every 30s
       if (i > 0 && i % 6 === 0) {
         const progress = Math.min(30 + Math.round((i / maxAttempts) * 65), 95);
-        this.ws.sendToUser(userId, 'compose:progress', {
+        this.ws.sendToUser(userId, 'digital-human:progress', {
           jobId,
           status: 'PROCESSING',
           progress,

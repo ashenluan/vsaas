@@ -38,7 +38,7 @@ export class StoryboardComposeProcessor extends WorkerHost {
 
     try {
       await this.generationService.updateStatus(jobId, 'PROCESSING');
-      this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'PROCESSING', message: '正在合成视频...' });
+      this.ws.sendToUser(userId, 'job:update', { jobId, status: 'PROCESSING', message: '正在合成视频...' });
 
       // Build IMS Timeline
       const timeline = this.buildTimeline(videos, transition, transitionDuration, bgMusicUrl);
@@ -73,14 +73,14 @@ export class StoryboardComposeProcessor extends WorkerHost {
       };
 
       await this.generationService.updateStatus(jobId, 'COMPLETED', metadata);
-      this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'COMPLETED', result: metadata });
+      this.ws.sendToUser(userId, 'job:update', { jobId, status: 'COMPLETED', result: metadata });
 
       return metadata;
     } catch (error: any) {
       this.logger.error(`Storyboard compose ${jobId} failed: ${error.message}`);
 
       await this.generationService.updateStatus(jobId, 'FAILED', { error: error.message });
-      this.ws.sendToUser(userId, 'generation:status', { jobId, status: 'FAILED', error: error.message });
+      this.ws.sendToUser(userId, 'job:update', { jobId, status: 'FAILED', error: error.message });
 
       // Refund credits
       try {
@@ -166,7 +166,7 @@ export class StoryboardComposeProcessor extends WorkerHost {
       // Send progress updates
       if (i > 0 && i % 4 === 0) {
         const progress = result.progress || Math.min(90, Math.round(i / maxAttempts * 100));
-        this.ws.sendToUser(userId, 'generation:status', {
+        this.ws.sendToUser(userId, 'job:update', {
           jobId,
           status: 'PROCESSING',
           message: `合成中... ${progress}%`,

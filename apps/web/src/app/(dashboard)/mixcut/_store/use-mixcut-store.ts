@@ -551,6 +551,8 @@ export const useMixcutStore = create<MixcutState>()(
         globalConfig: state.globalConfig,
         highlightWords: state.highlightWords,
         forbiddenWords: state.forbiddenWords,
+        outputVideos: state.outputVideos,
+        jobStatus: state.jobStatus,
       }),
     },
   ),

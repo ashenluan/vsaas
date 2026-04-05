@@ -7,6 +7,7 @@ import {
   Query,
   UseGuards,
   Req,
+  ValidationPipe,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { GenerationService } from './generation.service';
@@ -14,6 +15,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateImageDto } from './dto/create-image.dto';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { CreateAdvancedImageDto, AdvancedImageType } from './dto/create-advanced-image.dto';
+import { CreateStoryboardComposeDto } from './dto/create-storyboard-compose.dto';
 
 @Controller('generations')
 @UseGuards(JwtAuthGuard)
@@ -22,13 +24,25 @@ export class GenerationController {
 
   @Post('image')
   @Throttle({ short: { ttl: 10000, limit: 3 }, medium: { ttl: 60000, limit: 20 } })
-  createImage(@Req() req: any, @Body() body: any) {
+  async createImage(@Req() req: any, @Body() body: any) {
     // Route to advanced generation if body has an advanced type
     const advancedTypes = Object.values(AdvancedImageType) as string[];
     if (body.type && advancedTypes.includes(body.type)) {
-      return this.generationService.createAdvancedImageGeneration(req.user.sub, body);
+      // 手动验证 AdvancedImageDto
+      const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+      const validated = await pipe.transform(body, {
+        type: 'body',
+        metatype: CreateAdvancedImageDto,
+      });
+      return this.generationService.createAdvancedImageGeneration(req.user.sub, validated);
     }
-    return this.generationService.createImageGeneration(req.user.sub, body);
+    // 手动验证 CreateImageDto
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+    const validated = await pipe.transform(body, {
+      type: 'body',
+      metatype: CreateImageDto,
+    });
+    return this.generationService.createImageGeneration(req.user.sub, validated);
   }
 
   @Post('video')
@@ -39,7 +53,7 @@ export class GenerationController {
 
   @Post('storyboard/compose')
   @Throttle({ short: { ttl: 10000, limit: 2 }, medium: { ttl: 60000, limit: 5 } })
-  createStoryboardCompose(@Req() req: any, @Body() body: any) {
+  createStoryboardCompose(@Req() req: any, @Body() body: CreateStoryboardComposeDto) {
     return this.generationService.createStoryboardCompose(req.user.sub, body);
   }
 

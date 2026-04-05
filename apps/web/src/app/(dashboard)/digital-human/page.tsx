@@ -58,6 +58,7 @@ export default function DigitalHumanPage() {
       reader.onload = () => setPreview(reader.result as string);
       reader.readAsDataURL(f);
     } else {
+      if (preview) URL.revokeObjectURL(preview);
       setPreview(URL.createObjectURL(f));
     }
   };
@@ -89,6 +90,7 @@ export default function DigitalHumanPage() {
   const resetCloneForm = () => {
     setName('');
     setFile(null);
+    if (preview && cloneMode === 'video') URL.revokeObjectURL(preview);
     setPreview(null);
     setError('');
     setUploadProgress(0);

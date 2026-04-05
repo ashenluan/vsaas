@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { API_UNAUTHORIZED_EVENT, userApi } from '@/lib/api';
+import { logout as authLogout, clearTokens, getAccessToken } from '@/lib/auth';
 import { WsProvider } from '@/components/ws-provider';
 import {
   Home,
@@ -84,14 +85,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     const handleUnauthorized = () => {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      clearTokens();
       router.replace('/login');
     };
 
     window.addEventListener(API_UNAUTHORIZED_EVENT, handleUnauthorized);
 
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (!token) {
       router.replace('/login');
       return () => {
@@ -273,11 +273,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    localStorage.removeItem('accessToken');
-                    localStorage.removeItem('refreshToken');
-                    window.location.href = '/login';
-                  }}
+                  onClick={authLogout}
                   className="shrink-0 cursor-pointer p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
                   title="退出登录"
                 >
@@ -290,11 +286,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Settings size={20} />
                 </Link>
                 <button
-                  onClick={() => {
-                    localStorage.removeItem('accessToken');
-                    localStorage.removeItem('refreshToken');
-                    window.location.href = '/login';
-                  }}
+                  onClick={authLogout}
                   className="p-2 cursor-pointer text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg"
                 >
                   <LogOut size={20} />

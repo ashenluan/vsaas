@@ -10,6 +10,7 @@ interface VoiceCloneJobData {
   voiceId: string;
   userId: string;
   sampleUrl: string;
+  creditCost?: number;
 }
 
 @Processor('voice-cloning', { concurrency: 3 })
@@ -77,11 +78,11 @@ export class VoiceCloningProcessor extends WorkerHost {
         message: `声音克隆失败: ${error.message}`,
       });
 
-      // 退款：声音克隆扣费 10 积分
+      // 退款：声音克隆积分
       try {
         await this.userService.addCredits(
           userId,
-          10,
+          job.data.creditCost || 10,
           'REFUND',
           `退款: 声音克隆失败 - ${error.message.slice(0, 100)}`,
           voiceId,

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
+import { setTokens } from '@/lib/auth';
 import { Sparkles, ArrowRight, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,8 +29,7 @@ export default function LoginPage() {
       } else {
         res = await authApi.register(email, password, email.split('@')[0]);
       }
-      localStorage.setItem('accessToken', res.accessToken);
-      localStorage.setItem('refreshToken', res.refreshToken);
+      setTokens(res.accessToken, res.refreshToken);
       router.replace('/workspace');
     } catch (err: any) {
       setError(err.message || '认证失败');
