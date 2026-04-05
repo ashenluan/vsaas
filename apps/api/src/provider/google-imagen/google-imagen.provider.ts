@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ImageProvider } from '../provider.registry';
 import { retryFetch } from '../retry-fetch';
+import { resolveGoogleImagenKey } from '../../config/env-resolver';
 
 @Injectable()
 export class GoogleImagenProvider implements ImageProvider {
@@ -12,7 +13,10 @@ export class GoogleImagenProvider implements ImageProvider {
   constructor(private readonly config: ConfigService) {}
 
   async isAvailable(): Promise<boolean> {
-    return !!this.config.get<string>('GOOGLE_IMAGEN_API_KEY');
+    return !!resolveGoogleImagenKey({
+      GOOGLE_IMAGEN_API_KEY: this.config.get<string>('GOOGLE_IMAGEN_API_KEY'),
+      GOOGLE_API_KEY: this.config.get<string>('GOOGLE_API_KEY'),
+    });
   }
 
   estimateCost(request: any): number {
@@ -20,7 +24,10 @@ export class GoogleImagenProvider implements ImageProvider {
   }
 
   async generateImage(request: any): Promise<any> {
-    const apiKey = this.config.get<string>('GOOGLE_IMAGEN_API_KEY');
+    const apiKey = resolveGoogleImagenKey({
+      GOOGLE_IMAGEN_API_KEY: this.config.get<string>('GOOGLE_IMAGEN_API_KEY'),
+      GOOGLE_API_KEY: this.config.get<string>('GOOGLE_API_KEY'),
+    }) || '';
 
     this.logger.log(`Generating image with Google Imagen: ${request.prompt}`);
 

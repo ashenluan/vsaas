@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { resolveLlmApiKey } from '../config/env-resolver';
 
 @Injectable()
 export class AiService {
@@ -9,7 +10,10 @@ export class AiService {
   private readonly model: string;
 
   constructor(private readonly config: ConfigService) {
-    this.apiKey = this.config.get('LLM_API_KEY', '');
+    this.apiKey = resolveLlmApiKey({
+      LLM_API_KEY: this.config.get<string>('LLM_API_KEY'),
+      DASHSCOPE_API_KEY: this.config.get<string>('DASHSCOPE_API_KEY'),
+    }) || '';
     this.apiEndpoint = this.config.get(
       'LLM_API_ENDPOINT',
       'https://dashscope.aliyuncs.com/compatible-mode/v1',
@@ -22,7 +26,7 @@ export class AiService {
     type: 'image' | 'video' = 'image',
   ): Promise<{ prompt: string }> {
     if (!this.apiKey) {
-      this.logger.warn('LLM_API_KEY not configured');
+      this.logger.warn('LLM API key not configured (set LLM_API_KEY or DASHSCOPE_API_KEY)');
       return { prompt: '无法分析：未配置 LLM API Key' };
     }
 
@@ -349,7 +353,7 @@ export class AiService {
     type: 'image' | 'video' = 'image',
   ): Promise<{ polished: string }> {
     if (!this.apiKey) {
-      this.logger.warn('LLM_API_KEY not configured, returning original prompt');
+      this.logger.warn('LLM API key not configured (set LLM_API_KEY or DASHSCOPE_API_KEY), returning original prompt');
       return { polished: prompt };
     }
 
