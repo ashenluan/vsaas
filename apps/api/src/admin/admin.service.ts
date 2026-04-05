@@ -147,20 +147,44 @@ export class AdminService {
   }
 
   async getStats() {
-    const [totalUsers, totalJobs, activeJobs, totalCreditsSpent] = await Promise.all([
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [
+      totalUsers,
+      totalJobs,
+      activeJobs,
+      todayJobs,
+      totalCreditsSpent,
+      totalCreditsAdded,
+      totalCreditsBalance,
+    ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.generation.count(),
       this.prisma.generation.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
+      this.prisma.generation.count({
+        where: { createdAt: { gte: startOfToday } },
+      }),
       this.prisma.creditTransaction.aggregate({
         where: { type: 'USAGE' },
         _sum: { amount: true },
+      }),
+      this.prisma.creditTransaction.aggregate({
+        where: { amount: { gt: 0 } },
+        _sum: { amount: true },
+      }),
+      this.prisma.user.aggregate({
+        _sum: { creditBalance: true },
       }),
     ]);
     return {
       totalUsers,
       totalJobs,
       activeJobs,
+      todayJobs,
       totalCreditsSpent: Math.abs(totalCreditsSpent._sum.amount ?? 0),
+      totalCreditsAdded: totalCreditsAdded._sum.amount ?? 0,
+      totalCreditsBalance: totalCreditsBalance._sum.creditBalance ?? 0,
     };
   }
 

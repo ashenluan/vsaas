@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { adminApi, adminFetch } from '@/lib/api';
+import { adminApi } from '@/lib/api';
 
 export default function AdminAnalyticsPage() {
   const [stats, setStats] = useState<any>(null);
@@ -12,8 +12,8 @@ export default function AdminAnalyticsPage() {
   useEffect(() => {
     Promise.all([
       adminApi.getStats().catch(() => null),
-      adminFetch('/admin/analytics/daily').catch(() => []),
-      adminFetch('/admin/analytics/providers').catch(() => []),
+      adminApi.getDailyAnalytics(7).catch(() => []),
+      adminApi.getProviderAnalytics().catch(() => []),
     ]).then(([s, d, p]) => {
       setStats(s);
       setDailyStats(Array.isArray(d) ? d : []);
@@ -44,7 +44,11 @@ export default function AdminAnalyticsPage() {
         {/* Daily Trends - Bar Chart Simulation */}
         <div className="rounded-xl border bg-card p-6 shadow-sm">
           <h3 className="mb-4 font-semibold">近7天任务趋势</h3>
-          {dailyStats.length > 0 ? (
+          {loading ? (
+            <div className="flex h-48 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
+              正在加载趋势数据...
+            </div>
+          ) : dailyStats.length > 0 ? (
             <div className="flex items-end gap-2 h-48">
               {dailyStats.slice(-7).map((day: any, i: number) => {
                 const max = Math.max(...dailyStats.slice(-7).map((d: any) => d.count || 1));
@@ -63,7 +67,7 @@ export default function AdminAnalyticsPage() {
             </div>
           ) : (
             <div className="flex h-48 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
-              暂无数据（API 端点 /admin/analytics/daily 待实现）
+              最近还没有任务趋势数据
             </div>
           )}
         </div>
@@ -71,7 +75,11 @@ export default function AdminAnalyticsPage() {
         {/* Provider Usage */}
         <div className="rounded-xl border bg-card p-6 shadow-sm">
           <h3 className="mb-4 font-semibold">模型使用量</h3>
-          {providerStats.length > 0 ? (
+          {loading ? (
+            <div className="flex h-48 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
+              正在加载模型使用数据...
+            </div>
+          ) : providerStats.length > 0 ? (
             <div className="space-y-3">
               {providerStats.map((p: any, i: number) => {
                 const max = Math.max(...providerStats.map((s: any) => s.count || 1));
@@ -94,7 +102,7 @@ export default function AdminAnalyticsPage() {
             </div>
           ) : (
             <div className="flex h-48 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
-              暂无数据（API 端点 /admin/analytics/providers 待实现）
+              还没有模型使用统计数据
             </div>
           )}
         </div>
@@ -108,11 +116,11 @@ export default function AdminAnalyticsPage() {
               <span className="text-lg font-bold text-red-600">{stats?.totalCreditsSpent ?? '--'}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">总充值</span>
+              <span className="text-sm text-muted-foreground">累计入账积分</span>
               <span className="text-lg font-bold text-green-600">{stats?.totalCreditsAdded ?? '--'}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">系统积分余额</span>
+              <span className="text-sm text-muted-foreground">当前用户总余额</span>
               <span className="text-lg font-bold">{stats?.totalCreditsBalance ?? '--'}</span>
             </div>
           </div>

@@ -71,6 +71,9 @@ export const adminApi = {
     return adminFetch(`/admin/jobs?${qs}`);
   },
   getStats: () => adminFetch('/admin/jobs/stats'),
+  getDailyAnalytics: (days = 30) => adminFetch(`/admin/analytics/daily?days=${days}`),
+  getProviderAnalytics: () => adminFetch('/admin/analytics/providers'),
+  getCreditAnalytics: (days = 30) => adminFetch(`/admin/analytics/credits?days=${days}`),
 
   // Config
   listProviders: () => adminFetch('/admin/config/providers'),
