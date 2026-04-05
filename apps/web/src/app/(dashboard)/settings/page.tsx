@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { userApi } from '@/lib/api';
 import { logout } from '@/lib/auth';
 import { UserCircle, Mail, Key, Shield, LogOut, Save, Sparkles, Phone, CreditCard, ChevronRight, Settings } from 'lucide-react';
@@ -11,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -164,7 +166,7 @@ export default function SettingsPage() {
                   </div>
                   
                   <div className="flex gap-3">
-                    <Button variant="picmagic" className="h-11 px-6 rounded-xl font-bold flex-1" onClick={() => window.location.href = '/billing'}>
+                    <Button variant="picmagic" className="h-11 px-6 rounded-xl font-bold flex-1" onClick={() => router.push('/billing')}>
                       立即充值
                     </Button>
                     <Button variant="outline" className="h-11 px-6 rounded-xl font-bold border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50">

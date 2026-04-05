@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { generationApi } from '@/lib/api';
 import { Image as ImageIcon, Video, FolderOpen, Search, Filter, Download, Trash2, Expand, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 
 export default function GalleryPage() {
+  const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
@@ -91,7 +93,7 @@ export default function GalleryPage() {
           </div>
           <h3 className="text-base font-semibold text-slate-700 mb-1">暂无资产</h3>
           <p className="text-sm text-slate-500 max-w-[250px] mb-6">您还没有生成任何{filter === 'IMAGE' ? '图片' : filter === 'VIDEO' ? '视频' : ''}资产。</p>
-          <Button variant="default" className="rounded-xl shadow-sm bg-primary hover:bg-blue-700" onClick={() => window.location.href = '/workspace'}>
+          <Button variant="default" className="rounded-xl shadow-sm bg-primary hover:bg-blue-700" onClick={() => router.push('/workspace')}>
             开始创作
           </Button>
         </div>
