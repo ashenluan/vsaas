@@ -573,6 +573,11 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     return !!this.config.get<string>('ALIYUN_ACCESS_KEY_ID') && !!this.config.get<string>('ALIYUN_ACCESS_KEY_SECRET');
   }
 
+  getRequiredOssRegion(): string {
+    const region = this.config.get<string>('ALIYUN_IMS_REGION', 'cn-shanghai');
+    return region.startsWith('oss-') ? region : `oss-${region}`;
+  }
+
   async submitBatchJob(
     inputConfig: any,
     editingConfig: any,

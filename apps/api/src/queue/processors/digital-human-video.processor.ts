@@ -459,6 +459,17 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
     generationId: string,
     outputFormat: DHVideoJobData['input']['outputFormat'] = 'mp4',
   ) {
+    const requiredOssRegion =
+      typeof this.providers.imsProvider?.getRequiredOssRegion === 'function'
+        ? this.providers.imsProvider.getRequiredOssRegion()
+        : undefined;
+
+    if (requiredOssRegion && this.storage.getRegion() !== requiredOssRegion) {
+      throw new Error(
+        `IMS 输出存储区域与服务区域不一致，请将 OSS_REGION 配置为 ${requiredOssRegion} 后重试`,
+      );
+    }
+
     const outputKey = this.storage.generateKey('digital-human/ims', `${generationId}.${outputFormat}`);
 
     return {

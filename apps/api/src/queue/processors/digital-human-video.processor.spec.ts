@@ -21,6 +21,7 @@ function createPrismaMock() {
 function createProvidersMock() {
   return {
     imsProvider: {
+      getRequiredOssRegion: vi.fn(() => 'oss-cn-shanghai'),
       buildAvatarEditingConfig: vi.fn((config) => config),
       buildOutputConfig: vi.fn((config) => config),
       submitAvatarVideoJob: vi.fn().mockResolvedValue({
@@ -67,6 +68,7 @@ function createStorageMock() {
   return {
     generateKey: vi.fn((prefix: string, filename: string) => `${prefix}/${filename}`),
     getOssUrl: vi.fn((key: string) => `https://bucket.oss-cn-shanghai.aliyuncs.com/${key}`),
+    getRegion: vi.fn(() => 'oss-cn-shanghai'),
     ensureSignedUrl: vi.fn((url: string) => `${url}?signed=1`),
   };
 }
@@ -169,6 +171,30 @@ describe('DigitalHumanVideoProcessor', () => {
 
     const [, pollOptions] = pollTaskStatusMock.mock.calls[0];
     expect(pollOptions.buildProgressMessage(6, 180).message).toContain('正在等待 IMS 数字人合成完成');
+  });
+
+  it('fails early when IMS output OSS region does not match the IMS region', async () => {
+    storage.getRegion.mockReturnValue('oss-cn-hangzhou');
+
+    await expect(
+      processor.process({
+        data: {
+          jobId: 'job-ims-region-mismatch',
+          userId: 'user-1',
+          input: {
+            engine: 'ims',
+            builtinAvatarId: 'ims-avatar-1',
+            driveMode: 'text',
+            resolution: '1080x1920',
+            voiceId: 'ava',
+            voiceType: 'builtin',
+            text: '区域校验测试',
+          },
+        },
+      } as any),
+    ).rejects.toThrow('OSS_REGION');
+
+    expect(providers.imsProvider.submitAvatarVideoJob).not.toHaveBeenCalled();
   });
 
   it('routes ims audio jobs directly to avatar rendering without Qwen TTS', async () => {
