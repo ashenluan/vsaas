@@ -997,11 +997,20 @@ export class DigitalHumanService {
   async createVideo(
     userId: string,
     data: {
-      avatarId: string;
+      engine: 'ims' | 'wan-photo' | 'wan-motion';
+      avatarId?: string;
+      avatarSource?: 'builtin' | 'custom';
+      builtinAvatarId?: string;
       driveMode: 'text' | 'audio' | 'video';
       resolution: string;
       name?: string;
       voiceId?: string;
+      voiceType?: 'builtin' | 'cloned';
+      outputFormat?: 'mp4' | 'webm';
+      loopMotion?: boolean;
+      pitchRate?: number;
+      volume?: number;
+      backgroundUrl?: string;
       text?: string;
       speechRate?: number;
       audioUrl?: string;
@@ -1009,49 +1018,72 @@ export class DigitalHumanService {
       animateMode?: 'wan-std' | 'wan-pro';
     },
   ) {
-    // Validate avatar (user-owned or public)
-    const avatar = await this.prisma.material.findFirst({
-      where: {
-        id: data.avatarId,
-        OR: [{ userId }, { isPublic: true }],
-      },
-    });
-    if (!avatar) throw new BadRequestException('数字人形象不存在');
+    const supportedDriveModes: Record<'ims' | 'wan-photo' | 'wan-motion', Array<'text' | 'audio' | 'video'>> = {
+      ims: ['text', 'audio'],
+      'wan-photo': ['text', 'audio'],
+      'wan-motion': ['video'],
+    };
 
-    // Check face detection (not needed for video drive mode — animate-move has built-in check)
-    if (data.driveMode !== 'video') {
-      const faceDetect = (avatar.metadata as any)?.faceDetect;
-      if (!faceDetect?.valid) {
-        throw new BadRequestException(
-          '该形象未通过人脸检测，请先进行人脸检测',
-        );
-      }
+    if (!supportedDriveModes[data.engine].includes(data.driveMode)) {
+      throw new BadRequestException('当前引擎不支持所选驱动模式');
     }
 
-    // Validate voice for text mode
+    if (data.engine === 'ims' && !data.builtinAvatarId) {
+      throw new BadRequestException('请选择内置数字人');
+    }
+
+    if ((data.engine === 'wan-photo' || data.engine === 'wan-motion') && !data.avatarId) {
+      throw new BadRequestException('请选择数字人形象');
+    }
+
     if (data.driveMode === 'text') {
       if (!data.voiceId) throw new BadRequestException('请选择声音');
       if (!data.text?.trim()) throw new BadRequestException('请输入台词文案');
-
-      const voice = await this.prisma.voice.findFirst({
-        where: {
-          voiceId: data.voiceId,
-          status: 'READY',
-          OR: [{ userId }, { isPublic: true }],
-        },
-      });
-      if (!voice) throw new BadRequestException('声音不存在或未就绪');
     }
 
-    // Validate audio for audio mode
     if (data.driveMode === 'audio' && !data.audioUrl) {
       throw new BadRequestException('请上传音频文件');
     }
 
-    // Validate video for video mode
     if (data.driveMode === 'video' && !data.videoUrl) {
       throw new BadRequestException('请上传参考视频');
     }
+
+    let avatar: any;
+    if (data.engine !== 'ims') {
+      avatar = await this.prisma.material.findFirst({
+        where: {
+          id: data.avatarId!,
+          OR: [{ userId }, { isPublic: true }],
+        },
+      });
+      if (!avatar) throw new BadRequestException('数字人形象不存在');
+
+      if (data.engine === 'wan-photo') {
+        const faceDetect = (avatar.metadata as any)?.faceDetect;
+        if (!faceDetect?.valid) {
+          throw new BadRequestException(
+            '该形象未通过人脸检测，请先进行人脸检测',
+          );
+        }
+      }
+    }
+
+    if (data.driveMode === 'text') {
+      const skipVoiceOwnershipCheck = data.engine === 'ims' && data.voiceType === 'builtin';
+      if (!skipVoiceOwnershipCheck) {
+        const voice = await this.prisma.voice.findFirst({
+          where: {
+            voiceId: data.voiceId,
+            status: 'READY',
+            OR: [{ userId }, { isPublic: true }],
+          },
+        });
+        if (!voice) throw new BadRequestException('声音不存在或未就绪');
+      }
+    }
+
+    const resolvedAvatarSource = data.avatarSource || (data.engine === 'ims' ? 'builtin' : 'custom');
 
     // Deduct credits
     const cost = CREDIT_COSTS.DH_VIDEO;
@@ -1069,14 +1101,23 @@ export class DigitalHumanService {
           userId,
           type: 'DIGITAL_HUMAN_VIDEO',
           status: 'PENDING',
-          provider: 'aliyun-wan',
+          provider: data.engine === 'ims' ? 'aliyun-ims' : 'aliyun-wan',
           creditsUsed: cost,
           input: {
             name: data.name,
-            avatarId: data.avatarId,
-            avatarUrl: avatar.url,
+            engine: data.engine,
+            avatarSource: resolvedAvatarSource,
+            ...(data.voiceType && { voiceType: data.voiceType }),
+            ...(data.outputFormat && { outputFormat: data.outputFormat }),
+            ...(data.avatarId && { avatarId: data.avatarId }),
+            ...(avatar?.url && { avatarUrl: avatar.url }),
+            ...(data.builtinAvatarId && { builtinAvatarId: data.builtinAvatarId }),
             driveMode: data.driveMode,
             resolution: data.resolution,
+            ...(data.engine === 'ims' && data.loopMotion !== undefined && { loopMotion: data.loopMotion }),
+            ...(data.engine === 'ims' && data.pitchRate !== undefined && { pitchRate: data.pitchRate }),
+            ...(data.engine === 'ims' && data.volume !== undefined && { volume: data.volume }),
+            ...(data.engine === 'ims' && data.backgroundUrl && { backgroundUrl: data.backgroundUrl }),
             ...(data.driveMode === 'text'
               ? { voiceId: data.voiceId, text: data.text, speechRate: data.speechRate || 1.0 }
               : data.driveMode === 'video'

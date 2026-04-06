@@ -258,13 +258,25 @@ export const scriptApi = {
 // Digital Human - Single Video Creation
 export const digitalHumanApi = {
   createVideo: (data: {
-    avatarId: string;
-    driveMode: 'text' | 'audio';
+    engine: 'ims' | 'wan-photo' | 'wan-motion';
+    avatarId?: string;
+    avatarSource?: 'builtin' | 'custom';
+    builtinAvatarId?: string;
+    driveMode: 'text' | 'audio' | 'video';
     resolution: string;
     name?: string;
     voiceId?: string;
+    voiceType?: 'builtin' | 'cloned';
+    outputFormat?: 'mp4' | 'webm';
+    loopMotion?: boolean;
+    pitchRate?: number;
+    volume?: number;
+    backgroundUrl?: string;
     text?: string;
+    speechRate?: number;
     audioUrl?: string;
+    videoUrl?: string;
+    animateMode?: 'wan-std' | 'wan-pro';
   }) =>
     apiFetch('/digital-human/create-video', { method: 'POST', body: JSON.stringify(data) }),
   getVideo: (id: string) => apiFetch(`/digital-human/video/${id}`),

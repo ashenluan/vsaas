@@ -397,3 +397,150 @@ describe('DigitalHumanService.createMixcutJob', () => {
     expect(queue.add).not.toHaveBeenCalled();
   });
 });
+
+describe('DigitalHumanService.createVideo engine contract', () => {
+  let prisma: ReturnType<typeof createMockPrisma>;
+  let providers: ReturnType<typeof createProvidersMock>;
+  let userService: ReturnType<typeof createUserServiceMock>;
+  let storage: ReturnType<typeof createStorageMock>;
+  let queue: ReturnType<typeof createQueueMock>;
+  let service: DigitalHumanService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    providers = createProvidersMock();
+    userService = createUserServiceMock();
+    storage = createStorageMock();
+    queue = createQueueMock();
+
+    prisma.generation.create.mockResolvedValue(createGenerationRecord());
+    queue.add.mockResolvedValue(undefined);
+
+    service = new DigitalHumanService(
+      prisma as any,
+      providers as any,
+      userService as any,
+      storage as any,
+      queue as any,
+      queue as any,
+      queue as any,
+      queue as any,
+    );
+  });
+
+  it('requires builtinAvatarId for ims engine', async () => {
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'ims',
+        driveMode: 'text',
+        resolution: '1080x1920',
+        voiceId: 'voice-1',
+        text: 'hello world',
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.material.findFirst).not.toHaveBeenCalled();
+    expect(prisma.generation.create).not.toHaveBeenCalled();
+  });
+
+  it('allows ims text mode with builtin voice without Prisma voice lookup', async () => {
+    await service.createVideo('user-1', {
+      engine: 'ims',
+      driveMode: 'text',
+      resolution: '1080x1920',
+      builtinAvatarId: 'ims-avatar-1',
+      voiceId: 'ims-voice-1',
+      voiceType: 'builtin',
+      text: 'hello world',
+    } as any);
+
+    expect(prisma.voice.findFirst).not.toHaveBeenCalled();
+    expect(prisma.generation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          input: expect.objectContaining({
+            engine: 'ims',
+            builtinAvatarId: 'ims-avatar-1',
+            driveMode: 'text',
+            voiceType: 'builtin',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('allows ims text mode with cloned voice after ownership check', async () => {
+    prisma.voice.findFirst.mockResolvedValue({
+      id: 'voice-db-1',
+      voiceId: 'voice-cloned',
+      status: 'READY',
+      userId: 'user-1',
+      isPublic: false,
+    });
+
+    await service.createVideo('user-1', {
+      engine: 'ims',
+      driveMode: 'text',
+      resolution: '1080x1920',
+      builtinAvatarId: 'ims-avatar-1',
+      voiceId: 'voice-cloned',
+      voiceType: 'cloned',
+      text: 'hello world',
+    } as any);
+
+    expect(prisma.voice.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.generation.create).toHaveBeenCalled();
+  });
+
+  it('requires avatarId for wan-photo text mode', async () => {
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'wan-photo',
+        driveMode: 'text',
+        resolution: '1080x1920',
+        voiceId: 'voice-1',
+        text: 'hello world',
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.material.findFirst).not.toHaveBeenCalled();
+    expect(prisma.generation.create).not.toHaveBeenCalled();
+  });
+
+  it('requires videoUrl for wan-motion video mode', async () => {
+    prisma.material.findFirst.mockResolvedValue({
+      id: 'avatar-1',
+      url: 'https://example.com/avatar.png',
+      metadata: { faceDetect: { valid: true } },
+      isPublic: false,
+      userId: 'user-1',
+    });
+
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'wan-motion',
+        driveMode: 'video',
+        resolution: '1080x1920',
+        avatarId: 'avatar-1',
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.generation.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid engine and driveMode combinations early', async () => {
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'wan-motion',
+        driveMode: 'text',
+        resolution: '1080x1920',
+        avatarId: 'avatar-1',
+        voiceId: 'voice-1',
+        text: 'hello world',
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.material.findFirst).not.toHaveBeenCalled();
+    expect(prisma.generation.create).not.toHaveBeenCalled();
+  });
+});

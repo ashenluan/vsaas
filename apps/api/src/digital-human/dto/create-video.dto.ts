@@ -3,9 +3,16 @@ import {
   IsOptional,
   IsEnum,
   IsNumber,
+  IsBoolean,
   ValidateIf,
   IsNotEmpty,
 } from 'class-validator';
+
+export enum DigitalHumanEngine {
+  IMS = 'ims',
+  WAN_PHOTO = 'wan-photo',
+  WAN_MOTION = 'wan-motion',
+}
 
 export enum DriveMode {
   TEXT = 'text',
@@ -13,19 +20,56 @@ export enum DriveMode {
   VIDEO = 'video',
 }
 
-export class CreateVideoDto {
-  @IsString()
-  avatarId!: string;
+export enum AvatarSource {
+  BUILTIN = 'builtin',
+  CUSTOM = 'custom',
+}
 
-  @IsEnum(DriveMode)
-  driveMode!: DriveMode;
+export enum VoiceType {
+  BUILTIN = 'builtin',
+  CLONED = 'cloned',
+}
+
+export enum OutputFormat {
+  MP4 = 'mp4',
+  WEBM = 'webm',
+}
+
+export class CreateVideoDto {
+  @IsEnum(DigitalHumanEngine)
+  engine!: DigitalHumanEngine;
+
+  @ValidateIf((o) => o.engine === DigitalHumanEngine.WAN_PHOTO || o.engine === DigitalHumanEngine.WAN_MOTION)
+  @IsString()
+  @IsNotEmpty({ message: '请选择数字人形象' })
+  avatarId?: string;
+
+  @ValidateIf((o) => o.engine === DigitalHumanEngine.IMS)
+  @IsString()
+  @IsNotEmpty({ message: '请选择内置数字人' })
+  builtinAvatarId?: string;
+
+  @IsOptional()
+  @IsEnum(AvatarSource)
+  avatarSource?: AvatarSource;
 
   @IsString()
   resolution!: string;
 
+  @IsEnum(DriveMode)
+  driveMode!: DriveMode;
+
   @IsOptional()
   @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsEnum(VoiceType)
+  voiceType?: VoiceType;
+
+  @IsOptional()
+  @IsEnum(OutputFormat)
+  outputFormat?: OutputFormat;
 
   // Text drive fields
   @ValidateIf((o) => o.driveMode === DriveMode.TEXT)
@@ -37,6 +81,22 @@ export class CreateVideoDto {
   @IsString()
   @IsNotEmpty({ message: '请输入台词文案' })
   text?: string;
+
+  @IsOptional()
+  @IsNumber()
+  pitchRate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  volume?: number;
+
+  @IsOptional()
+  @IsString()
+  backgroundUrl?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  loopMotion?: boolean;
 
   @IsOptional()
   @IsNumber()
