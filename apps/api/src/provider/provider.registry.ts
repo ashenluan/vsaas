@@ -11,6 +11,7 @@ import { QwenVoiceProvider } from './qwen/qwen-voice.provider';
 import { WanS2VProvider } from './aliyun-wan/wan-s2v.provider';
 import { WanR2VProvider } from './aliyun-wan/wan-r2v.provider';
 import { AliyunIMSProvider } from './aliyun-ims/ims-compose.provider';
+import { VideoRetalkProvider } from './aliyun-bailian/video-retalk.provider';
 import { ProviderConfigService, RegisteredProvider } from './provider-config.service';
 
 export interface ImageProvider {
@@ -49,6 +50,7 @@ export class ProviderRegistry implements OnModuleInit {
     public readonly digitalHumanProvider: WanS2VProvider,
     public readonly r2vProvider: WanR2VProvider,
     public readonly batchComposeProvider: AliyunIMSProvider,
+    public readonly videoRetalkProvider: VideoRetalkProvider,
   ) {
     this.imsProvider = this.batchComposeProvider;
   }
@@ -133,6 +135,7 @@ export class ProviderRegistry implements OnModuleInit {
       ...this.getRegisteredVideoProviders(),
       this.voiceProvider,
       this.digitalHumanProvider,
+      this.videoRetalkProvider,
       this.batchComposeProvider,
     ];
   }

@@ -2,15 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCreatePreviewSummary,
   buildCreateVideoPayload,
-  syncEngineSelection,
+  buildPreflightSummary,
+  syncUseCaseSelection,
   type CreateVideoFormState,
 } from './create-video-form';
 
 const createState = (overrides: Partial<CreateVideoFormState> = {}): CreateVideoFormState => ({
+  useCase: 'standard-presenter',
   engine: 'ims',
   driveMode: 'text',
   projectName: '',
   resolution: '1080x1920',
+  preset: 'balanced',
   selectedAvatar: null,
   selectedBuiltinAvatar: null,
   selectedVoice: null,
@@ -23,30 +26,67 @@ const createState = (overrides: Partial<CreateVideoFormState> = {}): CreateVideo
   backgroundUrl: '',
   pitchRate: 0,
   volume: 1,
+  videoExtension: false,
+  queryFaceThreshold: 180,
   ...overrides,
 });
 
 describe('create video form helpers', () => {
-  it('forces video mode and clears builtin voice selections when switching to wan motion', () => {
-    const nextState = syncEngineSelection(
+  it('maps the video-retalk use case onto the videoretalk engine and source resolution', () => {
+    const nextState = syncUseCaseSelection(
       createState({
+        useCase: 'standard-presenter',
         engine: 'ims',
-        driveMode: 'audio',
-        voiceType: 'builtin',
-        selectedVoice: 'builtin-voice-1',
+        driveMode: 'text',
+        resolution: '1080x1920',
       }),
-      'wan-motion',
+      'video-retalk',
     );
 
-    expect(nextState.engine).toBe('wan-motion');
-    expect(nextState.driveMode).toBe('video');
-    expect(nextState.voiceType).toBe('cloned');
-    expect(nextState.selectedVoice).toBeNull();
+    expect(nextState.useCase).toBe('video-retalk');
+    expect(nextState.engine).toBe('videoretalk');
+    expect(nextState.driveMode).toBe('audio');
+    expect(nextState.resolution).toBe('source');
+  });
+
+  it('builds a videoretalk payload with source video, audio, preset and optional face reference', () => {
+    const result = buildCreateVideoPayload(
+      createState({
+        useCase: 'video-retalk',
+        engine: 'videoretalk',
+        driveMode: 'audio',
+        resolution: 'source',
+        preset: 'quality',
+        videoExtension: true,
+        queryFaceThreshold: 185,
+      }),
+      {
+        audioUrl: 'https://example.com/audio.wav',
+        videoUrl: 'https://example.com/source.mp4',
+        refImageUrl: 'https://example.com/ref.png',
+      },
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      payload: {
+        engine: 'videoretalk',
+        driveMode: 'audio',
+        resolution: 'source',
+        preset: 'quality',
+        audioUrl: 'https://example.com/audio.wav',
+        videoUrl: 'https://example.com/source.mp4',
+        refImageUrl: 'https://example.com/ref.png',
+        videoExtension: true,
+        queryFaceThreshold: 185,
+      },
+    });
   });
 
   it('builds an IMS text payload with builtin avatar and IMS-only options', () => {
     const result = buildCreateVideoPayload(
       createState({
+        useCase: 'standard-presenter',
         engine: 'ims',
         selectedBuiltinAvatar: 'avatar-ims-1',
         selectedVoice: 'builtin-voice-1',
@@ -69,6 +109,7 @@ describe('create video form helpers', () => {
         builtinAvatarId: 'avatar-ims-1',
         driveMode: 'text',
         resolution: '1080x1920',
+        preset: 'balanced',
         name: 'IMS 演示',
         voiceId: 'builtin-voice-1',
         voiceType: 'builtin',
@@ -83,71 +124,72 @@ describe('create video form helpers', () => {
     });
   });
 
-  it('builds a wan photo audio payload with uploaded audio only', () => {
+  it('returns a friendly validation error for missing source video in videoretalk mode', () => {
     const result = buildCreateVideoPayload(
       createState({
-        engine: 'wan-photo',
+        useCase: 'video-retalk',
+        engine: 'videoretalk',
         driveMode: 'audio',
-        selectedAvatar: 'custom-avatar-1',
+        resolution: 'source',
       }),
       {
-        audioUrl: 'https://example.com/audio.mp3',
+        audioUrl: 'https://example.com/audio.wav',
       },
-    );
-
-    expect(result).toEqual({
-      ok: true,
-      payload: {
-        engine: 'wan-photo',
-        avatarSource: 'custom',
-        avatarId: 'custom-avatar-1',
-        driveMode: 'audio',
-        resolution: '1080x1920',
-        audioUrl: 'https://example.com/audio.mp3',
-      },
-    });
-  });
-
-  it('returns a friendly validation error for missing ims avatar selection', () => {
-    const result = buildCreateVideoPayload(
-      createState({
-        engine: 'ims',
-        selectedVoice: 'builtin-voice-1',
-        textContent: '你好',
-      }),
     );
 
     expect(result).toEqual({
       ok: false,
-      error: '请选择内置数字人',
+      error: '请上传源视频',
     });
   });
 
-  it('builds a mode-aware preview summary for ims native text mode', () => {
+  it('builds a mode-aware preview summary for videoretalk mode', () => {
     const summary = buildCreatePreviewSummary({
       state: createState({
-        engine: 'ims',
-        selectedBuiltinAvatar: 'avatar-ims-1',
-        selectedVoice: 'builtin-voice-1',
-        textContent: '欢迎来到智能数字人演示',
-        outputFormat: 'webm',
-        loopMotion: true,
-        backgroundUrl: 'https://example.com/bg.png',
+        useCase: 'video-retalk',
+        engine: 'videoretalk',
+        driveMode: 'audio',
+        resolution: 'source',
+        preset: 'quality',
+        selectedAvatar: 'custom-avatar-1',
+        videoExtension: true,
       }),
-      customAvatars: [],
-      builtinAvatars: [{ id: 'avatar-ims-1', name: '专业讲解员' }],
-      builtinVoices: [{ id: 'builtin-voice-1', label: '温柔女声' }],
+      customAvatars: [{ id: 'custom-avatar-1', name: '主持人参考图' }],
+      builtinAvatars: [],
+      builtinVoices: [],
       clonedVoices: [],
     });
 
     expect(summary).toEqual(
       expect.arrayContaining([
-        { label: '创作模式', value: 'IMS 原生数字人' },
-        { label: '数字人', value: '专业讲解员' },
-        { label: '声音', value: '系统音色 · 温柔女声' },
-        { label: '输出', value: 'webm · 循环动作' },
-        { label: '背景', value: '已设置' },
+        { label: '创作场景', value: '已有视频重驱动' },
+        { label: '质量档位', value: '高质量' },
+        { label: '参考人脸', value: '主持人参考图' },
+        { label: '声音', value: '上传音频 + 源视频重驱动' },
+        { label: '视频延展', value: '开启' },
       ]),
     );
+  });
+
+  it('builds a local preflight summary with videoretalk-specific warnings', () => {
+    const summary = buildPreflightSummary({
+      state: createState({
+        useCase: 'video-retalk',
+        engine: 'videoretalk',
+        driveMode: 'audio',
+      }),
+      hasAudio: true,
+      hasVideo: true,
+      hasReferenceImage: false,
+    });
+
+    expect(summary.checks).toEqual(
+      expect.arrayContaining([
+        { label: '源视频', ready: true },
+        { label: '音频素材', ready: true },
+        { label: '可选参考人脸图', ready: false },
+      ]),
+    );
+    expect(summary.warnings[0]).toContain('未启用深度媒体探测');
   });
 });

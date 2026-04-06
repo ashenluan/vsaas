@@ -33,6 +33,7 @@ const PROVIDER_ALIASES: Record<string, string> = {
   'aliyun-wan': 'aliyun_wan',
   'aliyun-r2v': 'aliyun_wan',
   'aliyun-ims': 'aliyun_ims',
+  'aliyun-videoretalk': 'aliyun_videoretalk',
 };
 
 @Injectable()

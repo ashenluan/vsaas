@@ -3,15 +3,19 @@ import {
   IsOptional,
   IsEnum,
   IsNumber,
+  IsInt,
   IsBoolean,
   ValidateIf,
   IsNotEmpty,
+  Min,
+  Max,
 } from 'class-validator';
 
 export enum DigitalHumanEngine {
   IMS = 'ims',
   WAN_PHOTO = 'wan-photo',
   WAN_MOTION = 'wan-motion',
+  VIDEORETALK = 'videoretalk',
 }
 
 export enum DriveMode {
@@ -35,12 +39,18 @@ export enum OutputFormat {
   WEBM = 'webm',
 }
 
+export enum CreateVideoPreset {
+  SPEED = 'speed',
+  BALANCED = 'balanced',
+  QUALITY = 'quality',
+}
+
 export class CreateVideoDto {
   @IsOptional()
   @IsEnum(DigitalHumanEngine)
   engine?: DigitalHumanEngine;
 
-  @ValidateIf((o) => o.engine !== DigitalHumanEngine.IMS)
+  @ValidateIf((o) => o.engine !== DigitalHumanEngine.IMS && o.engine !== DigitalHumanEngine.VIDEORETALK)
   @IsString()
   @IsNotEmpty({ message: '请选择数字人形象' })
   avatarId?: string;
@@ -63,6 +73,10 @@ export class CreateVideoDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsEnum(CreateVideoPreset)
+  preset?: CreateVideoPreset;
 
   @IsOptional()
   @IsEnum(VoiceType)
@@ -110,7 +124,7 @@ export class CreateVideoDto {
   audioUrl?: string;
 
   // Video drive fields
-  @ValidateIf((o) => o.driveMode === DriveMode.VIDEO)
+  @ValidateIf((o) => o.driveMode === DriveMode.VIDEO || o.engine === DigitalHumanEngine.VIDEORETALK)
   @IsString()
   @IsNotEmpty({ message: '请上传参考视频' })
   videoUrl?: string;
@@ -118,4 +132,18 @@ export class CreateVideoDto {
   @IsOptional()
   @IsString()
   animateMode?: 'wan-std' | 'wan-pro';
+
+  @IsOptional()
+  @IsString()
+  refImageUrl?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  videoExtension?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(120)
+  @Max(200)
+  queryFaceThreshold?: number;
 }

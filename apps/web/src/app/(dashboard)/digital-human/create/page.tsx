@@ -33,23 +33,17 @@ import {
   X,
 } from 'lucide-react';
 import {
+  buildPreflightSummary,
   buildCreatePreviewSummary,
   buildCreateVideoPayload,
-  CREATE_ENGINE_OPTIONS,
+  CREATE_USE_CASE_OPTIONS,
   DRIVE_MODE_OPTIONS,
-  syncEngineSelection,
-  type CreateEngine,
+  PRESET_OPTIONS,
+  syncUseCaseSelection,
   type CreateVideoFormState,
   type CreateVoiceType,
 } from './_lib/create-video-form';
-
-const RESOLUTIONS = [
-  { label: '竖屏 1080×1920', value: '1080x1920' },
-  { label: '横屏 1920×1080', value: '1920x1080' },
-  { label: '方形 1080×1080', value: '1080x1080' },
-  { label: '竖屏 4K', value: '2160x3840' },
-  { label: '横屏 4K', value: '3840x2160' },
-];
+import { getUseCaseCapability } from './_lib/digital-human-capabilities';
 
 type CustomAvatar = {
   id: string;
@@ -87,10 +81,12 @@ type BuiltinVoiceCard = ImsVoiceOption & {
 
 function createInitialFormState(presetAvatarId: string | null): CreateVideoFormState {
   return {
+    useCase: presetAvatarId ? 'photo-talk' : 'standard-presenter',
     engine: presetAvatarId ? 'wan-photo' : 'ims',
     driveMode: 'text',
     projectName: '',
     resolution: '1080x1920',
+    preset: 'balanced',
     selectedAvatar: presetAvatarId,
     selectedBuiltinAvatar: null,
     selectedVoice: null,
@@ -103,6 +99,8 @@ function createInitialFormState(presetAvatarId: string | null): CreateVideoFormS
     backgroundUrl: '',
     pitchRate: 0,
     volume: 1,
+    videoExtension: false,
+    queryFaceThreshold: 180,
   };
 }
 
@@ -161,6 +159,8 @@ function CreateContent() {
     ? selectedBuiltinAvatar?.coverUrl
     : selectedCustomAvatar?.url;
   const availableDriveModes = DRIVE_MODE_OPTIONS[form.engine];
+  const selectedUseCase = useMemo(() => getUseCaseCapability(form.useCase), [form.useCase]);
+  const availableResolutionOptions = selectedUseCase.allowedResolutions;
 
   const previewSummary = useMemo(
     () => buildCreatePreviewSummary({
@@ -174,6 +174,15 @@ function CreateContent() {
       })),
     }),
     [form, customAvatars, builtinAvatars, builtinVoices, clonedVoices],
+  );
+  const preflightSummary = useMemo(
+    () => buildPreflightSummary({
+      state: form,
+      hasAudio: !!audioFile,
+      hasVideo: !!videoFile,
+      hasReferenceImage: !!selectedCustomAvatar?.url,
+    }),
+    [form, audioFile, videoFile, selectedCustomAvatar?.url],
   );
 
   useEffect(() => {
@@ -302,9 +311,9 @@ function CreateContent() {
     setForm((prev) => ({ ...prev, ...patch }));
   };
 
-  const handleEngineSelect = (engine: CreateEngine) => {
+  const handleUseCaseSelect = (useCase: CreateVideoFormState['useCase']) => {
     setError('');
-    setForm((prev) => syncEngineSelection(prev, engine));
+    setForm((prev) => syncUseCaseSelection(prev, useCase));
   };
 
   const handleVoiceTypeSelect = (voiceType: CreateVoiceType) => {
@@ -374,8 +383,8 @@ function CreateContent() {
       return;
     }
 
-    if (form.driveMode === 'video' && !videoFile) {
-      setError('请上传参考视频');
+    if ((form.driveMode === 'video' || form.engine === 'videoretalk') && !videoFile) {
+      setError(form.engine === 'videoretalk' ? '请上传源视频' : '请上传参考视频');
       return;
     }
 
@@ -391,7 +400,7 @@ function CreateContent() {
         uploadedAudioUrl = uploaded.url;
       }
 
-      if (form.driveMode === 'video' && videoFile) {
+      if ((form.driveMode === 'video' || form.engine === 'videoretalk') && videoFile) {
         const uploaded = await uploadToOSS(videoFile);
         uploadedVideoUrl = uploaded.url;
       }
@@ -399,6 +408,7 @@ function CreateContent() {
       const payloadResult = buildCreateVideoPayload(form, {
         audioUrl: uploadedAudioUrl,
         videoUrl: uploadedVideoUrl,
+        refImageUrl: form.engine === 'videoretalk' ? selectedCustomAvatar?.url : undefined,
       });
 
       if (!payloadResult.ok) {
@@ -528,20 +538,22 @@ function CreateContent() {
           />
         </SectionCard>
 
-        <SectionCard icon={Sparkles} title="创作模式" description="先明确使用哪条引擎路径，表单会按模式自动精简。">
-          <div className="grid gap-3 md:grid-cols-3">
-            {CREATE_ENGINE_OPTIONS.map((option) => {
-              const selected = form.engine === option.value;
-              const meta = option.value === 'ims'
+        <SectionCard icon={Sparkles} title="创作场景" description="先选使用场景，再由系统自动匹配对应模型与参数能力。">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {CREATE_USE_CASE_OPTIONS.map((option) => {
+              const selected = form.useCase === option.useCase;
+              const meta = option.engine === 'ims'
                 ? `${builtinAvatars.length} 个内置数字人 · ${builtinVoices.length} 个系统音色`
-                : option.value === 'wan-photo'
+                : option.engine === 'wan-photo'
                   ? `${customAvatars.length} 个照片形象 · ${clonedVoices.length} 个可用声音`
-                  : `${customAvatars.length} 个照片形象 · 参考视频驱动`;
+                  : option.engine === 'videoretalk'
+                    ? '源视频 + 音频重驱动 · 可选参考人脸'
+                    : `${customAvatars.length} 个照片形象 · 参考视频驱动`;
 
               return (
                 <button
-                  key={option.value}
-                  onClick={() => handleEngineSelect(option.value)}
+                  key={option.useCase}
+                  onClick={() => handleUseCaseSelect(option.useCase)}
                   className={cn(
                     'rounded-2xl border p-4 text-left transition-all',
                     selected
@@ -558,6 +570,7 @@ function CreateContent() {
                     )}
                   </div>
                   <p className="mb-3 text-xs leading-5 text-slate-500">{option.description}</p>
+                  <p className="mb-2 text-[11px] font-medium text-slate-500">{option.assetHint}</p>
                   <p className="text-[11px] font-medium text-slate-400">{meta}</p>
                 </button>
               );
@@ -567,8 +580,20 @@ function CreateContent() {
 
         <SectionCard
           icon={UserCircle}
-          title={form.engine === 'ims' ? '选择内置数字人' : '选择照片数字人'}
-          description={form.engine === 'ims' ? '阿里云 IMS 预置数字人形象。' : '沿用当前照片数字人资产与管理方式。'}
+          title={
+            form.engine === 'ims'
+              ? '选择内置数字人'
+              : form.engine === 'videoretalk'
+                ? '选择参考人脸图（可选）'
+                : '选择照片数字人'
+          }
+          description={
+            form.engine === 'ims'
+              ? '阿里云 IMS 预置数字人形象。'
+              : form.engine === 'videoretalk'
+                ? '可选，用于帮助 VideoRetalk 更稳定地锁定目标人脸。'
+                : '沿用当前照片数字人资产与管理方式。'
+          }
         >
           {form.engine === 'ims' ? (
             builtinAvatars.length === 0 ? (
@@ -614,8 +639,10 @@ function CreateContent() {
             )
           ) : customAvatars.length === 0 ? (
             <EmptyState
-              title="暂无照片数字人"
-              description="请先到「我的数字人」页面上传或复刻照片形象。"
+              title={form.engine === 'videoretalk' ? '暂无参考人脸图' : '暂无照片数字人'}
+              description={form.engine === 'videoretalk'
+                ? '可以直接跳过；若需要更稳定的人脸锁定，建议先准备一张参考图。'
+                : '请先到「我的数字人」页面上传或复刻照片形象。'}
             />
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -651,7 +678,9 @@ function CreateContent() {
                     )}
                     <div className="bg-white p-2">
                       <p className="truncate text-sm font-medium text-slate-900">{avatar.name}</p>
-                      {!faceValid && <p className="text-[11px] text-red-500">未通过人脸检测</p>}
+                      {form.engine === 'videoretalk'
+                        ? <p className="text-[11px] text-slate-400">可作为参考人脸图</p>
+                        : !faceValid && <p className="text-[11px] text-red-500">未通过人脸检测</p>}
                     </div>
                   </button>
                 );
@@ -806,7 +835,7 @@ function CreateContent() {
         )}
 
         <SectionCard
-          icon={form.engine === 'wan-motion' ? Clapperboard : FileText}
+          icon={form.engine === 'wan-motion' || form.engine === 'videoretalk' ? Clapperboard : FileText}
           title="驱动内容"
           description="当前模式下只展示有效的驱动方式和输入区域。"
         >
@@ -874,24 +903,57 @@ function CreateContent() {
               <p className="mb-2 text-xs text-slate-500">
                 {form.engine === 'ims'
                   ? '上传音频，直接驱动 IMS 内置数字人口播。'
-                  : '上传音频文件，照片数字人将自动对口型。'}
+                  : form.engine === 'videoretalk'
+                    ? '上传驱动音频，并同时提供源视频进行口型重驱动。'
+                    : '上传音频文件，照片数字人将自动对口型。'}
               </p>
               <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleAudioFile} className="hidden" />
-              {audioPreview ? (
-                <div className="space-y-2">
-                  <audio src={audioPreview} controls className="w-full" />
-                  <button
-                    onClick={() => {
-                      setAudioFile(null);
-                      setAudioPreview(null);
-                    }}
-                    className="text-xs text-red-500 hover:underline"
-                  >
-                    移除音频
-                  </button>
+              <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoFile} className="hidden" />
+              <div className={cn('grid gap-4', form.engine === 'videoretalk' && 'md:grid-cols-2')}>
+                {audioPreview ? (
+                  <div className="space-y-2">
+                    <audio src={audioPreview} controls className="w-full" />
+                    <button
+                      onClick={() => {
+                        setAudioFile(null);
+                        setAudioPreview(null);
+                      }}
+                      className="text-xs text-red-500 hover:underline"
+                    >
+                      移除音频
+                    </button>
+                  </div>
+                ) : (
+                  <UploadBox label="点击上传音频文件" onClick={() => audioInputRef.current?.click()} />
+                )}
+
+                {form.engine === 'videoretalk' && (
+                  videoPreview ? (
+                    <div className="space-y-2">
+                      <video src={videoPreview} controls className="w-full rounded-xl" />
+                      <button
+                        onClick={() => {
+                          setVideoFile(null);
+                          setVideoPreview(null);
+                        }}
+                        className="text-xs text-red-500 hover:underline"
+                      >
+                        移除源视频
+                      </button>
+                    </div>
+                  ) : (
+                    <UploadBox label="点击上传源视频" onClick={() => videoInputRef.current?.click()} />
+                  )
+                )}
+              </div>
+
+              {form.engine === 'videoretalk' && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-medium text-slate-600">VideoRetalk 提示</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    推荐使用清晰正脸源视频；如果人物遮挡较多，可以在上方补一张参考人脸图提高稳定性。
+                  </p>
                 </div>
-              ) : (
-                <UploadBox label="点击上传音频文件" onClick={() => audioInputRef.current?.click()} />
               )}
             </div>
           ) : (
@@ -961,9 +1023,30 @@ function CreateContent() {
           {showAdvanced && (
             <div className="space-y-5 border-t border-border p-5">
               <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">质量档位</label>
+                <div className="grid gap-2 md:grid-cols-3">
+                  {PRESET_OPTIONS.map((preset) => (
+                    <button
+                      key={preset.value}
+                      onClick={() => updateForm({ preset: preset.value })}
+                      className={cn(
+                        'rounded-xl border p-3 text-left transition-all',
+                        form.preset === preset.value
+                          ? 'border-primary bg-primary/5 text-primary'
+                          : 'border-slate-200 text-slate-600 hover:border-slate-300',
+                      )}
+                    >
+                      <p className="text-sm font-semibold">{preset.label}</p>
+                      <p className="mt-1 text-[11px] leading-5 text-slate-500">{preset.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">输出分辨率</label>
                 <div className="flex flex-wrap gap-2">
-                  {RESOLUTIONS.map((resolution) => (
+                  {availableResolutionOptions.map((resolution) => (
                     <button
                       key={resolution.value}
                       onClick={() => updateForm({ resolution: resolution.value })}
@@ -990,6 +1073,40 @@ function CreateContent() {
                   format={(value) => `${value.toFixed(1)}x`}
                   onChange={(value) => updateForm({ speechRate: value })}
                 />
+              )}
+
+              {form.engine === 'videoretalk' && (
+                <>
+                  <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">视频延展</p>
+                      <p className="text-xs text-slate-400">尝试补足更完整的口型与头部过渡，默认关闭。</p>
+                    </div>
+                    <button
+                      onClick={() => updateForm({ videoExtension: !form.videoExtension })}
+                      className={cn(
+                        'relative h-6 w-11 rounded-full transition-colors',
+                        form.videoExtension ? 'bg-primary' : 'bg-slate-300',
+                      )}
+                    >
+                      <span className={cn(
+                        'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
+                        form.videoExtension ? 'translate-x-[22px]' : 'translate-x-0.5',
+                      )}
+                      />
+                    </button>
+                  </div>
+
+                  <SliderField
+                    label="目标人脸阈值"
+                    value={form.queryFaceThreshold}
+                    min={120}
+                    max={220}
+                    step={5}
+                    format={(value) => `${value}`}
+                    onChange={(value) => updateForm({ queryFaceThreshold: value })}
+                  />
+                </>
               )}
 
               {form.engine === 'ims' && (
@@ -1148,6 +1265,30 @@ function CreateContent() {
             ))}
           </div>
 
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="mb-2 text-[11px] font-medium text-slate-500">预检摘要</p>
+            <div className="space-y-2">
+              {preflightSummary.checks.map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-3 text-[11px]">
+                  <span className="text-slate-500">{item.label}</span>
+                  <span className={item.ready ? 'font-medium text-emerald-600' : 'font-medium text-amber-600'}>
+                    {item.ready ? '已就绪' : '待补充'}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 space-y-1">
+              {preflightSummary.warnings.map((warning) => (
+                <p key={warning} className="text-[11px] leading-5 text-amber-700">{warning}</p>
+              ))}
+            </div>
+            <div className="mt-3 space-y-1">
+              {selectedUseCase.notes.map((note) => (
+                <p key={note} className="text-[11px] leading-5 text-slate-500">{note}</p>
+              ))}
+            </div>
+          </div>
+
           {form.driveMode === 'text' && form.textContent && (
             <div className="mt-4 rounded-lg bg-slate-50 p-3">
               <p className="mb-1 text-[11px] font-medium text-slate-500">台词预览</p>
@@ -1162,9 +1303,11 @@ function CreateContent() {
             </div>
           )}
 
-          {form.driveMode === 'video' && videoPreview && (
+          {(form.driveMode === 'video' || form.engine === 'videoretalk') && videoPreview && (
             <div className="mt-4 rounded-lg bg-slate-50 p-3">
-              <p className="mb-2 text-[11px] font-medium text-slate-500">参考视频</p>
+              <p className="mb-2 text-[11px] font-medium text-slate-500">
+                {form.engine === 'videoretalk' ? '源视频' : '参考视频'}
+              </p>
               <video src={videoPreview} controls className="w-full rounded-lg" />
             </div>
           )}

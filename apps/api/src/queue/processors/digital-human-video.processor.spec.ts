@@ -55,6 +55,24 @@ function createProvidersMock() {
         videoUrl: 'https://example.com/wan-video.mp4',
       }),
     },
+    videoRetalkProvider: {
+      submitVideoRetalkJob: vi.fn().mockResolvedValue({
+        taskId: 'retalk-task-1',
+        status: 'PENDING',
+        requestId: 'retalk-request-1',
+      }),
+      checkTaskStatus: vi.fn().mockResolvedValue({
+        status: 'SUCCEEDED',
+        videoUrl: 'https://example.com/videoretalk-video.mp4',
+        requestId: 'retalk-request-1',
+        usage: {
+          videoDuration: 7.2,
+          videoRatio: '9:16',
+          size: '1080x1920',
+          fps: 25,
+        },
+      }),
+    },
   };
 }
 
@@ -70,6 +88,7 @@ function createStorageMock() {
     getOssUrl: vi.fn((key: string) => `https://bucket.oss-cn-shanghai.aliyuncs.com/${key}`),
     getRegion: vi.fn(() => 'oss-cn-shanghai'),
     ensureSignedUrl: vi.fn((url: string) => `${url}?signed=1`),
+    copyExternalToOss: vi.fn(async (sourceUrl: string) => `https://bucket.oss-cn-shanghai.aliyuncs.com/copied/${sourceUrl.split('/').pop()}`),
   };
 }
 
@@ -272,12 +291,17 @@ describe('DigitalHumanVideoProcessor', () => {
       'digital-human:progress',
       expect.objectContaining({
         jobId: 'job-wan-photo-text',
-        message: '正在生成数字人视频...',
+        message: '照片口播合成中...',
       }),
     );
   });
 
   it('routes wan-photo audio jobs directly to Wan S2V without TTS', async () => {
+    providers.digitalHumanProvider.checkTaskStatus.mockResolvedValue({
+      status: 'SUCCEEDED',
+      videoUrl: 'https://dashscope-result-cn-shanghai.aliyuncs.com/tmp/wan-video.mp4',
+    });
+
     await processor.process({
       data: {
         jobId: 'job-wan-photo-audio',
@@ -298,16 +322,25 @@ describe('DigitalHumanVideoProcessor', () => {
       'https://example.com/input-audio.mp3',
       '1080P',
     );
+    expect(storage.copyExternalToOss).toHaveBeenCalledWith(
+      'https://dashscope-result-cn-shanghai.aliyuncs.com/tmp/wan-video.mp4',
+      'digital-human/results/wan-photo',
+      'mp4',
+    );
     expect(prisma.generation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'job-wan-photo-audio' },
         data: expect.objectContaining({
           status: 'COMPLETED',
           output: expect.objectContaining({
-            videoUrl: 'https://example.com/wan-video.mp4',
+            videoUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/copied/wan-video.mp4?signed=1',
+            durableVideoUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/copied/wan-video.mp4',
+            providerTempUrl: 'https://dashscope-result-cn-shanghai.aliyuncs.com/tmp/wan-video.mp4',
             audioUrl: 'https://example.com/input-audio.mp3',
             externalJobType: 'wan-s2v',
             taskId: 'wan-task-1',
+            providerTaskId: 'wan-task-1',
+            engine: 'wan-photo',
           }),
         }),
       }),
@@ -341,7 +374,7 @@ describe('DigitalHumanVideoProcessor', () => {
     const [, pollOptions] = pollTaskStatusMock.mock.calls[0];
     expect(pollOptions.buildProgressMessage(6, 180).message).toContain('动作迁移视频生成中');
     expect(pollOptions.extractError({ errorMessage: 'boom' })).toContain('动作迁移视频生成失败');
-    expect(pollOptions.timeoutMessage).toBe('动作迁移视频生成超时（15分钟）');
+    expect(pollOptions.timeoutMessage).toBe('动作迁移视频生成超时（20分钟）');
 
     expect(prisma.generation.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -349,9 +382,73 @@ describe('DigitalHumanVideoProcessor', () => {
         data: expect.objectContaining({
           status: 'COMPLETED',
           output: expect.objectContaining({
-            videoUrl: 'https://example.com/wan-video.mp4',
+            videoUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/copied/wan-video.mp4?signed=1',
+            durableVideoUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/copied/wan-video.mp4',
+            providerTempUrl: 'https://example.com/wan-video.mp4',
             externalJobType: 'wan-animate',
             taskId: 'wan-animate-task-1',
+            providerTaskId: 'wan-animate-task-1',
+            engine: 'wan-motion',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('routes videoretalk jobs through the dedicated provider and persists durable output metadata', async () => {
+    await processor.process({
+      data: {
+        jobId: 'job-videoretalk-audio',
+        userId: 'user-1',
+        input: {
+          engine: 'videoretalk',
+          driveMode: 'audio',
+          resolution: 'source',
+          audioUrl: 'https://example.com/input-audio.wav',
+          videoUrl: 'https://example.com/source-video.mp4',
+          refImageUrl: 'https://example.com/ref-face.png',
+          videoExtension: true,
+          queryFaceThreshold: 180,
+          resolvedModel: 'videoretalk',
+        },
+      },
+    } as any);
+
+    expect(providers.videoRetalkProvider.submitVideoRetalkJob).toHaveBeenCalledWith({
+      videoUrl: 'https://example.com/source-video.mp4',
+      audioUrl: 'https://example.com/input-audio.wav',
+      refImageUrl: 'https://example.com/ref-face.png',
+      videoExtension: true,
+      queryFaceThreshold: 180,
+    });
+    expect(providers.digitalHumanProvider.generateVideo).not.toHaveBeenCalled();
+    expect(storage.copyExternalToOss).toHaveBeenCalledWith(
+      'https://example.com/videoretalk-video.mp4',
+      'digital-human/results/videoretalk',
+      'mp4',
+    );
+
+    const [, pollOptions] = pollTaskStatusMock.mock.calls[0];
+    expect(pollOptions.timeoutMessage).toBe('VideoRetalk 重驱动超时（25分钟）');
+
+    expect(prisma.generation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-videoretalk-audio' },
+        data: expect.objectContaining({
+          status: 'COMPLETED',
+          output: expect.objectContaining({
+            engine: 'videoretalk',
+            resolvedModel: 'videoretalk',
+            videoUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/copied/videoretalk-video.mp4?signed=1',
+            durableVideoUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/copied/videoretalk-video.mp4',
+            providerTempUrl: 'https://example.com/videoretalk-video.mp4',
+            providerTaskId: 'retalk-task-1',
+            providerRequestId: 'retalk-request-1',
+            duration: 7.2,
+            aspectRatio: '9:16',
+            fps: 25,
+            size: '1080x1920',
+            externalJobType: 'videoretalk',
           }),
         }),
       }),

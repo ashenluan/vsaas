@@ -28,6 +28,14 @@ import {
   readBooleanSystemConfigValue,
   type SystemCapabilities,
 } from '../common/system-config';
+import {
+  VIDEORETALK_ONLY_FIELDS,
+  buildDigitalHumanResolvedConstraints,
+  getDigitalHumanCapability,
+  type DigitalHumanEngineId,
+  type DigitalHumanPreset,
+} from './digital-human-capabilities';
+import { MediaPreflightService } from './media-preflight.service';
 
 const MIXCUT_SUPPORTED_SPEECH_LANGUAGES = new Set(['zh', 'en']);
 const MIXCUT_SSML_ALLOWED_TAGS = new Set([
@@ -66,6 +74,7 @@ export class DigitalHumanService {
     @InjectQueue('digital-human-video') private readonly dhVideoQueue: Queue,
     @InjectQueue('mixcut-production') private readonly mixcutQueue: Queue,
     @InjectQueue('dh-batch-v2') private readonly dhBatchV2Queue: Queue,
+    private readonly mediaPreflight: MediaPreflightService = new MediaPreflightService(),
   ) {}
 
   // ==================== Voices ====================
@@ -1000,13 +1009,14 @@ export class DigitalHumanService {
   async createVideo(
     userId: string,
     data: {
-      engine?: 'ims' | 'wan-photo' | 'wan-motion';
+      engine?: DigitalHumanEngineId;
       avatarId?: string;
       avatarSource?: 'builtin' | 'custom';
       builtinAvatarId?: string;
       driveMode: 'text' | 'audio' | 'video';
       resolution: string;
       name?: string;
+      preset?: DigitalHumanPreset;
       voiceId?: string;
       voiceType?: 'builtin' | 'cloned';
       outputFormat?: 'mp4' | 'webm';
@@ -1019,21 +1029,33 @@ export class DigitalHumanService {
       audioUrl?: string;
       videoUrl?: string;
       animateMode?: 'wan-std' | 'wan-pro';
+      refImageUrl?: string;
+      videoExtension?: boolean;
+      queryFaceThreshold?: number;
     },
   ) {
     const resolvedEngine = data.engine ?? this.inferLegacyCreateVideoEngine(data.driveMode);
-    const supportedDriveModes: Record<'ims' | 'wan-photo' | 'wan-motion', Array<'text' | 'audio' | 'video'>> = {
-      ims: ['text', 'audio'],
-      'wan-photo': ['text', 'audio'],
-      'wan-motion': ['video'],
-    };
+    const capability = getDigitalHumanCapability(resolvedEngine);
+    const resolvedPreset = data.preset ?? capability.defaultPreset;
+    const resolvedConstraints = buildDigitalHumanResolvedConstraints(resolvedEngine, data.resolution);
     const resolvedVoiceType =
       resolvedEngine === 'ims' && data.driveMode === 'text'
         ? (data.voiceType ?? (this.isImsBuiltinVoiceId(data.voiceId) ? 'builtin' : 'cloned'))
         : data.voiceType;
 
-    if (!supportedDriveModes[resolvedEngine].includes(data.driveMode)) {
+    if (!capability.supportedDriveModes.includes(data.driveMode)) {
       throw new BadRequestException('当前引擎不支持所选驱动模式');
+    }
+
+    if (!capability.allowedResolutions.includes(data.resolution)) {
+      throw new BadRequestException('当前引擎不支持所选分辨率');
+    }
+
+    if (resolvedEngine !== 'videoretalk') {
+      const unsupportedField = VIDEORETALK_ONLY_FIELDS.find((field) => data[field] !== undefined);
+      if (unsupportedField) {
+        throw new BadRequestException('当前引擎不支持 VideoRetalk 高级参数');
+      }
     }
 
     if (resolvedEngine === 'ims' && !data.builtinAvatarId) {
@@ -1042,6 +1064,10 @@ export class DigitalHumanService {
 
     if ((resolvedEngine === 'wan-photo' || resolvedEngine === 'wan-motion') && !data.avatarId) {
       throw new BadRequestException('请选择数字人形象');
+    }
+
+    if (resolvedEngine === 'videoretalk' && !data.videoUrl) {
+      throw new BadRequestException('请上传源视频');
     }
 
     if (data.driveMode === 'text') {
@@ -1056,6 +1082,15 @@ export class DigitalHumanService {
     if (data.driveMode === 'video' && !data.videoUrl) {
       throw new BadRequestException('请上传参考视频');
     }
+
+    const preflight = await this.mediaPreflight.preflightCreateVideo({
+      engine: resolvedEngine,
+      driveMode: data.driveMode,
+      resolution: data.resolution,
+      videoUrl: data.videoUrl,
+      audioUrl: data.audioUrl,
+      refImageUrl: data.refImageUrl,
+    });
 
     if (data.driveMode === 'text') {
       const skipVoiceOwnershipCheck = resolvedEngine === 'ims' && resolvedVoiceType === 'builtin';
@@ -1072,7 +1107,7 @@ export class DigitalHumanService {
     }
 
     let avatar: any;
-    if (resolvedEngine !== 'ims') {
+    if (resolvedEngine === 'wan-photo' || resolvedEngine === 'wan-motion') {
       avatar = await this.prisma.material.findFirst({
         where: {
           id: data.avatarId!,
@@ -1091,7 +1126,8 @@ export class DigitalHumanService {
       }
     }
 
-    const resolvedAvatarSource = data.avatarSource || (resolvedEngine === 'ims' ? 'builtin' : 'custom');
+    const resolvedAvatarSource = data.avatarSource
+      || (resolvedEngine === 'ims' ? 'builtin' : resolvedEngine === 'videoretalk' ? undefined : 'custom');
 
     // Deduct credits
     const cost = CREDIT_COSTS.DH_VIDEO;
@@ -1109,12 +1145,16 @@ export class DigitalHumanService {
           userId,
           type: 'DIGITAL_HUMAN_VIDEO',
           status: 'PENDING',
-          provider: resolvedEngine === 'ims' ? 'aliyun-ims' : 'aliyun-wan',
+          provider: capability.provider,
           creditsUsed: cost,
           input: {
             name: data.name,
             engine: resolvedEngine,
-            avatarSource: resolvedAvatarSource,
+            ...(resolvedAvatarSource && { avatarSource: resolvedAvatarSource }),
+            preset: resolvedPreset,
+            resolvedModel: capability.resolvedModel,
+            resolvedConstraints,
+            preflight,
             ...(resolvedVoiceType && { voiceType: resolvedVoiceType }),
             ...(data.outputFormat && { outputFormat: data.outputFormat }),
             ...(data.avatarId && { avatarId: data.avatarId }),
@@ -1126,7 +1166,15 @@ export class DigitalHumanService {
             ...(resolvedEngine === 'ims' && data.pitchRate !== undefined && { pitchRate: data.pitchRate }),
             ...(resolvedEngine === 'ims' && data.volume !== undefined && { volume: data.volume }),
             ...(resolvedEngine === 'ims' && data.backgroundUrl && { backgroundUrl: data.backgroundUrl }),
-            ...(data.driveMode === 'text'
+            ...(resolvedEngine === 'videoretalk'
+              ? {
+                  audioUrl: data.audioUrl,
+                  videoUrl: data.videoUrl,
+                  ...(data.refImageUrl && { refImageUrl: data.refImageUrl }),
+                  ...(data.videoExtension !== undefined && { videoExtension: data.videoExtension }),
+                  ...(data.queryFaceThreshold !== undefined && { queryFaceThreshold: data.queryFaceThreshold }),
+                }
+              : data.driveMode === 'text'
               ? { voiceId: data.voiceId, text: data.text, speechRate: data.speechRate || 1.0 }
               : data.driveMode === 'video'
                 ? { videoUrl: data.videoUrl, animateMode: data.animateMode || 'wan-std' }
