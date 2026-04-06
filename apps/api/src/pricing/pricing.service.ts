@@ -317,6 +317,8 @@ export class PricingService {
       { key: 'image-edit', displayName: '图像编辑', creditCost: CREDIT_COSTS.IMAGE_EDIT, costUnit: 'per_image' },
       { key: 'image-edit-pro', displayName: '图像编辑 Pro', creditCost: CREDIT_COSTS.IMAGE_EDIT_PRO, costUnit: 'per_image' },
       { key: 'storyboard-compose', displayName: '一键成片', creditCost: CREDIT_COSTS.STORYBOARD_COMPOSE, costUnit: 'per_job' },
+      { key: 'mixcut-video', displayName: '智能混剪', creditCost: CREDIT_COSTS.MIXCUT_PER_VIDEO, costUnit: 'per_job', description: '按输出视频条数计费' },
+      { key: 'dh-batch-v2-video', displayName: '数字人交错混剪', creditCost: CREDIT_COSTS.MIXCUT_PER_VIDEO, costUnit: 'per_job', description: '按输出视频条数计费' },
     ];
   }
 }

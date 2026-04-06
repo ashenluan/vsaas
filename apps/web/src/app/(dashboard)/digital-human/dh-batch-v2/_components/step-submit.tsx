@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useDhV2Store } from './use-dh-v2-store';
 import { Card } from './shared';
 import { dhBatchV2Api } from '@/lib/api';
+import { estimateAdvancedCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { AlertCircle, Loader2, Rocket, Music, Volume2 } from 'lucide-react';
 
 export function StepSubmit({
@@ -20,6 +21,7 @@ export function StepSubmit({
   const store = useDhV2Store();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const pricingCatalog = useGenerationPricingCatalog();
 
   const voice = voices.find((v: any) => v.voiceId === store.selectedVoice);
   const avatarName = store.channel === 'A'
@@ -85,6 +87,10 @@ export function StepSubmit({
   };
 
   const crfLabel = { 20: '高质量', 23: '较高', 27: '标准', 30: '较低' }[store.output.crf] || `CRF ${store.output.crf}`;
+  const totalCredits = estimateAdvancedCredits(pricingCatalog, 'dh-batch-v2-video', {
+    count: store.output.videoCount,
+  }) ?? store.output.videoCount * 20;
+  const perVideoCreditCost = estimateAdvancedCredits(pricingCatalog, 'dh-batch-v2-video') ?? 20;
 
   return (
     <div className="animate-in fade-in slide-in-from-right-2 duration-300">
@@ -146,9 +152,9 @@ export function StepSubmit({
       <div className="mt-4 max-w-2xl rounded-xl border border-blue-200 bg-blue-50 p-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-blue-800">确认费用</span>
-          <span className="text-2xl font-bold text-blue-900 tabular-nums">{store.output.videoCount * 20} 积分</span>
+          <span className="text-2xl font-bold text-blue-900 tabular-nums">{totalCredits} 积分</span>
         </div>
-        <p className="mt-1 text-xs text-blue-600">20 积分/条 × {store.output.videoCount} 条视频</p>
+        <p className="mt-1 text-xs text-blue-600">{perVideoCreditCost} 积分/条 × {store.output.videoCount} 条视频</p>
       </div>
 
       <div className="mt-4 max-w-2xl rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">

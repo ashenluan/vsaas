@@ -224,6 +224,18 @@ describe('PricingService', () => {
         costUnit: 'per_job',
       }),
     );
+    expect(catalog.advanced.find((entry) => entry.key === 'mixcut-video')).toEqual(
+      expect.objectContaining({
+        creditCost: 20,
+        costUnit: 'per_job',
+      }),
+    );
+    expect(catalog.advanced.find((entry) => entry.key === 'dh-batch-v2-video')).toEqual(
+      expect.objectContaining({
+        creditCost: 20,
+        costUnit: 'per_job',
+      }),
+    );
   });
 
   it('normalizes frontend video model variants into provider runtime model ids', () => {

@@ -33,7 +33,7 @@ const runbookItems = [
   {
     title: '部署方式',
     status: 'Docker Compose',
-    description: '生产环境运行在服务器 Docker Compose 中，构建、迁移、重启都走现有部署脚本。',
+    description: '生产环境运行在服务器 Docker Compose 中，构建、迁移、重启都走现有部署脚本；ADMIN_URL 必须保持为 http://localhost:3002。',
   },
 ];
 
@@ -212,6 +212,7 @@ export default function AdminSettingsPage() {
             <ul className="mt-4 space-y-3 text-sm leading-6 text-amber-900">
               <li>不要在后台录入 API Key，密钥统一由服务器环境变量维护。</li>
               <li>模型参数改动后无需重新发布；密钥和基础设施改动后需要重新部署。</li>
+              <li>生产环境的 ADMIN_URL 必须指向 http://localhost:3002，不能写成公网 a.newcn.cc:3002，否则会破坏后台登录与 CORS。</li>
               <li>用户充值仍是人工审核流程，到账动作必须在订单页完成，避免直接手动改余额绕过订单记录。</li>
             </ul>
           </section>

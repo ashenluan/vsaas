@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useMixcutStore } from '../_store/use-mixcut-store';
 import { useJobUpdates } from '@/components/ws-provider';
 import { mixcutApi } from '@/lib/api';
+import { estimateAdvancedCredits, useGenerationPricingCatalog } from '@/lib/generation-pricing';
 import { toast } from 'sonner';
 import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw, Clock, CalendarClock, Shield, Share2, Zap, Download, ExternalLink } from 'lucide-react';
 import { buildMixcutPayload } from '../_lib/build-mixcut-payload';
@@ -37,6 +38,7 @@ export function PreviewPanel() {
     bottomRight: { bottom: 24, right: 8 },
   };
   const [submitting, setSubmitting] = useState(false);
+  const pricingCatalog = useGenerationPricingCatalog();
   const [result, setResult] = useState<{ success: boolean; jobId?: string; error?: string } | null>(null);
   const [progress, setProgress] = useState<{ status?: string; progress?: number; message?: string } | null>(null);
 
@@ -99,6 +101,10 @@ export function PreviewPanel() {
   }, 1);
 
   const estimatedCount = Math.min(shotCombinations, 100);
+  const estimatedCredits = estimateAdvancedCredits(pricingCatalog, 'mixcut-video', {
+    count: estimatedCount,
+  }) ?? estimatedCount * 20;
+  const perVideoCreditCost = estimateAdvancedCredits(pricingCatalog, 'mixcut-video') ?? 20;
 
   // Estimate per-video duration: each group contributes one material's average duration
   const totalDuration = enabledGroups.reduce((acc, group) => {
@@ -403,9 +409,9 @@ export function PreviewPanel() {
       <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[12px] font-medium">预估费用</span>
-          <span className="text-xl font-bold text-primary tabular-nums">{estimatedCount * 20} 积分</span>
+          <span className="text-xl font-bold text-primary tabular-nums">{estimatedCredits} 积分</span>
         </div>
-        <p className="text-[10px] text-muted-foreground">20 积分/条 × {estimatedCount} 条</p>
+        <p className="text-[10px] text-muted-foreground">{perVideoCreditCost} 积分/条 × {estimatedCount} 条</p>
       </div>
 
       {/* 定时发布 */}

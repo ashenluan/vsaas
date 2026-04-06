@@ -27,6 +27,7 @@ Use this path when GitHub Actions is blocked but production still needs to be up
 4. Rebuild and restart services:
    - Full rollout: `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api web admin`
    - API-only fix: `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api`
+   - Keep `ADMIN_URL=http://localhost:3002` in `.env.production`. The admin container is intentionally bound to `127.0.0.1:3002`, so using the public `a.newcn.cc:3002` host breaks admin login/CORS.
 5. Run database migrations from inside the API container:
    - `docker compose --env-file .env.production -f docker-compose.prod.yml exec -T api sh -lc 'cd /app/packages/database && ./node_modules/.bin/prisma migrate deploy --schema src/schema.prisma'`
 6. Clear Nginx cache and reload:
@@ -50,3 +51,4 @@ Use this path when GitHub Actions is blocked but production still needs to be up
 - The current GitHub Actions account may be blocked by billing issues. If Actions jobs fail before any steps run, use the manual fallback.
 - The API runtime container exposes Prisma under `/app/packages/database/node_modules/.bin/prisma`, not `/app/node_modules/.bin/prisma`.
 - Do not commit production passwords or secret values into the repository. Keep credentials in environment variables or out-of-band notes only.
+- `CORS_ORIGIN` may include the public site origin, but `ADMIN_URL` must continue pointing at the internal admin origin (`http://localhost:3002`) so backend origin allowlists include both web and admin.

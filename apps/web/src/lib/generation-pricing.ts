@@ -54,3 +54,17 @@ export function estimateModelCredits(
 export function getAdvancedCredits(catalog: PublicPricingCatalog | null, key: string) {
   return catalog?.advanced.find((entry) => entry.key === key)?.creditCost ?? null;
 }
+
+export function estimateAdvancedCredits(
+  catalog: PublicPricingCatalog | null,
+  key: string,
+  options: { count?: number } = {},
+) {
+  const entry = catalog?.advanced.find((item) => item.key === key);
+
+  if (!entry) {
+    return null;
+  }
+
+  return entry.creditCost * (options.count ?? 1);
+}
