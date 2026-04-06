@@ -9,6 +9,10 @@ import { estimateAdvancedCredits, useGenerationPricingCatalog } from '@/lib/gene
 import { toast } from 'sonner';
 import { Eye, Play, Film, Loader2, CheckCircle, AlertCircle, RefreshCw, Clock, CalendarClock, Shield, Share2, Zap, Download, ExternalLink } from 'lucide-react';
 import { buildMixcutPayload } from '../_lib/build-mixcut-payload';
+import { getMixcutCompatibilityErrors, getMixcutSpeechMode } from '../_lib/mixcut-compatibility';
+import { getPrimaryMixcutPoolItem } from '../_lib/mixcut-random-pools';
+import { summarizeMixcutPreviewProject } from '../_lib/mixcut-preview-project';
+import { getEffectiveMixcutMaterialDuration } from '../_lib/mixcut-trim';
 
 const PUBLISH_PLATFORMS = [
   { id: 'douyin', label: '抖音', icon: '🎵', color: 'bg-black text-white' },
@@ -20,13 +24,13 @@ const PUBLISH_PLATFORMS = [
 ];
 
 export function PreviewPanel() {
-  const { project, subtitleStyle, titleStyle, globalConfig, highlightWords, forbiddenWords, setScheduledAt, setPublishPlatforms, outputVideos, jobStatus, setOutputVideos, setJobStatus } = useMixcutStore(
+  const { project, subtitleStyle, titleStyle, globalConfig, highlightWords, forbiddenWords, setScheduledAt, setPublishPlatforms, outputVideos, previewProject, jobStatus, setOutputVideos, setPreviewProject, setJobStatus } = useMixcutStore(
     useShallow((s) => ({
       project: s.project, subtitleStyle: s.subtitleStyle, titleStyle: s.titleStyle,
       globalConfig: s.globalConfig, highlightWords: s.highlightWords, forbiddenWords: s.forbiddenWords,
       setScheduledAt: s.setScheduledAt, setPublishPlatforms: s.setPublishPlatforms,
-      outputVideos: s.outputVideos, jobStatus: s.jobStatus,
-      setOutputVideos: s.setOutputVideos, setJobStatus: s.setJobStatus,
+      outputVideos: s.outputVideos, previewProject: s.previewProject, jobStatus: s.jobStatus,
+      setOutputVideos: s.setOutputVideos, setPreviewProject: s.setPreviewProject, setJobStatus: s.setJobStatus,
     })),
   );
 
@@ -54,6 +58,7 @@ export function PreviewPanel() {
       message: data.message || '',
     });
     if (data.status === 'COMPLETED') {
+      setPreviewProject(data.previewProject || null);
       if (data.isPreviewOnly && data.outputVideos?.length) {
         setOutputVideos(data.outputVideos);
         setJobStatus('COMPLETED');
@@ -109,18 +114,27 @@ export function PreviewPanel() {
   // Estimate per-video duration: each group contributes one material's average duration
   const totalDuration = enabledGroups.reduce((acc, group) => {
     if (group.materials.length === 0) return acc + 3;
-    const avgDuration = group.materials.reduce((sum, m) => sum + (m.duration || 3), 0) / group.materials.length;
+    const avgDuration = group.materials.reduce((sum, m) => sum + getEffectiveMixcutMaterialDuration(m), 0) / group.materials.length;
     return acc + avgDuration;
   }, 0);
 
+  const compatibilityErrors = getMixcutCompatibilityErrors({ project, globalConfig });
+  const speechMode = getMixcutSpeechMode(project);
+  const previewTitle = getPrimaryMixcutPoolItem(titleStyle.text);
+  const previewSubtitleText = speechMode === 'global'
+    ? project.speechTexts[0]
+    : project.shotGroups.find((g) => g.subtitles.length > 0)?.subtitles[0]?.text;
+  const previewProjectSummary = summarizeMixcutPreviewProject(previewProject);
+
   // Check if ready to submit
   const hasEmptyGroups = enabledGroups.some((g) => g.materials.length === 0);
-  const canSubmit = enabledGroups.length > 0 && !hasEmptyGroups && !submitting;
+  const canSubmit = enabledGroups.length > 0 && !hasEmptyGroups && compatibilityErrors.length === 0 && !submitting;
 
   const handleSubmit = async (previewOnly = false) => {
     if (!canSubmit) return;
     setSubmitting(true);
     setResult(null);
+    setPreviewProject(null);
 
     try {
       const payload = buildMixcutPayload({
@@ -147,6 +161,43 @@ export function PreviewPanel() {
 
   return (
     <div id="mixcut-preview-panel" className="space-y-4">
+      {previewProject && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-sky-700">
+              <Play size={14} /> 云端预览时间线
+            </h3>
+            <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5 text-[10px] font-medium text-sky-700">
+              {previewProject.status || '已生成'}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] text-sky-800">
+            {previewProject.title || `预览工程 ${previewProject.projectId}`}
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-sky-900">
+            <div className="rounded-lg bg-white/80 p-2">
+              <p className="text-[10px] text-sky-600">总时长</p>
+              <p className="font-semibold">{formatTime(Math.round(previewProjectSummary.duration || 0))}</p>
+            </div>
+            <div className="rounded-lg bg-white/80 p-2">
+              <p className="text-[10px] text-sky-600">视频片段</p>
+              <p className="font-semibold">{previewProjectSummary.clipCount} 段</p>
+            </div>
+            <div className="rounded-lg bg-white/80 p-2">
+              <p className="text-[10px] text-sky-600">视频轨道</p>
+              <p className="font-semibold">{previewProjectSummary.videoTrackCount} 条</p>
+            </div>
+            <div className="rounded-lg bg-white/80 p-2">
+              <p className="text-[10px] text-sky-600">字幕/音频轨</p>
+              <p className="font-semibold">{previewProjectSummary.subtitleTrackCount}/{previewProjectSummary.audioTrackCount}</p>
+            </div>
+          </div>
+          <p className="mt-2 text-[10px] text-sky-700">
+            {previewProjectSummary.hasTimeline ? '该预览来自阿里云真实编辑工程，可用于校对片段拼接与时间线结构。' : '预览工程已返回，但当前时间线摘要为空。'}
+          </p>
+        </div>
+      )}
+
       {/* Output videos for completed jobs */}
       {(jobStatus === 'COMPLETED' || outputVideos.length > 0) && (
         <div className="rounded-xl border-2 border-green-200 bg-green-50/50 p-4 shadow-sm">
@@ -315,7 +366,7 @@ export function PreviewPanel() {
           )}
 
           {/* Title preview */}
-          {titleStyle.enabled && titleStyle.text && (
+          {titleStyle.enabled && previewTitle && (
             <div
               className="absolute left-0 right-0 text-center pointer-events-none"
               style={{ top: `${titleStyle.y * 100}%` }}
@@ -328,13 +379,13 @@ export function PreviewPanel() {
                   fontWeight: 'bold',
                 }}
               >
-                {titleStyle.text}
+                {previewTitle}
               </span>
             </div>
           )}
 
           {/* Subtitle preview */}
-          {project.shotGroups.some((g) => g.subtitles.length > 0) && (
+          {previewSubtitleText && (
             <div
               className="absolute left-2 right-2 text-center pointer-events-none"
               style={{ top: `${subtitleStyle.y * 100}%` }}
@@ -350,7 +401,7 @@ export function PreviewPanel() {
                   textShadow: subtitleStyle.outline > 0 ? `0 0 ${subtitleStyle.outline}px ${subtitleStyle.outlineColour}` : 'none',
                 }}
               >
-                {project.shotGroups.find((g) => g.subtitles.length > 0)?.subtitles[0]?.text?.slice(0, 20) || '字幕预览'}
+                {previewSubtitleText.slice(0, 20) || '字幕预览'}
               </span>
             </div>
           )}
@@ -532,6 +583,17 @@ export function PreviewPanel() {
 
       {hasEmptyGroups && (
         <p className="text-[10px] text-amber-600 text-center">存在空镜头组，请为所有镜头组添加素材</p>
+      )}
+
+      {compatibilityErrors.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-700">
+          <p className="font-medium">当前配置与阿里云 {speechMode === 'group' ? '分组口播' : '全局口播'} 模式不兼容</p>
+          <ul className="mt-1 space-y-1 text-[10px]">
+            {compatibilityErrors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* Result feedback */}

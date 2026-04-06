@@ -11,6 +11,8 @@ import { COPY_TEMPLATES } from './constants';
 export function SubtitleContent({
   shotId,
   subtitles,
+  disabled,
+  disabledMessage,
   onAdd,
   onUpdate,
   onRemove,
@@ -21,6 +23,8 @@ export function SubtitleContent({
 }: {
   shotId: string;
   subtitles: { text: string; voiceId?: string }[];
+  disabled?: boolean;
+  disabledMessage?: string;
   onAdd: () => void;
   onUpdate: (i: number, data: { text?: string; voiceId?: string }) => void;
   onRemove: (i: number) => void;
@@ -41,6 +45,26 @@ export function SubtitleContent({
   const { globalConfig } = useMixcutStore(
     useShallow((s) => ({ globalConfig: s.globalConfig })),
   );
+
+  if (disabled) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-700">
+          {disabledMessage || '当前内容不可编辑。'}
+        </div>
+        {subtitles.length > 0 && (
+          <div className="space-y-2">
+            {subtitles.map((sub, index) => (
+              <div key={index} className="rounded-lg border p-3">
+                <div className="mb-1 text-[11px] font-medium">镜头字幕{index + 1}</div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">{sub.text || '未填写字幕内容'}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const handleVoicePreview = async (index: number) => {
     const text = subtitles[index]?.text;
@@ -104,6 +128,9 @@ export function SubtitleContent({
   return (
     <div className="space-y-4">
       <p className="text-[10px] text-muted-foreground">文字转语音消耗0.1个算力/100字</p>
+      <p className="text-[10px] text-muted-foreground">
+        支持直接输入 SSML。使用标签时请用 <code>{'<speak>'}</code> 包裹全文；普通音色支持 <code>{'<break>'}</code>、<code>{'<s>'}</code>、<code>{'<sub>'}</code>、<code>{'<w>'}</code>、<code>{'<phoneme>'}</code>、<code>{'<say-as>'}</code>，CosyVoice/克隆音色仅支持前三种。
+      </p>
 
       <div>
         <h4 className="mb-2 text-[12px] font-medium">添加字幕内容</h4>

@@ -1,6 +1,7 @@
 'use client';
 
 import { FONTS, TITLE_PRESETS } from './constants';
+import { parseMixcutPoolText } from '../../_lib/mixcut-random-pools';
 
 export function TitleTab({
   titleStyle,
@@ -9,6 +10,8 @@ export function TitleTab({
   titleStyle: any;
   onUpdate: (p: any) => void;
 }) {
+  const titleList = parseMixcutPoolText(titleStyle.text);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -61,13 +64,16 @@ export function TitleTab({
 
           <div>
             <label className="mb-1 block text-[10px] text-muted-foreground">标题文字</label>
-            <input
-              type="text"
+            <textarea
               value={titleStyle.text}
               onChange={(e) => onUpdate({ text: e.target.value })}
-              placeholder="输入视频标题..."
-              className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              rows={3}
+              placeholder="每行一个标题，支持配置随机标题池"
+              className="flex min-h-[76px] w-full rounded-md border border-input bg-transparent px-2 py-1.5 text-sm leading-5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {titleList.length > 1 ? `当前已配置 ${titleList.length} 个标题，成片时将随机选择。` : '单行模式下将使用固定标题。'}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

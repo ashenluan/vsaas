@@ -10,6 +10,20 @@ export interface BatchComposeProvider {
   isAvailable(): Promise<boolean>;
   submitBatchJob(inputConfig: any, editingConfig: any, outputConfig: any, callbackUrl?: string, callbackToken?: string): Promise<{ jobId: string }>;
   checkJobStatus(jobId: string): Promise<{ status: string; subJobs?: any[]; progress?: number }>;
+  getEditingProject(projectId: string): Promise<EditingProjectSnapshot | null>;
+}
+
+export interface EditingProjectSnapshot {
+  projectId: string;
+  title?: string;
+  status?: string;
+  duration?: number;
+  coverURL?: string;
+  modifiedTime?: string;
+  timeline?: any;
+  timelineRaw?: string;
+  timelineConvertStatus?: string;
+  timelineConvertErrorMessage?: string;
 }
 
 // ========== 转场效果枚举（带中文名）==========
@@ -670,6 +684,7 @@ export class AliyunIMSProvider implements BatchComposeProvider {
           mediaId: sj.mediaId,
           mediaURL: sj.mediaURL,
           duration: sj.duration,
+          projectId: sj.projectId,
           status: sj.status,
           errorCode: sj.errorCode,
           errorMessage: sj.errorMessage,
@@ -678,6 +693,54 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     } catch (error: any) {
       this.logger.error(`IMS status check failed: ${error.message}`);
       throw new Error(`IMS status check failed: ${error.message}`);
+    }
+  }
+
+  async getEditingProject(projectId: string): Promise<EditingProjectSnapshot | null> {
+    this.logger.log(`Fetching IMS editing project: ${projectId}`);
+
+    const client = this.getClient();
+    const request = new $ICE20201109.GetEditingProjectRequest({
+      projectId,
+      requestSource: 'WebSDK',
+    });
+    const runtime = new $Util.RuntimeOptions({});
+
+    try {
+      const response = await client.getEditingProjectWithOptions(request, runtime);
+      const project = response.body?.project;
+
+      if (!project) {
+        return null;
+      }
+
+      return {
+        projectId: project.projectId || projectId,
+        title: project.title,
+        status: project.status,
+        duration: project.duration,
+        coverURL: project.coverURL,
+        modifiedTime: project.modifiedTime,
+        timeline: this.parseJsonObject(project.timeline),
+        timelineRaw: project.timeline,
+        timelineConvertStatus: project.timelineConvertStatus,
+        timelineConvertErrorMessage: project.timelineConvertErrorMessage,
+      };
+    } catch (error: any) {
+      this.logger.error(`IMS get editing project failed: ${error.message}`);
+      throw new Error(`IMS get editing project failed: ${error.message}`);
+    }
+  }
+
+  private parseJsonObject(value?: string) {
+    if (!value) {
+      return undefined;
+    }
+
+    try {
+      return JSON.parse(value);
+    } catch {
+      return undefined;
     }
   }
 
@@ -702,6 +765,13 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     stickers?: { url: string; x: number; y: number; width: number; height: number; opacity?: number; dyncFrames?: number }[];
     backgroundImages?: string[];
   }): any {
+    this.validateOssRegions([
+      ...config.mediaGroups.flatMap((group) => group.mediaUrls),
+      ...(config.backgroundMusic || []),
+      ...(config.backgroundImages || []),
+      ...(config.stickers?.map((sticker) => sticker.url) || []),
+    ]);
+
     const inputConfig: any = {
       MediaGroupArray: config.mediaGroups.map((g) => ({
         GroupName: g.groupName,
@@ -738,6 +808,44 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     return inputConfig;
   }
 
+  private validateOssRegions(values: string[]) {
+    const expectedRegion = this.config.get<string>('ALIYUN_IMS_REGION', 'cn-shanghai');
+
+    for (const value of values) {
+      const actualRegion = this.extractOssRegion(value);
+      if (actualRegion && actualRegion !== expectedRegion) {
+        throw new Error(
+          `OSS region mismatch: expected ${expectedRegion}, received ${actualRegion}`,
+        );
+      }
+    }
+  }
+
+  private extractOssRegion(value: string): string | null {
+    if (!/^https?:\/\//i.test(value)) return null;
+
+    try {
+      const url = new URL(value);
+      const hostname = url.hostname.toLowerCase();
+      const patterns = [
+        /^.+\.oss-([a-z0-9-]+)\.aliyuncs\.com$/,
+        /^.+\.oss-([a-z0-9-]+)-internal\.aliyuncs\.com$/,
+        /^oss-([a-z0-9-]+)\.aliyuncs\.com$/,
+      ];
+
+      for (const pattern of patterns) {
+        const match = hostname.match(pattern);
+        if (match) {
+          return match[1];
+        }
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * 构建 EditingConfig — 剪辑配置
    * 包含：字幕、特效、转场、滤镜、人声等完整配置
@@ -745,6 +853,11 @@ export class AliyunIMSProvider implements BatchComposeProvider {
   buildEditingConfig(config: {
     // 媒体音量
     mediaVolume?: number;
+    mediaMetaData?: {
+      mediaUrl: string;
+      trimIn?: number;
+      trimOut?: number;
+    }[];
     // 口播配置
     speechVolume?: number;
     speechRate?: number;
@@ -848,8 +961,23 @@ export class AliyunIMSProvider implements BatchComposeProvider {
       coverTitlePosition?: 'top' | 'center' | 'bottom';
     };
   }): any {
+    const mediaMetaDataArray = (config.mediaMetaData || [])
+      .filter((item) => item.mediaUrl && item.trimIn !== undefined && item.trimOut !== undefined)
+      .map((item) => ({
+        MediaURL: item.mediaUrl,
+        TimeRangeList: [
+          {
+            In: item.trimIn,
+            Out: item.trimOut,
+          },
+        ],
+      }));
+
     const editingConfig: any = {
-      MediaConfig: { Volume: config.mediaVolume ?? 1 },
+      MediaConfig: {
+        Volume: config.mediaVolume ?? 1,
+        ...(mediaMetaDataArray.length && { MediaMetaDataArray: mediaMetaDataArray }),
+      },
       SpeechConfig: {
         Volume: config.speechVolume ?? 1,
         SpeechRate: config.speechRate ?? 0,

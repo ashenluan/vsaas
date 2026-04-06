@@ -5,6 +5,7 @@ import { useMixcutStore } from '../../_store/use-mixcut-store';
 import { Type, Mic2, Volume2, Music } from 'lucide-react';
 import { VoiceSelectSection } from '../voice-select-section';
 import { ConfigSection } from './shared';
+import { getPrimaryMixcutPoolItem, parseMixcutPoolText, stringifyMixcutPool } from '../../_lib/mixcut-random-pools';
 
 const PRESET_MUSIC = [
   { label: '轻快活力', url: 'https://ice-public-media.china.aliyuncs.com/music/happy_upbeat.mp3' },
@@ -15,27 +16,116 @@ const PRESET_MUSIC = [
   { label: '运动激情', url: 'https://ice-public-media.china.aliyuncs.com/music/sport_energy.mp3' },
 ];
 
+const SPEECH_LANGUAGE_OPTIONS = [
+  { value: 'zh', label: '中文 (zh)' },
+  { value: 'en', label: '英文 (en)' },
+] as const;
+
 export function SubtitleVoiceSection() {
-  const { project, openDrawer } = useMixcutStore(
-    useShallow((s) => ({ project: s.project, openDrawer: s.openDrawer })),
+  const { project, globalConfig, updateGlobalConfig, openDrawer, setSpeechMode, setSpeechTexts } = useMixcutStore(
+    useShallow((s) => ({
+      project: s.project,
+      globalConfig: s.globalConfig,
+      updateGlobalConfig: s.updateGlobalConfig,
+      openDrawer: s.openDrawer,
+      setSpeechMode: s.setSpeechMode,
+      setSpeechTexts: s.setSpeechTexts,
+    })),
   );
+  const firstGroup = project.shotGroups[0];
+  const speechMode = project.speechMode;
+  const speechTextValue = stringifyMixcutPool(project.speechTexts);
+  const speechLanguage = globalConfig.speechLanguage || 'zh';
 
   return (
     <>
       <ConfigSection icon={Type} label="全局字幕配音&标题" badge="AI">
-        <button
-          onClick={() => {
-            const firstGroup = project.shotGroups[0];
-            if (firstGroup) openDrawer('subtitle', firstGroup.id);
-          }}
-          className="w-full rounded-lg border border-dashed py-2 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
-        >
-          添加
-        </button>
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => setSpeechMode('global')}
+              className={`rounded-md border px-2 py-1.5 text-[11px] transition-colors ${
+                speechMode === 'global'
+                  ? 'border-primary bg-primary/10 text-primary font-medium'
+                  : 'border-input hover:bg-accent'
+              }`}
+            >
+              全局口播
+            </button>
+            <button
+              onClick={() => setSpeechMode('group')}
+              className={`rounded-md border px-2 py-1.5 text-[11px] transition-colors ${
+                speechMode === 'group'
+                  ? 'border-primary bg-primary/10 text-primary font-medium'
+                  : 'border-input hover:bg-accent'
+              }`}
+            >
+              分组口播
+            </button>
+          </div>
+
+          {speechMode === 'global' ? (
+            <>
+              <textarea
+                value={speechTextValue}
+                onChange={(e) => setSpeechTexts(parseMixcutPoolText(e.target.value))}
+                rows={4}
+                placeholder="每行一条全局口播文案，可填写多个作为随机文案池"
+                className="w-full rounded-md border border-input bg-transparent px-2 py-1.5 text-[11px] leading-5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <p className="text-[10px] text-muted-foreground">全局口播会写入阿里云 `SpeechTextArray`，不会再提交逐镜头字幕文案。</p>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  if (firstGroup) openDrawer('subtitle', firstGroup.id);
+                }}
+                className="w-full rounded-lg border border-dashed py-2 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+              >
+                逐镜头编辑字幕配音
+              </button>
+              <p className="text-[10px] text-muted-foreground">分组口播模式下，请在每个镜头组的「字幕配音&标题」里分别维护文案。</p>
+            </>
+          )}
+
+          <button
+            onClick={() => {
+              if (firstGroup) openDrawer('subtitle', firstGroup.id);
+            }}
+            className="w-full rounded-md border py-1.5 text-[11px] hover:bg-accent transition-colors"
+          >
+            字幕样式与标题
+          </button>
+        </div>
       </ConfigSection>
 
       <ConfigSection icon={Mic2} label="配音声音">
-        <VoiceSelectSection />
+        <div className="space-y-2.5">
+          <VoiceSelectSection />
+          <div className="space-y-1.5 rounded-md border border-dashed border-input/80 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-[10px] text-muted-foreground">口播语种</label>
+              <select
+                value={speechLanguage}
+                onChange={(e) => updateGlobalConfig({ speechLanguage: e.target.value as 'zh' | 'en' })}
+                className="h-7 rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {SPEECH_LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-[10px] leading-4 text-muted-foreground">
+              阿里云脚本化自动成片当前仅支持 <code>zh</code> 和 <code>en</code>。英文口播会自动优先按空格换行，减少字幕断词。
+            </p>
+            <p className="text-[10px] leading-4 text-muted-foreground">
+              文案里可直接写 SSML，支持 <code>break</code> <code>s</code> <code>sub</code> <code>w</code> <code>phoneme</code> <code>say-as</code>；CosyVoice 与克隆音色仅支持 <code>break</code> <code>s</code> <code>sub</code>。
+            </p>
+          </div>
+        </div>
       </ConfigSection>
     </>
   );
@@ -73,6 +163,8 @@ export function BgMusicSection() {
   const { globalConfig, updateGlobalConfig } = useMixcutStore(
     useShallow((s) => ({ globalConfig: s.globalConfig, updateGlobalConfig: s.updateGlobalConfig })),
   );
+  const bgMusicList = parseMixcutPoolText(globalConfig.bgMusic);
+  const primaryBgMusic = getPrimaryMixcutPoolItem(globalConfig.bgMusic);
 
   const handleSmartMatchMusic = () => {
     const pick = PRESET_MUSIC[Math.floor(Math.random() * PRESET_MUSIC.length)];
@@ -82,12 +174,12 @@ export function BgMusicSection() {
   return (
     <ConfigSection icon={Music} label="背景音乐">
       <div className="flex gap-1.5">
-        <input
-          type="text"
+        <textarea
           value={globalConfig.bgMusic}
           onChange={(e) => updateGlobalConfig({ bgMusic: e.target.value })}
-          placeholder="输入音乐 URL 或选择"
-          className="flex h-8 flex-1 rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          rows={3}
+          placeholder="每行一个音乐 URL，可填写多个作为随机背景音乐池"
+          className="flex min-h-[72px] flex-1 rounded-md border border-input bg-transparent px-2 py-1.5 text-[11px] leading-5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
         <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-dashed px-2 text-[10px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
           <Music size={10} /> 上传
@@ -110,11 +202,14 @@ export function BgMusicSection() {
           />
         </label>
       </div>
-      {globalConfig.bgMusic && (
+      {bgMusicList.length > 0 && (
         <div className="mt-1.5 flex items-center gap-2">
-          <audio src={globalConfig.bgMusic} controls className="h-7 w-full" />
+          <audio src={primaryBgMusic} controls className="h-7 w-full" />
           <button onClick={() => updateGlobalConfig({ bgMusic: '' })} className="shrink-0 text-[10px] text-red-500 hover:underline">清除</button>
         </div>
+      )}
+      {bgMusicList.length > 1 && (
+        <p className="mt-1 text-[10px] text-primary">已配置 {bgMusicList.length} 首背景音乐，成片时将按阿里云规则随机轮换。</p>
       )}
       <div className="mt-1.5 flex flex-wrap gap-1">
         {PRESET_MUSIC.map((m) => (
@@ -122,7 +217,7 @@ export function BgMusicSection() {
             key={m.label}
             onClick={() => updateGlobalConfig({ bgMusic: m.url })}
             className={`rounded border px-1.5 py-0.5 text-[10px] transition-all ${
-              globalConfig.bgMusic === m.url
+              primaryBgMusic === m.url
                 ? 'border-primary bg-primary/10 text-primary font-medium'
                 : 'border-input hover:bg-accent'
             }`}

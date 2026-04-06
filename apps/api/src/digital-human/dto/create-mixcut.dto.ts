@@ -5,12 +5,28 @@ import {
   IsInt,
   IsBoolean,
   IsNumber,
+  IsIn,
   Min,
   Max,
   ArrayMinSize,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+class MixcutMaterialDto {
+  @IsString()
+  url!: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  trimIn?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  trimOut?: number;
+}
 
 class MixcutShotGroupDto {
   @IsString()
@@ -20,6 +36,12 @@ class MixcutShotGroupDto {
   @IsString({ each: true })
   @ArrayMinSize(1, { message: '每个镜头组至少需要一个素材' })
   materialUrls!: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MixcutMaterialDto)
+  materials?: MixcutMaterialDto[];
 
   @IsOptional()
   @IsArray()
@@ -124,7 +146,7 @@ export class CreateMixcutDto {
 
   @IsInt()
   @Min(1, { message: '视频数量最少为1' })
-  @Max(1000, { message: '视频数量最多为1000' })
+  @Max(100, { message: '视频数量最多为100' })
   videoCount!: number;
 
   @IsString()
@@ -134,6 +156,11 @@ export class CreateMixcutDto {
   @IsOptional()
   @IsString()
   bgMusic?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  bgMusicList?: string[];
 
   @IsOptional()
   @IsNumber()
@@ -152,6 +179,10 @@ export class CreateMixcutDto {
   @IsOptional()
   @IsNumber()
   speechRate?: number;
+
+  @IsOptional()
+  @IsIn(['zh', 'en'])
+  speechLanguage?: 'zh' | 'en';
 
   // Subtitle
   @IsOptional()
@@ -240,6 +271,11 @@ export class CreateMixcutDto {
   @IsOptional()
   @IsString()
   bgImage?: string; // 自定义背景图 URL
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  bgImageList?: string[];
 
   // 模糊背景半径
   @IsOptional()

@@ -1,4 +1,6 @@
-import type { MixcutProject, SubtitleStyle, TitleStyle, GlobalConfig, ForbiddenWord, ShotGroup } from '../_store/use-mixcut-store';
+import type { MixcutProject, SubtitleStyle, TitleStyle, GlobalConfig, ForbiddenWord } from '../_store/use-mixcut-store';
+import { getMixcutSpeechMode } from './mixcut-compatibility';
+import { parseMixcutPoolText } from './mixcut-random-pools';
 
 export function buildMixcutPayload({
   project,
@@ -20,35 +22,58 @@ export function buildMixcutPayload({
   previewOnly: boolean;
 }) {
   const enabledGroups = project.shotGroups.filter((g) => g.enabled !== false);
-
-  const hasGroupSpeech = enabledGroups.some((g) => g.subtitles.length > 0);
+  const speechMode = getMixcutSpeechMode(project);
+  const globalSpeechTexts = (project.speechTexts || []).map((text) => text.trim()).filter(Boolean);
+  const bgMusicList = parseMixcutPoolText(globalConfig.bgMusic);
+  const bgImageList = parseMixcutPoolText(globalConfig.bgImage);
+  const titleList = parseMixcutPoolText(titleStyle.text);
+  const subtitleAdaptMode = globalConfig.speechLanguage === 'en' && subtitleStyle.adaptMode === 'AutoWrap'
+    ? 'AutoWrapAtSpaces'
+    : subtitleStyle.adaptMode;
 
   return {
     name: project.name,
-    shotGroups: enabledGroups.map((g) => ({
-      name: g.name,
-      materialUrls: g.materials.map((m) => m.url),
-      ...(g.subtitles.length > 0 && {
-        speechTexts: g.subtitles.map((s) => s.text).filter(Boolean),
-      }),
-      ...(g.subHeadings?.length > 0 && { subHeadings: g.subHeadings }),
-      keepOriginalAudio: g.keepOriginalAudio,
-      ...(!g.keepOriginalAudio ? { volume: 0 } : g.volume !== 1 ? { volume: g.volume } : {}),
-      ...(g.smartTrim && { splitMode: 'AverageSplit' as const }),
-    })),
-    speechMode: hasGroupSpeech ? 'group' as const : undefined,
+    shotGroups: enabledGroups.map((g) => {
+      const speechTexts = speechMode === 'group'
+        ? g.subtitles.map((s) => s.text.trim()).filter(Boolean)
+        : [];
+
+      return {
+        name: g.name,
+        materialUrls: g.materials.map((m) => m.url),
+        materials: g.materials.map((m) => ({
+          url: m.url,
+          ...(m.trimIn !== undefined && { trimIn: m.trimIn }),
+          ...(m.trimOut !== undefined && { trimOut: m.trimOut }),
+        })),
+        ...(speechMode === 'group' && speechTexts.length > 0 && {
+          speechTexts,
+        }),
+        ...(g.subHeadings?.length > 0 && { subHeadings: g.subHeadings }),
+        keepOriginalAudio: g.keepOriginalAudio,
+        ...(!g.keepOriginalAudio ? { volume: 0 } : g.volume !== 1 ? { volume: g.volume } : {}),
+        ...(g.smartTrim && { splitMode: 'AverageSplit' as const }),
+      };
+    }),
+    ...(speechMode === 'group' && { speechMode: 'group' as const }),
+    ...(speechMode === 'global' && globalSpeechTexts.length > 0 && {
+      speechMode: 'global' as const,
+      speechTexts: globalSpeechTexts,
+    }),
     videoCount: estimatedCount,
     resolution: globalConfig.resolution,
     // Voice
     ...((globalConfig as any).voiceId && { voiceId: (globalConfig as any).voiceId }),
     ...((globalConfig as any).voiceType && { voiceType: (globalConfig as any).voiceType }),
     // Background music
-    ...(globalConfig.bgMusic && { bgMusic: globalConfig.bgMusic }),
+    ...(bgMusicList.length === 1 && { bgMusic: bgMusicList[0] }),
+    ...(bgMusicList.length > 1 && { bgMusicList }),
     ...(globalConfig.bgMusicVolume !== 0.2 && { bgMusicVolume: globalConfig.bgMusicVolume }),
     // Audio volumes
     ...(globalConfig.mediaVolume !== 1.0 && { mediaVolume: globalConfig.mediaVolume }),
     ...(globalConfig.speechVolume !== 1.0 && { speechVolume: globalConfig.speechVolume }),
     ...(globalConfig.speechRate !== 1.0 && { speechRate: globalConfig.speechRate }),
+    ...(globalConfig.speechLanguage && { speechLanguage: globalConfig.speechLanguage }),
     // Subtitle
     subtitleConfig: {
       font: subtitleStyle.font,
@@ -62,7 +87,7 @@ export function buildMixcutPayload({
       bold: subtitleStyle.bold,
       italic: subtitleStyle.italic,
       underline: subtitleStyle.underline,
-      ...(subtitleStyle.adaptMode && { adaptMode: subtitleStyle.adaptMode }),
+      ...(subtitleAdaptMode && { adaptMode: subtitleAdaptMode }),
       ...(subtitleStyle.textWidth && { textWidth: subtitleStyle.textWidth }),
       ...(subtitleStyle.effectColorStyleId && { effectColorStyleId: subtitleStyle.effectColorStyleId }),
       ...(subtitleStyle.bubbleStyleId && { bubbleStyleId: subtitleStyle.bubbleStyleId }),
@@ -71,7 +96,7 @@ export function buildMixcutPayload({
     ...(titleStyle.enabled && {
       titleConfig: {
         enabled: true,
-        titles: titleStyle.text ? [titleStyle.text] : [],
+        titles: titleList,
         font: titleStyle.font,
         fontSize: titleStyle.fontSize,
         fontColor: titleStyle.fontColor,
@@ -143,7 +168,8 @@ export function buildMixcutPayload({
     ...(globalConfig.bgType !== 'none' && { bgType: globalConfig.bgType }),
     ...(globalConfig.bgType === 'color' && { bgColor: globalConfig.bgColor }),
     ...(globalConfig.bgType === 'blur' && globalConfig.bgBlurRadius && { bgBlurRadius: globalConfig.bgBlurRadius }),
-    ...(globalConfig.bgType === 'image' && globalConfig.bgImage && { bgImage: globalConfig.bgImage }),
+    ...(globalConfig.bgType === 'image' && bgImageList.length === 1 && { bgImage: bgImageList[0] }),
+    ...(globalConfig.bgType === 'image' && bgImageList.length > 1 && { bgImageList }),
     // 封面
     ...(globalConfig.coverType !== 'auto' && { coverType: globalConfig.coverType }),
     ...(globalConfig.coverType === 'custom' && globalConfig.coverUrl && { coverUrl: globalConfig.coverUrl }),

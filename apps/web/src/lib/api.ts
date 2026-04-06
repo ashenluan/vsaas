@@ -277,33 +277,79 @@ export const mixcutApi = {
     shotGroups: {
       name: string;
       materialUrls: string[];
+      materials?: {
+        url: string;
+        trimIn?: number;
+        trimOut?: number;
+      }[];
       speechTexts?: string[];
+      subHeadings?: string[];
       duration?: number;
       splitMode?: string;
       keepOriginalAudio?: boolean;
+      volume?: number;
     }[];
     speechMode?: 'global' | 'group';
     speechTexts?: string[];
     voiceId?: string;
+    voiceType?: 'builtin' | 'cloned';
     videoCount: number;
     resolution: string;
     bgMusic?: string;
+    bgMusicList?: string[];
     bgMusicVolume?: number;
     mediaVolume?: number;
     speechVolume?: number;
     speechRate?: number;
+    speechLanguage?: 'zh' | 'en';
     subtitleConfig?: any;
     titleConfig?: any;
     highlightWords?: { word: string; fontColor?: string; outlineColour?: string; bold?: boolean }[];
+    forbiddenWords?: { word: string; soundReplaceMode?: 'mute' | 'beep' }[];
     transitionEnabled?: boolean;
     transitionDuration?: number;
     transitionList?: string[];
+    useUniformTransition?: boolean;
     filterEnabled?: boolean;
     filterList?: string[];
+    vfxEffectEnabled?: boolean;
+    vfxEffectProbability?: number;
+    vfxFirstClipEffectList?: string[];
+    vfxNotFirstClipEffectList?: string[];
     bgType?: string;
     bgColor?: string;
+    bgImage?: string;
+    bgImageList?: string[];
+    bgBlurRadius?: number;
     maxDuration?: number;
+    fixedDuration?: number;
     crf?: number;
+    generatePreviewOnly?: boolean;
+    singleShotDuration?: number;
+    imageDuration?: number;
+    alignmentMode?: string;
+    dedupConfig?: {
+      smartCrop?: boolean;
+      smartZoom?: boolean;
+      smartMirror?: boolean;
+      transparentMask?: boolean;
+      randomSpeed?: boolean;
+    };
+    coverType?: 'auto' | 'custom' | 'smart';
+    coverUrl?: string;
+    coverConfig?: {
+      coverTitle?: string;
+      coverTitleFont?: string;
+      coverTitleColor?: string;
+      coverTitleSize?: number;
+      coverTitlePosition?: 'top' | 'center' | 'bottom';
+    };
+    scheduledAt?: string;
+    publishPlatforms?: string[];
+    watermarkText?: string;
+    watermarkPosition?: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
+    watermarkOpacity?: number;
+    stickers?: { url: string; x: number; y: number; width: number; height: number; opacity?: number; dyncFrames?: number }[];
   }) =>
     apiFetch('/mixcut', { method: 'POST', body: JSON.stringify(data) }),
   list: () => apiFetch<any[]>('/mixcut'),

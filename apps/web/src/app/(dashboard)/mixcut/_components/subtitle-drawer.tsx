@@ -7,6 +7,8 @@ import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SubtitleContent } from './subtitle-drawer/subtitle-content';
 import { SubtitleStyleTab } from './subtitle-drawer/subtitle-style-tab';
 import { TitleTab } from './subtitle-drawer/title-tab';
+import { getMixcutSpeechMode } from '../_lib/mixcut-compatibility';
+import { getPrimaryMixcutPoolItem } from '../_lib/mixcut-random-pools';
 
 export function SubtitleDrawer({
   shotId,
@@ -44,6 +46,11 @@ export function SubtitleDrawer({
   const subtitleStyles = options?.subtitleStyles || [];
   const bubbleStyles = options?.bubbleStyles || [];
   const currentIdx = project.shotGroups.findIndex((g) => g.id === shotId);
+  const previewTitle = getPrimaryMixcutPoolItem(titleStyle.text);
+  const speechMode = getMixcutSpeechMode(project);
+  const previewSubtitle = speechMode === 'global'
+    ? project.speechTexts[0]
+    : shotGroup.subtitles[0]?.text;
 
   return (
     <>
@@ -59,7 +66,7 @@ export function SubtitleDrawer({
             style={{ aspectRatio: '9/16' }}
           >
             {/* Title preview */}
-            {titleStyle.enabled && titleStyle.text && (
+            {titleStyle.enabled && previewTitle && (
               <div
                 className="absolute left-2 right-2 text-center pointer-events-none"
                 style={{ top: `${titleStyle.y * 100}%` }}
@@ -72,7 +79,7 @@ export function SubtitleDrawer({
                     fontWeight: 'bold',
                   }}
                 >
-                  {titleStyle.text}
+                  {previewTitle}
                 </span>
               </div>
             )}
@@ -96,7 +103,7 @@ export function SubtitleDrawer({
                     : 'none',
                 }}
               >
-                {shotGroup.subtitles[0]?.text || '字幕预览'}
+                {previewSubtitle || '字幕预览'}
               </span>
             </div>
 
@@ -170,6 +177,8 @@ export function SubtitleDrawer({
               <SubtitleContent
                 shotId={shotId}
                 subtitles={shotGroup.subtitles}
+                disabled={speechMode === 'global'}
+                disabledMessage="当前项目处于全局口播模式。若要编辑本镜头字幕，请先切换到分组口播模式。"
                 onAdd={() => addSubtitleToShot(shotId, { text: '' })}
                 onUpdate={(i, data) => updateSubtitleInShot(shotId, i, data)}
                 onRemove={(i) => removeSubtitleFromShot(shotId, i)}

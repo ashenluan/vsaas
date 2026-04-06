@@ -7,6 +7,7 @@ import {
   Smartphone, Monitor, Square,
 } from 'lucide-react';
 import { ConfigSection, ToggleSwitch } from './shared';
+import { getPrimaryMixcutPoolItem, parseMixcutPoolText } from '../../_lib/mixcut-random-pools';
 
 const ASPECT_RATIOS = [
   { label: '9:16', value: '9:16', icon: Smartphone },
@@ -119,6 +120,8 @@ export function BackgroundSection() {
   const { globalConfig, updateGlobalConfig } = useMixcutStore(
     useShallow((s) => ({ globalConfig: s.globalConfig, updateGlobalConfig: s.updateGlobalConfig })),
   );
+  const bgImageList = parseMixcutPoolText(globalConfig.bgImage);
+  const primaryBgImage = getPrimaryMixcutPoolItem(globalConfig.bgImage);
 
   return (
     <ConfigSection icon={ImageIcon} label="背景设置">
@@ -150,16 +153,19 @@ export function BackgroundSection() {
       )}
       {globalConfig.bgType === 'image' && (
         <div className="mt-2">
-          <input
-            type="text"
+          <textarea
             value={globalConfig.bgImage}
             onChange={(e) => updateGlobalConfig({ bgImage: e.target.value })}
-            placeholder="输入背景图片 URL"
-            className="w-full rounded-md border px-2.5 py-1.5 text-[11px] placeholder:text-muted-foreground/50"
+            rows={3}
+            placeholder="每行一个背景图 URL，可填写多个作为随机背景图池"
+            className="w-full rounded-md border px-2.5 py-1.5 text-[11px] leading-5 placeholder:text-muted-foreground/50"
           />
-          {globalConfig.bgImage && (
+          {bgImageList.length > 1 && (
+            <p className="mt-1 text-[10px] text-primary">已配置 {bgImageList.length} 张背景图，成片时将随机轮换。</p>
+          )}
+          {primaryBgImage && (
             <div className="mt-1.5 relative rounded-md overflow-hidden border" style={{ aspectRatio: '16/9', maxHeight: 80 }}>
-              <img src={globalConfig.bgImage} alt="背景预览" className="w-full h-full object-cover" />
+              <img src={primaryBgImage} alt="背景预览" className="w-full h-full object-cover" />
             </div>
           )}
         </div>

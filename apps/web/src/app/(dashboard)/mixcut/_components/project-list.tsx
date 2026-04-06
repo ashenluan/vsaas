@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useMixcutStore, createShotGroup } from '../_store/use-mixcut-store';
+import { useMixcutStore } from '../_store/use-mixcut-store';
 import { ScriptImportModal } from './script-import-modal';
+import { hydrateMixcutProjectFromJob } from '../_lib/mixcut-project-hydration';
 import { mixcutApi } from '@/lib/api';
 import { Plus, FileText, Trash2, Film, Clock, Layers, Loader2, RefreshCw, Download, Play, ExternalLink, CheckCircle, Eye } from 'lucide-react';
 
@@ -48,58 +49,13 @@ export function ProjectList() {
   };
 
   const handleOpenProject = (job: any) => {
-    const input = job.input || {};
     const store = useMixcutStore.getState();
-    if (input.isDraft && input.projectData) {
-      // Restore draft project
-      loadProject({
-        id: job.id,
-        name: input.name || job.id,
-        shotGroups: input.projectData.shotGroups || [createShotGroup('视频组_1')],
-        subtitleStyle: input.projectData.subtitleStyle || store.subtitleStyle,
-        titleStyle: input.projectData.titleStyle || store.titleStyle,
-        globalConfig: input.projectData.globalConfig || store.globalConfig,
-        highlightWords: input.projectData.highlightWords || [],
-        forbiddenWords: input.projectData.forbiddenWords || [],
-      });
-      store.setOutputVideos([]);
-      store.setJobStatus('');
-    } else {
-      // Open completed/in-progress job as read-only view
-      const shotGroups = (input.shotGroups || []).map((g: any, i: number) => {
-        const group = createShotGroup(g.name || `视频组_${i + 1}`);
-        group.materials = (g.materialUrls || []).map((url: string, j: number) => {
-          const ext = url.split('?')[0].split('.').pop()?.toLowerCase() || '';
-          const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
-          return {
-            id: `m_${i}_${j}`,
-            name: `素材_${j + 1}`,
-            type: (isImage ? 'IMAGE' : 'VIDEO') as 'IMAGE' | 'VIDEO',
-            url,
-          };
-        });
-        if (g.speechTexts?.length) {
-          group.subtitles = g.speechTexts.map((t: string) => ({ text: t }));
-        }
-        return group;
-      });
+    const hydrated = hydrateMixcutProjectFromJob(job, store.project);
 
-      loadProject({
-        id: job.id,
-        name: input.name || '混剪项目',
-        shotGroups: shotGroups.length ? shotGroups : [createShotGroup('视频组_1')],
-        subtitleStyle: input.subtitleConfig || store.subtitleStyle,
-        titleStyle: input.titleConfig || store.titleStyle,
-        globalConfig: store.globalConfig,
-        highlightWords: input.highlightWords || [],
-        forbiddenWords: input.forbiddenWords || [],
-      });
-
-      // Set output videos and job status for completed jobs
-      const outputVideos = (job.output as any)?.outputVideos || [];
-      store.setOutputVideos(outputVideos);
-      store.setJobStatus(job.status);
-    }
+    loadProject(hydrated.project);
+    store.setOutputVideos(hydrated.outputVideos);
+    store.setPreviewProject(hydrated.previewProject);
+    store.setJobStatus(hydrated.jobStatus);
   };
 
   const filtered = search
@@ -194,7 +150,7 @@ export function ProjectList() {
                   name={name}
                   status={job.status}
                   isDraft={!!input.isDraft}
-                  resolution={input.resolution || job.input?.projectData?.globalConfig?.resolution || '—'}
+                  resolution={input.resolution || input.globalConfig?.resolution || job.input?.projectData?.globalConfig?.resolution || '—'}
                   materialCount={materialCount}
                   shotCount={shotGroups.length}
                   createdAt={job.createdAt}

@@ -10,6 +10,8 @@ export interface ShotMaterial {
   url: string;
   thumbnailUrl?: string;
   duration?: number; // seconds
+  trimIn?: number;
+  trimOut?: number;
 }
 
 export interface ShotSubtitle {
@@ -75,6 +77,7 @@ export interface GlobalConfig {
   mediaVolume: number;
   speechVolume: number;
   speechRate: number;
+  speechLanguage?: 'zh' | 'en';
   transitionEnabled: boolean;
   transitionDuration: number;
   transitionList: string[];
@@ -122,7 +125,19 @@ export interface OutputVideo {
   duration?: number;
 }
 
+export interface MixcutPreviewProject {
+  projectId: string;
+  title?: string;
+  status?: string;
+  duration?: number;
+  coverURL?: string;
+  modifiedTime?: string;
+  timeline?: any;
+  timelineRaw?: string;
+}
+
 export type MixcutView = 'list' | 'editor';
+export type MixcutSpeechMode = 'global' | 'group';
 
 export interface ForbiddenWord {
   word: string;
@@ -138,6 +153,8 @@ export interface MixcutProject {
   globalConfig: GlobalConfig;
   highlightWords: { word: string; fontColor: string; bold: boolean }[];
   forbiddenWords: ForbiddenWord[];
+  speechMode: MixcutSpeechMode;
+  speechTexts: string[];
   scheduledAt?: string; // ISO date string for scheduled publishing
   publishPlatforms?: string[]; // 矩阵发布目标平台
   createdAt?: string;
@@ -179,6 +196,7 @@ const defaultGlobalConfig: GlobalConfig = {
   mediaVolume: 1.0,
   speechVolume: 1.0,
   speechRate: 1.0,
+  speechLanguage: 'zh',
   transitionEnabled: false,
   transitionDuration: 0.5,
   transitionList: [],
@@ -220,6 +238,52 @@ const defaultGlobalConfig: GlobalConfig = {
   },
 };
 
+function inferSpeechModeFromShotGroups(shotGroups: ShotGroup[]): MixcutSpeechMode {
+  return shotGroups.some((group) =>
+    group.subtitles.some((subtitle) => subtitle.text.trim().length > 0),
+  ) ? 'group' : 'global';
+}
+
+function normalizeSpeechTexts(speechTexts?: string[]) {
+  if (!Array.isArray(speechTexts)) {
+    return [];
+  }
+
+  return speechTexts
+    .map((text) => text.trim())
+    .filter(Boolean);
+}
+
+function normalizeProject(project: MixcutProject): MixcutProject {
+  const shotGroups = project.shotGroups?.length ? project.shotGroups : [createShotGroup('视频组_1')];
+  const globalConfig = {
+    ...defaultGlobalConfig,
+    ...(project.globalConfig || {}),
+    dedupConfig: {
+      ...defaultGlobalConfig.dedupConfig,
+      ...(project.globalConfig?.dedupConfig || {}),
+    },
+  };
+
+  return {
+    ...project,
+    shotGroups,
+    subtitleStyle: {
+      ...defaultSubtitleStyle,
+      ...(project.subtitleStyle || {}),
+    },
+    titleStyle: {
+      ...defaultTitleStyle,
+      ...(project.titleStyle || {}),
+    },
+    globalConfig,
+    highlightWords: project.highlightWords || [],
+    forbiddenWords: project.forbiddenWords || [],
+    speechMode: project.speechMode ?? inferSpeechModeFromShotGroups(shotGroups),
+    speechTexts: normalizeSpeechTexts(project.speechTexts),
+  };
+}
+
 let shotIdCounter = 0;
 export function createShotGroup(name?: string): ShotGroup {
   shotIdCounter++;
@@ -250,6 +314,8 @@ interface MixcutState {
   project: MixcutProject;
   setProjectName: (name: string) => void;
   setProjectId: (id: string) => void;
+  setSpeechMode: (mode: MixcutSpeechMode) => void;
+  setSpeechTexts: (texts: string[]) => void;
   setScheduledAt: (scheduledAt?: string) => void;
   setPublishPlatforms: (platforms: string[]) => void;
 
@@ -258,6 +324,7 @@ interface MixcutState {
   removeShotGroup: (id: string) => void;
   updateShotGroup: (id: string, partial: Partial<ShotGroup>) => void;
   addMaterialToShot: (shotId: string, material: ShotMaterial) => void;
+  updateMaterialInShot: (shotId: string, materialId: string, partial: Partial<ShotMaterial>) => void;
   removeMaterialFromShot: (shotId: string, materialId: string) => void;
   reorderShotGroups: (fromIndex: number, toIndex: number) => void;
   duplicateShotGroup: (id: string) => void;
@@ -289,6 +356,8 @@ interface MixcutState {
   // Output videos (for completed jobs)
   outputVideos: OutputVideo[];
   setOutputVideos: (videos: OutputVideo[]) => void;
+  previewProject: MixcutPreviewProject | null;
+  setPreviewProject: (previewProject: MixcutPreviewProject | null) => void;
   jobStatus: string;
   setJobStatus: (status: string) => void;
 
@@ -310,6 +379,8 @@ const initialProject: MixcutProject = {
   globalConfig: { ...defaultGlobalConfig },
   highlightWords: [],
   forbiddenWords: [],
+  speechMode: 'global',
+  speechTexts: [],
 };
 
 export const useMixcutStore = create<MixcutState>()(
@@ -323,6 +394,10 @@ export const useMixcutStore = create<MixcutState>()(
         set((s) => ({ project: { ...s.project, name } })),
       setProjectId: (id) =>
         set((s) => ({ project: { ...s.project, id } })),
+      setSpeechMode: (speechMode) =>
+        set((s) => ({ project: { ...s.project, speechMode } })),
+      setSpeechTexts: (speechTexts) =>
+        set((s) => ({ project: { ...s.project, speechTexts: normalizeSpeechTexts(speechTexts) } })),
       setScheduledAt: (scheduledAt) =>
         set((s) => ({ project: { ...s.project, scheduledAt } })),
       setPublishPlatforms: (platforms) =>
@@ -359,6 +434,22 @@ export const useMixcutStore = create<MixcutState>()(
             shotGroups: s.project.shotGroups.map((g) =>
               g.id === shotId
                 ? { ...g, materials: [...g.materials, material] }
+                : g,
+            ),
+          },
+        })),
+      updateMaterialInShot: (shotId, materialId, partial) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            shotGroups: s.project.shotGroups.map((g) =>
+              g.id === shotId
+                ? {
+                    ...g,
+                    materials: g.materials.map((m) =>
+                      m.id === materialId ? { ...m, ...partial } : m,
+                    ),
+                  }
                 : g,
             ),
           },
@@ -502,6 +593,8 @@ export const useMixcutStore = create<MixcutState>()(
       // Output videos
       outputVideos: [],
       setOutputVideos: (videos) => set({ outputVideos: videos }),
+      previewProject: null,
+      setPreviewProject: (previewProject) => set({ previewProject }),
       jobStatus: '',
       setJobStatus: (status) => set({ jobStatus: status }),
 
@@ -513,7 +606,7 @@ export const useMixcutStore = create<MixcutState>()(
       // Reset
       resetProject: () =>
         set({
-          project: {
+          project: normalizeProject({
             name: '未命名项目',
             shotGroups: [createShotGroup('视频组_1')],
             subtitleStyle: { ...defaultSubtitleStyle },
@@ -521,7 +614,9 @@ export const useMixcutStore = create<MixcutState>()(
             globalConfig: { ...defaultGlobalConfig },
             highlightWords: [],
             forbiddenWords: [],
-          },
+            speechMode: 'global',
+            speechTexts: [],
+          }),
           subtitleStyle: { ...defaultSubtitleStyle },
           titleStyle: { ...defaultTitleStyle },
           globalConfig: { ...defaultGlobalConfig },
@@ -529,17 +624,22 @@ export const useMixcutStore = create<MixcutState>()(
           forbiddenWords: [],
           activeDrawer: null,
           outputVideos: [],
+          previewProject: null,
           jobStatus: '',
         }),
       loadProject: (project) =>
-        set({
-          project,
-          subtitleStyle: project.subtitleStyle,
-          titleStyle: project.titleStyle,
-          globalConfig: project.globalConfig,
-          highlightWords: project.highlightWords,
-          forbiddenWords: project.forbiddenWords || [],
-          view: 'editor',
+        set(() => {
+          const normalizedProject = normalizeProject(project);
+
+          return {
+            project: normalizedProject,
+            subtitleStyle: normalizedProject.subtitleStyle,
+            titleStyle: normalizedProject.titleStyle,
+            globalConfig: normalizedProject.globalConfig,
+            highlightWords: normalizedProject.highlightWords,
+            forbiddenWords: normalizedProject.forbiddenWords || [],
+            view: 'editor',
+          };
         }),
     }),
     {
@@ -552,6 +652,7 @@ export const useMixcutStore = create<MixcutState>()(
         highlightWords: state.highlightWords,
         forbiddenWords: state.forbiddenWords,
         outputVideos: state.outputVideos,
+        previewProject: state.previewProject,
         jobStatus: state.jobStatus,
       }),
     },

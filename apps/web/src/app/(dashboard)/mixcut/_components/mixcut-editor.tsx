@@ -37,12 +37,12 @@ export function MixcutEditor({
   allMaterials: any[];
   onMaterialAdd: (m: any) => void;
 }) {
-  const { project, setProjectName, setView, activeDrawer, closeDrawer, subtitleStyle, titleStyle, globalConfig, highlightWords, reorderShotGroups } = useMixcutStore(
+  const { project, setProjectName, setView, activeDrawer, closeDrawer, subtitleStyle, titleStyle, globalConfig, highlightWords, forbiddenWords, reorderShotGroups } = useMixcutStore(
     useShallow((s) => ({
       project: s.project, setProjectName: s.setProjectName, setView: s.setView,
       activeDrawer: s.activeDrawer, closeDrawer: s.closeDrawer,
       subtitleStyle: s.subtitleStyle, titleStyle: s.titleStyle,
-      globalConfig: s.globalConfig, highlightWords: s.highlightWords,
+      globalConfig: s.globalConfig, highlightWords: s.highlightWords, forbiddenWords: s.forbiddenWords,
       reorderShotGroups: s.reorderShotGroups,
     })),
   );
@@ -85,6 +85,11 @@ export function MixcutEditor({
           titleStyle,
           globalConfig,
           highlightWords,
+          forbiddenWords,
+          speechMode: project.speechMode,
+          speechTexts: project.speechTexts,
+          scheduledAt: project.scheduledAt,
+          publishPlatforms: project.publishPlatforms,
         },
       });
       // Write back the ID so subsequent saves update the same record

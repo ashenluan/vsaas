@@ -23,6 +23,27 @@ import {
   IMS_VOICE_LIST,
 } from '../provider/aliyun-ims/ims-compose.provider';
 
+const MIXCUT_SUPPORTED_SPEECH_LANGUAGES = new Set(['zh', 'en']);
+const MIXCUT_SSML_ALLOWED_TAGS = new Set([
+  'speak',
+  'break',
+  's',
+  'sub',
+  'w',
+  'phoneme',
+  'say-as',
+]);
+const MIXCUT_COSYVOICE_SSML_ALLOWED_TAGS = new Set([
+  'speak',
+  'break',
+  's',
+  'sub',
+]);
+const MIXCUT_COSYVOICE_VOICE_IDS = new Set(
+  [...(IMS_VOICE_LIST['CosyVoice v1'] || []), ...(IMS_VOICE_LIST['CosyVoice v2'] || [])]
+    .map((voice) => voice.id),
+);
+
 @Injectable()
 export class DigitalHumanService {
   private readonly logger = new Logger(DigitalHumanService.name);
@@ -328,6 +349,7 @@ export class DigitalHumanService {
       shotGroups: {
         name: string;
         materialUrls: string[];
+        materials?: { url: string; trimIn?: number; trimOut?: number }[];
         speechTexts?: string[];
         subHeadings?: string[];
         duration?: number;
@@ -339,9 +361,11 @@ export class DigitalHumanService {
       speechTexts?: string[];
       voiceId?: string;
       voiceType?: 'builtin' | 'cloned';
+      speechLanguage?: 'zh' | 'en';
       videoCount: number;
       resolution: string;
       bgMusic?: string;
+      bgMusicList?: string[];
       bgMusicVolume?: number;
       mediaVolume?: number;
       speechVolume?: number;
@@ -362,6 +386,7 @@ export class DigitalHumanService {
       bgType?: string;
       bgColor?: string;
       bgImage?: string;
+      bgImageList?: string[];
       bgBlurRadius?: number;
       maxDuration?: number;
       fixedDuration?: number;
@@ -395,15 +420,19 @@ export class DigitalHumanService {
       stickers?: { url: string; x: number; y: number; width: number; height: number; opacity?: number; dyncFrames?: number }[];
     },
   ) {
+    const resolvedSpeechMode = this.resolveMixcutSpeechMode(data);
+
     // Validate: at least one shot group with materials
     if (!data.shotGroups?.length) {
       throw new BadRequestException('至少需要一个镜头组');
     }
     for (const group of data.shotGroups) {
-      if (!group.materialUrls?.length) {
+      const materials = this.resolveMixcutShotMaterials(group);
+      if (!materials.length) {
         throw new BadRequestException(`镜头组 "${group.name}" 没有素材`);
       }
     }
+    this.validateMixcutRequest(data, resolvedSpeechMode);
 
     // Validate voice if speechTexts provided
     if (data.voiceId) {
@@ -421,23 +450,17 @@ export class DigitalHumanService {
       }
     }
 
-    // Deduct credits
-    const costPerVideo = CREDIT_COSTS.MIXCUT_PER_VIDEO;
-    const totalCost = costPerVideo * data.videoCount;
-    await this.userService.deductCredits(
-      userId,
-      totalCost,
-      `智能混剪: ${data.name} (${data.videoCount}条视频)`,
-    );
-
     // Build IMS configs
     const imsProvider = this.providers.batchComposeProvider;
 
+    const backgroundMusic = this.resolveMixcutPool(data.bgMusicList, data.bgMusic);
+    const backgroundImages = this.resolveMixcutPool(data.bgImageList, data.bgImage);
+
     const inputConfig = imsProvider.buildInputConfig({
-      mode: data.speechMode === 'group' ? 'group' : 'global',
+      mode: resolvedSpeechMode,
       mediaGroups: data.shotGroups.map((g) => ({
         groupName: g.name,
-        mediaUrls: g.materialUrls,
+        mediaUrls: this.resolveMixcutShotMaterials(g).map((material) => material.url),
         ...(g.speechTexts?.length && { speechTexts: g.speechTexts }),
         ...(g.duration && { duration: g.duration }),
         ...(g.splitMode && { splitMode: g.splitMode }),
@@ -447,8 +470,8 @@ export class DigitalHumanService {
       })),
       ...(data.speechTexts?.length && { speechTexts: data.speechTexts }),
       ...(data.titleConfig?.titles?.length && { titles: data.titleConfig.titles }),
-      ...(data.bgMusic && { backgroundMusic: [data.bgMusic] }),
-      ...(data.bgType === 'image' && data.bgImage && { backgroundImages: [data.bgImage] }),
+      ...(backgroundMusic.length && { backgroundMusic }),
+      ...(data.bgType === 'image' && backgroundImages.length && { backgroundImages }),
       ...(data.stickers?.length && { stickers: data.stickers }),
       ...(() => {
         const subHeadings = data.shotGroups
@@ -505,7 +528,17 @@ export class DigitalHumanService {
       })(),
       ...(data.voiceId && data.voiceType === 'builtin' && { voice: data.voiceId }),
       ...(data.voiceId && data.voiceType !== 'builtin' && { customizedVoice: data.voiceId }),
+      ...(data.speechLanguage && { speechLanguage: data.speechLanguage }),
       backgroundMusicVolume: data.bgMusicVolume ?? 0.2,
+      mediaMetaData: data.shotGroups.flatMap((group) =>
+        this.resolveMixcutShotMaterials(group)
+          .filter((material) => material.trimIn !== undefined || material.trimOut !== undefined)
+          .map((material) => ({
+            mediaUrl: material.url,
+            trimIn: material.trimIn,
+            trimOut: material.trimOut,
+          })),
+      ),
       subtitleConfig: data.subtitleConfig,
       ...(specialWordsConfig.length && { specialWordsConfig }),
       // 新增处理配置
@@ -579,6 +612,15 @@ export class DigitalHumanService {
       ...(data.generatePreviewOnly && { generatePreviewOnly: true }),
     });
 
+    // Deduct credits after all local validation/build steps succeed.
+    const costPerVideo = CREDIT_COSTS.MIXCUT_PER_VIDEO;
+    const totalCost = costPerVideo * data.videoCount;
+    await this.userService.deductCredits(
+      userId,
+      totalCost,
+      `智能混剪: ${data.name} (${data.videoCount}条视频)`,
+    );
+
     // Compute delay for scheduled jobs
     let delay: number | undefined;
     if (data.scheduledAt) {
@@ -606,6 +648,8 @@ export class DigitalHumanService {
             speechMode: data.speechMode,
             speechTexts: data.speechTexts,
             voiceId: data.voiceId,
+            voiceType: data.voiceType,
+            speechLanguage: data.speechLanguage,
             videoCount: data.videoCount,
             resolution: data.resolution,
             bgMusic: data.bgMusic,
@@ -652,6 +696,132 @@ export class DigitalHumanService {
     return job;
   }
 
+  private resolveMixcutSpeechMode(data: {
+    speechMode?: 'global' | 'group';
+    speechTexts?: string[];
+    shotGroups: { speechTexts?: string[]; duration?: number }[];
+  }): 'global' | 'group' {
+    if (data.speechMode) return data.speechMode;
+
+    const hasGlobalSpeech = !!data.speechTexts?.length;
+    const hasGroupSpeech = data.shotGroups.some((group) => !!group.speechTexts?.length);
+    const hasGroupDuration = data.shotGroups.some((group) => group.duration !== undefined);
+
+    if (hasGlobalSpeech) return 'global';
+    if (hasGroupSpeech || hasGroupDuration) return 'group';
+    return 'global';
+  }
+
+  private validateMixcutRequest(
+    data: {
+      speechTexts?: string[];
+      shotGroups: {
+        name: string;
+        materialUrls: string[];
+        materials?: { url: string; trimIn?: number; trimOut?: number }[];
+        speechTexts?: string[];
+        duration?: number;
+      }[];
+      videoCount: number;
+      maxDuration?: number;
+      fixedDuration?: number;
+      alignmentMode?: string;
+      voiceId?: string;
+      voiceType?: 'builtin' | 'cloned';
+      speechLanguage?: 'zh' | 'en';
+    },
+    resolvedSpeechMode: 'global' | 'group',
+  ) {
+    const hasGlobalSpeech = !!data.speechTexts?.length;
+    const hasGroupSpeech = data.shotGroups.some((group) => !!group.speechTexts?.length);
+
+    if (data.videoCount > 100) {
+      throw new BadRequestException('阿里云脚本化自动成片单次最多生成 100 条视频');
+    }
+
+    if (data.maxDuration && data.fixedDuration) {
+      throw new BadRequestException('maxDuration 和 fixedDuration 不能同时设置');
+    }
+
+    if (data.speechLanguage && !MIXCUT_SUPPORTED_SPEECH_LANGUAGES.has(data.speechLanguage)) {
+      throw new BadRequestException('脚本化自动成片当前仅支持 zh 和 en 两种口播语种');
+    }
+
+    for (const group of data.shotGroups) {
+      for (const material of this.resolveMixcutShotMaterials(group)) {
+        const hasTrimIn = material.trimIn !== undefined;
+        const hasTrimOut = material.trimOut !== undefined;
+
+        if (hasTrimIn !== hasTrimOut) {
+          throw new BadRequestException(`镜头组 "${group.name}" 的素材裁剪需要同时设置开始和结束时间`);
+        }
+
+        if (hasTrimIn && hasTrimOut && material.trimOut! <= material.trimIn!) {
+          throw new BadRequestException(`镜头组 "${group.name}" 的素材裁剪结束时间必须大于开始时间`);
+        }
+      }
+
+      this.validateMixcutSpeechMarkup(
+        group.speechTexts,
+        {
+          context: `镜头组 "${group.name}" 的口播文案`,
+          voiceId: data.voiceId,
+          voiceType: data.voiceType,
+        },
+      );
+    }
+
+    if (resolvedSpeechMode === 'group') {
+      if (hasGlobalSpeech) {
+        throw new BadRequestException('分组口播模式下不能同时传入全局口播文案');
+      }
+      if (data.fixedDuration) {
+        throw new BadRequestException('分组口播模式不支持 fixedDuration');
+      }
+      if (data.alignmentMode) {
+        throw new BadRequestException('AlignmentMode 仅支持全局口播模式');
+      }
+      if (data.maxDuration) {
+        throw new BadRequestException('分组口播模式不应设置 maxDuration');
+      }
+      return;
+    }
+
+    if (hasGroupSpeech) {
+      throw new BadRequestException('全局口播模式下不能传入分组口播文案');
+    }
+
+    if (hasGlobalSpeech && data.fixedDuration) {
+      throw new BadRequestException('存在全局口播文案时不支持 fixedDuration');
+    }
+
+    this.validateMixcutSpeechMarkup(
+      data.speechTexts,
+      {
+        context: '全局口播文案',
+        voiceId: data.voiceId,
+        voiceType: data.voiceType,
+      },
+    );
+  }
+
+  private resolveMixcutShotMaterials(group: {
+    materialUrls?: string[];
+    materials?: { url: string; trimIn?: number; trimOut?: number }[];
+  }): { url: string; trimIn?: number; trimOut?: number }[] {
+    if (group.materials?.length) {
+      return group.materials
+        .filter((material) => typeof material.url === 'string' && material.url.trim().length > 0)
+        .map((material) => ({
+          url: material.url,
+          trimIn: material.trimIn,
+          trimOut: material.trimOut,
+        }));
+    }
+
+    return (group.materialUrls || []).map((url) => ({ url }));
+  }
+
   private parseResolutionWH(resolution: string): { width: number; height: number } {
     const parts = resolution.split('x').map(Number);
     if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
@@ -659,6 +829,123 @@ export class DigitalHumanService {
     }
     if (resolution.toUpperCase().includes('1080')) return { width: 1080, height: 1920 };
     return { width: 720, height: 1280 };
+  }
+
+  private resolveMixcutPool(list?: string[], fallback?: string) {
+    if (list?.length) {
+      return list.map((item) => item.trim()).filter(Boolean);
+    }
+
+    if (!fallback?.trim()) {
+      return [];
+    }
+
+    return fallback
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  private validateMixcutSpeechMarkup(
+    speechTexts: string[] | undefined,
+    options: {
+      context: string;
+      voiceId?: string;
+      voiceType?: 'builtin' | 'cloned';
+    },
+  ) {
+    if (!speechTexts?.length) {
+      return;
+    }
+
+    const allowedTags = this.isCosyVoiceSpeechVoice(options.voiceId, options.voiceType)
+      ? MIXCUT_COSYVOICE_SSML_ALLOWED_TAGS
+      : MIXCUT_SSML_ALLOWED_TAGS;
+
+    for (const speechText of speechTexts) {
+      this.validateMixcutSpeechText(speechText, options.context, allowedTags);
+    }
+  }
+
+  private validateMixcutSpeechText(
+    speechText: string,
+    context: string,
+    allowedTags: Set<string>,
+  ) {
+    if (typeof speechText !== 'string') {
+      return;
+    }
+
+    const trimmed = speechText.trim();
+    if (!trimmed || (!trimmed.includes('<') && !trimmed.includes('>'))) {
+      return;
+    }
+
+    if (trimmed.includes('<!--') || trimmed.includes('<![CDATA[') || trimmed.includes('<?')) {
+      throw new BadRequestException(`${context} 包含不受支持的 SSML 结构，请仅保留阿里云支持的标签`);
+    }
+
+    const firstTag = trimmed.match(/^<([a-zA-Z][\w-]*)(?:\s[^<>]*)?>/);
+    const lastTag = trimmed.match(/<\/([a-zA-Z][\w-]*)>\s*$/);
+    if (firstTag?.[1]?.toLowerCase() !== 'speak' || lastTag?.[1]?.toLowerCase() !== 'speak') {
+      throw new BadRequestException(`${context} 使用 SSML 时必须用 <speak> 根标签包裹全文`);
+    }
+
+    const tagPattern = /<\/?([a-zA-Z][\w-]*)(?:\s[^<>]*)?\s*\/?>/g;
+    const stack: string[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = tagPattern.exec(trimmed)) !== null) {
+      const rawTag = match[0];
+      const tagName = match[1].toLowerCase();
+      const textBetween = trimmed.slice(lastIndex, match.index);
+      lastIndex = match.index + rawTag.length;
+
+      if (textBetween.includes('<') || textBetween.includes('>')) {
+        throw new BadRequestException(`${context} 存在非法的 SSML 标签或未转义字符`);
+      }
+
+      if (!allowedTags.has(tagName)) {
+        throw new BadRequestException(`${context} 包含当前音色不支持的 SSML 标签 <${tagName}>`);
+      }
+
+      const isClosingTag = rawTag.startsWith('</');
+      const isSelfClosingTag = /\/>\s*$/.test(rawTag);
+      const isImplicitBreakTag = tagName === 'break' && !isClosingTag;
+
+      if (isClosingTag) {
+        const expectedTag = stack.pop();
+        if (expectedTag !== tagName) {
+          throw new BadRequestException(`${context} 的 SSML 标签闭合顺序不正确`);
+        }
+        continue;
+      }
+
+      if (!isSelfClosingTag && !isImplicitBreakTag) {
+        stack.push(tagName);
+      }
+    }
+
+    const trailingText = trimmed.slice(lastIndex);
+    if (trailingText.includes('<') || trailingText.includes('>')) {
+      throw new BadRequestException(`${context} 存在非法的 SSML 标签或未转义字符`);
+    }
+
+    if (stack.length > 0) {
+      throw new BadRequestException(`${context} 的 SSML 标签没有正确闭合`);
+    }
+  }
+
+  private isCosyVoiceSpeechVoice(
+    voiceId?: string,
+    voiceType?: 'builtin' | 'cloned',
+  ) {
+    if (voiceType === 'cloned') {
+      return true;
+    }
+
+    return !!voiceId && MIXCUT_COSYVOICE_VOICE_IDS.has(voiceId);
   }
 
   // ==================== Single Video Creation ====================

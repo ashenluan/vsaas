@@ -81,7 +81,7 @@ export class MixcutProductionProcessor extends WorkerHost {
         }));
 
       // Re-poll with retry — sub-job statuses can lag behind the main job 'Finished' status
-      if (outputVideos.length === 0 && (imsStatus.subJobs || []).length > 0) {
+      if (!isPreviewOnly && outputVideos.length === 0 && (imsStatus.subJobs || []).length > 0) {
         this.logger.warn(
           `Mixcut ${jobId}: main job Finished but 0 Success sub-jobs. ` +
           `Statuses: ${(imsStatus.subJobs || []).map((sj: any) => sj.status).join(', ')}. Retrying...`,
@@ -102,7 +102,7 @@ export class MixcutProductionProcessor extends WorkerHost {
       }
 
       // Fallback: if still 0, include any sub-job that has a mediaURL
-      if (outputVideos.length === 0) {
+      if (!isPreviewOnly && outputVideos.length === 0) {
         outputVideos = (imsStatus.subJobs || [])
           .filter((sj: any) => sj.mediaURL)
           .map((sj: any) => ({
@@ -120,12 +120,17 @@ export class MixcutProductionProcessor extends WorkerHost {
         `Statuses: ${(imsStatus.subJobs || []).map((sj: any) => `${sj.status}[${sj.mediaURL ? 'url' : 'no-url'}]`).join(', ')}`,
       );
 
+      const previewProject = isPreviewOnly
+        ? await this.fetchPreviewProject(imsProvider, imsStatus, jobId)
+        : undefined;
+
       // Update final status
       const output = {
         imsJobId: imsResult.jobId,
         imsStatus,
         outputVideos,
         isPreviewOnly,
+        ...(previewProject && { previewProject }),
       };
 
       await this.prisma.generation.update({
@@ -148,6 +153,7 @@ export class MixcutProductionProcessor extends WorkerHost {
         message,
         outputVideos,
         isPreviewOnly,
+        ...(previewProject && { previewProject }),
       });
       return output;
     } catch (error: any) {
@@ -238,6 +244,23 @@ export class MixcutProductionProcessor extends WorkerHost {
 
   private sendProgress(userId: string, jobId: string, status: string, progress: number, message: string) {
     this.ws.sendToUser(userId, 'mixcut:progress', { jobId, status, progress, message });
+  }
+
+  private async fetchPreviewProject(imsProvider: any, imsStatus: any, jobId: string) {
+    const projectId = (imsStatus?.subJobs || [])
+      .map((subJob: any) => subJob?.projectId)
+      .find((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0);
+
+    if (!projectId || typeof imsProvider.getEditingProject !== 'function') {
+      return undefined;
+    }
+
+    try {
+      return await imsProvider.getEditingProject(projectId);
+    } catch (error: any) {
+      this.logger.warn(`Mixcut ${jobId}: failed to fetch preview project ${projectId}: ${error.message}`);
+      return undefined;
+    }
   }
 
   private async updateJobStatus(jobId: string, status: string) {

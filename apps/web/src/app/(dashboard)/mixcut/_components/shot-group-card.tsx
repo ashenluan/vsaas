@@ -7,6 +7,7 @@ import { materialApi } from '@/lib/api';
 import { uploadToOSS } from '@/lib/upload';
 import { toast } from 'sonner';
 import { IMS_MEDIA_ACCEPT, validateImsFile } from '@/lib/ims-formats';
+import { getEffectiveMixcutMaterialDuration, getMixcutMaterialTrimError, getMixcutMaterialTrimState } from '../_lib/mixcut-trim';
 import {
   ImagePlus, Film, Image as ImageIcon, X, GripVertical,
   Type, Wand2, Sparkles, Sticker, Volume2, VolumeX, Trash2,
@@ -41,10 +42,10 @@ export function ShotGroupCard({
   onMaterialAdd: (m: any) => void;
   dragHandleProps?: Record<string, any>;
 }) {
-  const { removeShotGroup, updateShotGroup, addMaterialToShot, removeMaterialFromShot, openDrawer, duplicateShotGroup, reorderMaterialsInShot } = useMixcutStore(
+  const { removeShotGroup, updateShotGroup, addMaterialToShot, updateMaterialInShot, removeMaterialFromShot, openDrawer, duplicateShotGroup, reorderMaterialsInShot } = useMixcutStore(
     useShallow((s) => ({
       removeShotGroup: s.removeShotGroup, updateShotGroup: s.updateShotGroup,
-      addMaterialToShot: s.addMaterialToShot, removeMaterialFromShot: s.removeMaterialFromShot,
+      addMaterialToShot: s.addMaterialToShot, updateMaterialInShot: s.updateMaterialInShot, removeMaterialFromShot: s.removeMaterialFromShot,
       openDrawer: s.openDrawer, duplicateShotGroup: s.duplicateShotGroup,
       reorderMaterialsInShot: s.reorderMaterialsInShot,
     })),
@@ -70,7 +71,8 @@ export function ShotGroupCard({
     if (fromIndex !== -1 && toIndex !== -1) reorderMaterialsInShot(group.id, fromIndex, toIndex);
   }, [group.id, group.materials, reorderMaterialsInShot]);
 
-  const totalDuration = group.materials.reduce((acc, m) => acc + (m.duration || 3), 0);
+  const totalDuration = group.materials.reduce((acc, m) => acc + getEffectiveMixcutMaterialDuration(m), 0);
+  const videoMaterials = group.materials.filter((material) => material.type === 'VIDEO');
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -285,6 +287,91 @@ export function ShotGroupCard({
             </SortableContext>
           </DndContext>
         )}
+
+        {videoMaterials.length > 0 && (
+          <div className="mt-3 rounded-lg border bg-muted/30 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-medium">精确裁剪</p>
+                <p className="text-[10px] text-muted-foreground">按秒设置素材截取区间，提交时会映射到阿里云 TimeRangeList</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {videoMaterials.map((material) => {
+                const trimError = getMixcutMaterialTrimError(material);
+                const trimState = getMixcutMaterialTrimState(material);
+
+                return (
+                  <div key={material.id} className="rounded-md border bg-background p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[11px] font-medium">{material.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          原始时长 {formatDuration(material.duration || 3)}
+                          {trimState.isValid && ` -> 截取后 ${formatDuration(getEffectiveMixcutMaterialDuration(material))}`}
+                        </p>
+                      </div>
+                      {trimState.isValid && (
+                        <span className="rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[9px] font-medium text-primary">
+                          已裁剪
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <label className="space-y-1">
+                        <span className="block text-[10px] text-muted-foreground">开始时间（秒）</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          value={material.trimIn ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            updateMaterialInShot(group.id, material.id, {
+                              trimIn: value === '' ? undefined : Number(value),
+                            });
+                          }}
+                          className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          placeholder="例如 1.5"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="block text-[10px] text-muted-foreground">结束时间（秒）</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          value={material.trimOut ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            updateMaterialInShot(group.id, material.id, {
+                              trimOut: value === '' ? undefined : Number(value),
+                            });
+                          }}
+                          className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          placeholder="例如 6.8"
+                        />
+                      </label>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <p className={`text-[10px] ${trimError ? 'text-red-500' : 'text-muted-foreground'}`}>
+                        {trimError || '留空表示使用完整素材；开始和结束时间需要成对填写。'}
+                      </p>
+                      {(material.trimIn !== undefined || material.trimOut !== undefined) && (
+                        <button
+                          onClick={() => updateMaterialInShot(group.id, material.id, { trimIn: undefined, trimOut: undefined })}
+                          className="rounded border px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent transition-colors"
+                        >
+                          清除
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>}
 
       {/* Material preview modal */}
@@ -409,7 +496,7 @@ function SortableMaterialThumb({ material, onRemove, onPreview, selected, onTogg
       <div className="px-1.5 py-1">
         <p className="truncate text-[9px] font-medium">{material.name}</p>
         <p className="text-[8px] text-muted-foreground">
-          {material.type === 'IMAGE' ? '图片' : '视频'} · {formatDuration(material.duration || 3)}
+          {material.type === 'IMAGE' ? '图片' : '视频'} · {formatDuration(getEffectiveMixcutMaterialDuration(material))}
         </p>
       </div>
       {/* Remove button */}
@@ -423,6 +510,11 @@ function SortableMaterialThumb({ material, onRemove, onPreview, selected, onTogg
       <div className="absolute left-0.5 top-0.5 rounded bg-black/50 px-1 py-0.5 text-[8px] text-white">
         {material.type === 'VIDEO' ? '视频' : '图片'}
       </div>
+      {getMixcutMaterialTrimState(material).isValid && (
+        <div className="absolute left-0.5 bottom-0.5 rounded bg-primary/80 px-1 py-0.5 text-[8px] text-white">
+          裁剪
+        </div>
+      )}
       {/* Selection checkbox */}
       {onToggleSelect && (
         <button
@@ -515,6 +607,5 @@ function MaterialPickerDropdown({
     </div>
   );
 }
-
 
 
