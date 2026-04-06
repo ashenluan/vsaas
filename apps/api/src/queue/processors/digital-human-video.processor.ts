@@ -240,7 +240,11 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
         });
 
         const voiceProvider = this.providers.voiceProvider;
-        const ttsResult = await voiceProvider.synthesizeSpeech(input.text, input.voiceId);
+        const ttsResult = await voiceProvider.synthesizeSpeech(input.text, input.voiceId, {
+          ...(input.speechRate !== undefined && { speechRate: input.speechRate }),
+          ...(input.pitchRate !== undefined && { pitchRate: input.pitchRate }),
+          ...(input.volume !== undefined && { volume: input.volume }),
+        });
         audioUrl = ttsResult.audioUrl;
 
         if (!audioUrl) {

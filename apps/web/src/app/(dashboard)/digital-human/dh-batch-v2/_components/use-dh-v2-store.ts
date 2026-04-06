@@ -84,11 +84,31 @@ const defaultOutput: OutputConfig = {
   resolution: '1080x1920',
   maxDuration: 120,
   crf: 27,
-  speechRate: 0,
+  speechRate: 1,
   mediaVolume: 1,
   speechVolume: 1,
   bgMusicVolume: 0.2,
 };
+
+function normalizeSpeechRate(rate?: number) {
+  if (!Number.isFinite(rate)) {
+    return 1;
+  }
+
+  if (rate === 0) {
+    return 1;
+  }
+
+  return Math.max(0.5, Math.min(2, rate ?? 1));
+}
+
+function normalizeOutput(output?: Partial<OutputConfig>): OutputConfig {
+  return {
+    ...defaultOutput,
+    ...output,
+    speechRate: normalizeSpeechRate(output?.speechRate ?? defaultOutput.speechRate),
+  };
+}
 
 export const useDhV2Store = create<DhV2State>()(
   persist(
@@ -141,8 +161,8 @@ export const useDhV2Store = create<DhV2State>()(
       subtitle: { ...defaultSubtitle },
       updateSubtitle: (p) => set((s) => ({ subtitle: { ...s.subtitle, ...p } })),
 
-      output: { ...defaultOutput },
-      updateOutput: (p) => set((s) => ({ output: { ...s.output, ...p } })),
+      output: normalizeOutput(),
+      updateOutput: (p) => set((s) => ({ output: normalizeOutput({ ...s.output, ...p }) })),
 
       reset: () =>
         set({
@@ -156,11 +176,24 @@ export const useDhV2Store = create<DhV2State>()(
           bgMusic: '',
           transitionId: '',
           subtitle: { ...defaultSubtitle },
-          output: { ...defaultOutput },
+          output: normalizeOutput(),
         }),
     }),
     {
       name: 'vsaas-dh-v2-draft',
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<DhV2State> | undefined;
+
+        return {
+          ...currentState,
+          ...persisted,
+          subtitle: {
+            ...defaultSubtitle,
+            ...(persisted?.subtitle || {}),
+          },
+          output: normalizeOutput(persisted?.output),
+        };
+      },
       partialize: (state) => ({
         channel: state.channel,
         selectedVoice: state.selectedVoice,

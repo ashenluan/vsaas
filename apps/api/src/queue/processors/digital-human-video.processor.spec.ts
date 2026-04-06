@@ -238,11 +238,22 @@ describe('DigitalHumanVideoProcessor', () => {
           resolution: '1080x1920',
           voiceId: 'voice-1',
           text: '万相照片驱动',
+          speechRate: 1.25,
+          pitchRate: 1.1,
+          volume: 80,
         },
       },
     } as any);
 
-    expect(providers.voiceProvider.synthesizeSpeech).toHaveBeenCalledWith('万相照片驱动', 'voice-1');
+    expect(providers.voiceProvider.synthesizeSpeech).toHaveBeenCalledWith(
+      '万相照片驱动',
+      'voice-1',
+      {
+        speechRate: 1.25,
+        pitchRate: 1.1,
+        volume: 80,
+      },
+    );
     expect(providers.digitalHumanProvider.generateVideo).toHaveBeenCalledWith(
       'https://example.com/avatar.png',
       'https://example.com/tts-audio.mp3',
@@ -286,6 +297,20 @@ describe('DigitalHumanVideoProcessor', () => {
       'https://example.com/avatar.png',
       'https://example.com/input-audio.mp3',
       '1080P',
+    );
+    expect(prisma.generation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-wan-photo-audio' },
+        data: expect.objectContaining({
+          status: 'COMPLETED',
+          output: expect.objectContaining({
+            videoUrl: 'https://example.com/wan-video.mp4',
+            audioUrl: 'https://example.com/input-audio.mp3',
+            externalJobType: 'wan-s2v',
+            taskId: 'wan-task-1',
+          }),
+        }),
+      }),
     );
   });
 

@@ -9,7 +9,11 @@ export interface VoiceProvider {
   readonly displayName: string;
   isAvailable(): Promise<boolean>;
   cloneVoice(audioUrl: string, name: string): Promise<{ voiceId: string; status: string }>;
-  synthesizeSpeech(text: string, voiceId: string): Promise<{ audioUrl: string }>;
+  synthesizeSpeech(
+    text: string,
+    voiceId: string,
+    options?: { speechRate?: number; pitchRate?: number; volume?: number },
+  ): Promise<{ audioUrl: string }>;
 }
 
 @Injectable()
@@ -110,7 +114,11 @@ export class QwenVoiceProvider implements VoiceProvider {
     'xiaoze', 'shanshan', 'chuangirl',
   ]);
 
-  async synthesizeSpeech(text: string, voiceId: string): Promise<{ audioUrl: string }> {
+  async synthesizeSpeech(
+    text: string,
+    voiceId: string,
+    options?: { speechRate?: number; pitchRate?: number; volume?: number },
+  ): Promise<{ audioUrl: string }> {
     let model: string;
     let wsVoiceId: string;
 
@@ -134,7 +142,8 @@ export class QwenVoiceProvider implements VoiceProvider {
 
     this.logger.log(`Synthesizing speech via WebSocket (model: ${model}, voice: ${wsVoiceId}): ${text.slice(0, 50)}...`);
 
-    const audioBuffer = await this.synthesizeViaWebSocket(model, text, wsVoiceId);
+    const normalizedOptions = this.normalizeSynthesisOptions(options);
+    const audioBuffer = await this.synthesizeViaWebSocket(model, text, wsVoiceId, normalizedOptions);
     this.logger.log(`TTS audio received: ${audioBuffer.length} bytes`);
 
     const audioUrl = await this.uploadAudioToOSS(audioBuffer);
@@ -147,7 +156,12 @@ export class QwenVoiceProvider implements VoiceProvider {
   // Docs: https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api
   // Sambert also uses WebSocket but with 'out' streaming mode.
   // Docs: https://help.aliyun.com/zh/model-studio/sambert-websocket-api
-  private synthesizeViaWebSocket(model: string, text: string, voiceId: string): Promise<Buffer> {
+  private synthesizeViaWebSocket(
+    model: string,
+    text: string,
+    voiceId: string,
+    options: { speechRate: number; pitchRate: number; volume: number },
+  ): Promise<Buffer> {
     const isSambert = model.startsWith('sambert-');
     return new Promise((resolve, reject) => {
       const apiKey = this.config.get<string>('DASHSCOPE_API_KEY') || '';
@@ -190,9 +204,9 @@ export class QwenVoiceProvider implements VoiceProvider {
                 text_type: 'PlainText',
                 format: 'mp3',
                 sample_rate: 16000,
-                volume: 50,
-                rate: 1,
-                pitch: 1,
+                volume: options.volume,
+                rate: options.speechRate,
+                pitch: options.pitchRate,
               },
               input: { text },
             },
@@ -211,9 +225,9 @@ export class QwenVoiceProvider implements VoiceProvider {
                 voice: voiceId,
                 format: 'mp3',
                 sample_rate: 22050,
-                volume: 50,
-                rate: 1,
-                pitch: 1,
+                volume: options.volume,
+                rate: options.speechRate,
+                pitch: options.pitchRate,
               },
               input: {},
             },
@@ -286,6 +300,26 @@ export class QwenVoiceProvider implements VoiceProvider {
         }
       });
     });
+  }
+
+  private normalizeSynthesisOptions(options?: {
+    speechRate?: number;
+    pitchRate?: number;
+    volume?: number;
+  }): { speechRate: number; pitchRate: number; volume: number } {
+    return {
+      speechRate: this.clampNumber(options?.speechRate, 1, 0.5, 2),
+      pitchRate: this.clampNumber(options?.pitchRate, 1, 0.5, 2),
+      volume: this.clampNumber(options?.volume, 50, 0, 100),
+    };
+  }
+
+  private clampNumber(value: number | undefined, fallback: number, min: number, max: number) {
+    if (!Number.isFinite(value)) {
+      return fallback;
+    }
+
+    return Math.max(min, Math.min(max, value!));
   }
 
   private async uploadAudioToOSS(audioBuffer: Buffer): Promise<string> {

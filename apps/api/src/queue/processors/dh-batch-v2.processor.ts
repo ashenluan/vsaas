@@ -102,7 +102,13 @@ export class DhBatchV2Processor extends WorkerHost {
 
       // ===== Phase 2: TTS for ALL segments =====
       this.sendProgress(userId, jobId, 'PROCESSING', 5, `开始语音合成 (${flatSegments.length} 个片段)`);
-      await this.runTtsPhase(flatSegments, input.voiceId, userId, jobId);
+      await this.runTtsPhase(
+        flatSegments,
+        input.voiceId,
+        userId,
+        jobId,
+        input.speechRate !== undefined ? { speechRate: input.speechRate } : undefined,
+      );
 
       const ttsSuccessful = flatSegments.filter((s) => s.status === 'tts_done');
       if (ttsSuccessful.length === 0) {
@@ -351,6 +357,7 @@ export class DhBatchV2Processor extends WorkerHost {
     voiceId: string,
     userId: string,
     jobId: string,
+    voiceOptions?: { speechRate?: number; pitchRate?: number; volume?: number },
   ): Promise<void> {
     const TTS_CONCURRENCY = 3;
     const voiceProvider = this.providers.voiceProvider;
@@ -362,7 +369,7 @@ export class DhBatchV2Processor extends WorkerHost {
         batch.map(async (seg) => {
           try {
             seg.status = 'tts';
-            const result = await voiceProvider.synthesizeSpeech(seg.text, voiceId);
+            const result = await voiceProvider.synthesizeSpeech(seg.text, voiceId, voiceOptions);
             seg.ttsAudioUrl = result.audioUrl;
             seg.ttsDuration = this.estimateTtsDuration(seg.text);
             seg.status = 'tts_done';

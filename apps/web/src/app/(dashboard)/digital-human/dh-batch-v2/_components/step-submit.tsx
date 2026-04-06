@@ -69,7 +69,7 @@ export function StepSubmit({
         payload.subtitleConfig = { open: false };
       }
 
-      if (store.output.speechRate !== 0) payload.speechRate = store.output.speechRate;
+      if (store.output.speechRate !== 1) payload.speechRate = store.output.speechRate;
       if (store.output.mediaVolume !== 1) payload.mediaVolume = store.output.mediaVolume;
       if (store.output.speechVolume !== 1) payload.speechVolume = store.output.speechVolume;
       if (store.output.bgMusicVolume !== 0.2) payload.bgMusicVolume = store.output.bgMusicVolume;
@@ -137,7 +137,7 @@ export function StepSubmit({
             <SummaryRow label="口播音量" value={`${Math.round(store.output.speechVolume * 100)}%`} />
             <SummaryRow label="素材音量" value={`${Math.round(store.output.mediaVolume * 100)}%`} />
             <SummaryRow label="背景音乐音量" value={`${Math.round(store.output.bgMusicVolume * 100)}%`} />
-            <SummaryRow label="语速" value={store.output.speechRate === 0 ? '正常' : `${store.output.speechRate > 0 ? '+' : ''}${store.output.speechRate}`} />
+            <SummaryRow label="语速" value={`${store.output.speechRate.toFixed(1)}x`} />
           </div>
           {store.bgMusic && (
             <div className="mt-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-2.5 text-xs text-green-700">

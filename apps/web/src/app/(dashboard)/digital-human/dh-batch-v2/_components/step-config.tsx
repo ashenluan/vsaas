@@ -181,8 +181,8 @@ export function StepConfig() {
               label="语速调整"
               value={output.speechRate}
               onChange={(v) => updateOutput({ speechRate: v })}
-              min={-3} max={3} step={0.5}
-              format={(v) => v === 0 ? '正常' : v > 0 ? `快 ${v}` : `慢 ${Math.abs(v)}`}
+              min={0.5} max={2} step={0.1}
+              format={(v) => `${v.toFixed(1)}x`}
             />
           </div>
         </Card>
