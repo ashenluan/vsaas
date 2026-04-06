@@ -155,3 +155,149 @@ describe('AliyunIMSProvider.getEditingProject', () => {
     );
   });
 });
+
+describe('AliyunIMSProvider.submitAvatarVideoJob', () => {
+  it('maps avatar job configs into SubmitAvatarVideoJob request payload', async () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+    const submitAvatarVideoJobWithOptions = vi.fn().mockResolvedValue({
+      body: {
+        jobId: 'avatar-job-1',
+        mediaId: 'media-1',
+      },
+    });
+
+    (provider as any).client = {
+      submitAvatarVideoJobWithOptions,
+    };
+
+    const inputConfig = { Text: '这是一个数字人口播视频测试文本。' };
+    const editingConfig = { AvatarId: 'sys-avatar-1', Voice: 'zhitian', SpeechRate: 200 };
+    const outputConfig = { MediaURL: 'https://bucket.oss-cn-shanghai.aliyuncs.com/avatar.mp4' };
+    const userData = { NotifyAddress: 'https://callback.example.com/ims' };
+
+    const result = await (provider as any).submitAvatarVideoJob(
+      inputConfig,
+      editingConfig,
+      outputConfig,
+      userData,
+    );
+
+    expect(submitAvatarVideoJobWithOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputConfig: JSON.stringify(inputConfig),
+        editingConfig: JSON.stringify(editingConfig),
+        outputConfig: JSON.stringify(outputConfig),
+        userData: JSON.stringify(userData),
+      }),
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      jobId: 'avatar-job-1',
+      mediaId: 'media-1',
+    });
+  });
+});
+
+describe('AliyunIMSProvider.getSmartHandleJob', () => {
+  it('normalizes GetSmartHandleJob response payload fields', async () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+    const getSmartHandleJobWithOptions = vi.fn().mockResolvedValue({
+      body: {
+        state: 'Failed',
+        errorCode: 'AvatarRenderFailed',
+        errorMessage: 'tts service timeout',
+        jobResult: {
+          mediaId: 'media-2',
+          mediaUrl: 'https://example.com/avatar-video.mp4',
+        },
+        output: JSON.stringify({
+          MaskURL: 'https://example.com/avatar-mask.mp4',
+          SubtitleClips: [{ Text: '你好', Start: 0, End: 1.5 }],
+        }),
+      },
+    });
+
+    (provider as any).client = {
+      getSmartHandleJobWithOptions,
+    };
+
+    const result = await (provider as any).getSmartHandleJob('avatar-job-2');
+
+    expect(getSmartHandleJobWithOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'avatar-job-2',
+      }),
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      status: 'Failed',
+      mediaId: 'media-2',
+      videoUrl: 'https://example.com/avatar-video.mp4',
+      maskUrl: 'https://example.com/avatar-mask.mp4',
+      subtitleClips: [{ Text: '你好', Start: 0, End: 1.5 }],
+      errorCode: 'AvatarRenderFailed',
+      errorMessage: 'tts service timeout',
+    });
+  });
+});
+
+describe('AliyunIMSProvider.normalizeSpeechRate', () => {
+  it('converts UI speech rates to IMS SpeechRate range', () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+
+    expect((provider as any).normalizeSpeechRate(1)).toBe(0);
+    expect((provider as any).normalizeSpeechRate(1.25)).toBe(200);
+    expect((provider as any).normalizeSpeechRate(0.8)).toBe(-125);
+    expect((provider as any).normalizeSpeechRate(2)).toBe(500);
+    expect((provider as any).normalizeSpeechRate(0.5)).toBe(-500);
+    expect((provider as any).normalizeSpeechRate(0)).toBe(0);
+  });
+});
+
+describe('AliyunIMSProvider.submitTimelineJob', () => {
+  it('includes a ClientToken in SubmitMediaProducingJob requests', async () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+    const submitMediaProducingJobWithOptions = vi.fn().mockResolvedValue({
+      body: {
+        jobId: 'timeline-job-1',
+        mediaId: 'media-3',
+      },
+    });
+
+    (provider as any).client = {
+      submitMediaProducingJobWithOptions,
+    };
+
+    const timeline = {
+      VideoTracks: [
+        {
+          VideoTrackClips: [{ MediaURL: 'https://example.com/clip.mp4' }],
+        },
+      ],
+    };
+
+    const result = await provider.submitTimelineJob(timeline, {
+      mediaUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/timeline.mp4',
+      width: 1080,
+      height: 1920,
+    });
+
+    expect(submitMediaProducingJobWithOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientToken: expect.any(String),
+        timeline: JSON.stringify(timeline),
+        outputMediaConfig: JSON.stringify({
+          MediaURL: 'https://bucket.oss-cn-shanghai.aliyuncs.com/timeline.mp4',
+          Width: 1080,
+          Height: 1920,
+        }),
+      }),
+      expect.anything(),
+    );
+    expect(submitMediaProducingJobWithOptions.mock.calls[0][0].clientToken.length).toBeGreaterThan(0);
+    expect(result).toEqual({
+      jobId: 'timeline-job-1',
+      mediaId: 'media-3',
+    });
+  });
+});

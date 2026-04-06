@@ -33,6 +33,7 @@ export interface VideoProvider {
 export class ProviderRegistry implements OnModuleInit {
   private imageProviders = new Map<string, ImageProvider>();
   private videoProviders = new Map<string, VideoProvider>();
+  public readonly imsProvider: AliyunIMSProvider;
 
   constructor(
     private readonly providerConfigs: ProviderConfigService,
@@ -48,7 +49,9 @@ export class ProviderRegistry implements OnModuleInit {
     public readonly digitalHumanProvider: WanS2VProvider,
     public readonly r2vProvider: WanR2VProvider,
     public readonly batchComposeProvider: AliyunIMSProvider,
-  ) {}
+  ) {
+    this.imsProvider = this.batchComposeProvider;
+  }
 
   async onModuleInit() {
     this.registerImageProvider(this.qwen);

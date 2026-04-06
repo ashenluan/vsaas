@@ -1198,6 +1198,117 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     return BUBBLE_STYLE_LIST;
   }
 
+  async submitAvatarVideoJob(
+    inputConfig: any,
+    editingConfig: any,
+    outputConfig: any,
+    userData?: any,
+  ): Promise<{ jobId: string; mediaId?: string }> {
+    this.logger.log('Submitting avatar video job');
+
+    const client = this.getClient();
+    const request = new $ICE20201109.SubmitAvatarVideoJobRequest({
+      inputConfig: JSON.stringify(inputConfig || {}),
+      editingConfig: JSON.stringify(editingConfig || {}),
+      outputConfig: JSON.stringify(outputConfig || {}),
+    });
+
+    if (userData !== undefined) {
+      request.userData = typeof userData === 'string' ? userData : JSON.stringify(userData);
+    }
+
+    const runtime = new $Util.RuntimeOptions({});
+
+    try {
+      const response = await client.submitAvatarVideoJobWithOptions(request, runtime);
+      return {
+        jobId: response.body?.jobId || '',
+        mediaId: response.body?.mediaId || undefined,
+      };
+    } catch (error: any) {
+      this.logger.error(`Submit avatar video job failed: ${error.message}`);
+      throw new Error(`IMS avatar job submit failed: ${error.message}`);
+    }
+  }
+
+  async getSmartHandleJob(jobId: string): Promise<{
+    status: string;
+    mediaId?: string;
+    videoUrl?: string;
+    maskUrl?: string;
+    subtitleClips?: any[];
+    errorCode?: string;
+    errorMessage?: string;
+  }> {
+    const client = this.getClient();
+    const request = new $ICE20201109.GetSmartHandleJobRequest({ jobId });
+    const runtime = new $Util.RuntimeOptions({});
+
+    try {
+      const response = await client.getSmartHandleJobWithOptions(request, runtime);
+      const body = response.body;
+      const output = (this.parseJsonObject(body?.output) || {}) as Record<string, any>;
+
+      const mediaId = body?.jobResult?.mediaId || output.MediaId || output.mediaId;
+      const videoUrl =
+        body?.jobResult?.mediaUrl ||
+        output.VideoURL ||
+        output.VideoUrl ||
+        output.MediaURL ||
+        output.MediaUrl ||
+        output.mediaUrl;
+      const maskUrl = output.MaskURL || output.MaskUrl || output.maskUrl;
+      const subtitleClips = output.SubtitleClips || output.subtitleClips;
+
+      return {
+        status: body?.state || 'UNKNOWN',
+        ...(mediaId && { mediaId }),
+        ...(videoUrl && { videoUrl }),
+        ...(maskUrl && { maskUrl }),
+        ...(subtitleClips && { subtitleClips }),
+        ...(body?.errorCode && { errorCode: body.errorCode }),
+        ...(body?.errorMessage && { errorMessage: body.errorMessage }),
+      };
+    } catch (error: any) {
+      this.logger.error(`Get smart handle job failed: ${error.message}`);
+      throw new Error(`查询数字人任务失败: ${error.message}`);
+    }
+  }
+
+  normalizeSpeechRate(rate: number): number {
+    if (!rate || rate === 1 || !Number.isFinite(rate) || rate <= 0) {
+      return 0;
+    }
+
+    const imsRate = rate > 1
+      ? Math.round((1 - 1 / rate) / 0.001)
+      : Math.round((1 - 1 / rate) / 0.002);
+
+    return Math.max(-500, Math.min(500, imsRate));
+  }
+
+  buildAvatarEditingConfig(config: {
+    avatarId: string;
+    voice?: string;
+    customizedVoice?: string;
+    speechRate?: number;
+    loopMotion?: boolean;
+    pitchRate?: number;
+    volume?: number;
+    backgroundUrl?: string;
+  }): any {
+    return {
+      AvatarId: config.avatarId,
+      ...(config.voice && { Voice: config.voice }),
+      ...(config.customizedVoice && { CustomizedVoice: config.customizedVoice }),
+      ...(config.speechRate !== undefined && { SpeechRate: this.normalizeSpeechRate(config.speechRate) }),
+      ...(config.loopMotion !== undefined && { LoopMotion: config.loopMotion }),
+      ...(config.pitchRate !== undefined && { PitchRate: config.pitchRate }),
+      ...(config.volume !== undefined && { Volume: config.volume }),
+      ...(config.backgroundUrl && { BackgroundUrl: config.backgroundUrl }),
+    };
+  }
+
   // ========== Timeline 单视频合成 (SubmitMediaProducingJob) ==========
 
   /**
@@ -1221,6 +1332,7 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     }
 
     const request = new $ICE20201109.SubmitMediaProducingJobRequest({
+      clientToken: `ims-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       timeline: JSON.stringify(timeline),
       outputMediaConfig: JSON.stringify(outputMediaConfig),
       outputMediaTarget: 'oss-object',
