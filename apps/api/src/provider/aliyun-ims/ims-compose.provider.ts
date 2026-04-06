@@ -744,6 +744,35 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     }
   }
 
+  private parseJsonLike<T = any>(value: unknown): T | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value) as T;
+      } catch {
+        return undefined;
+      }
+    }
+
+    if (typeof value === 'object') {
+      return value as T;
+    }
+
+    return undefined;
+  }
+
+  private pickFirstString(...candidates: unknown[]): string | undefined {
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return candidate;
+      }
+    }
+    return undefined;
+  }
+
   /**
    * 构建 InputConfig — 输入素材配置
    */
@@ -1247,18 +1276,59 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     try {
       const response = await client.getSmartHandleJobWithOptions(request, runtime);
       const body = response.body;
-      const output = (this.parseJsonObject(body?.output) || {}) as Record<string, any>;
+      const jobResult = (body?.jobResult || {}) as Record<string, any>;
+      const aiResult = (this.parseJsonLike(jobResult.aiResult ?? jobResult.AiResult) || {}) as Record<string, any>;
+      const output = (this.parseJsonLike(body?.output) || {}) as Record<string, any>;
+      const smartOutputConfig = (body?.smartJobInfo?.outputConfig || body?.smartJobInfo?.OutputConfig || {}) as Record<string, any>;
 
-      const mediaId = body?.jobResult?.mediaId || output.MediaId || output.mediaId;
-      const videoUrl =
-        body?.jobResult?.mediaUrl ||
-        output.VideoURL ||
-        output.VideoUrl ||
-        output.MediaURL ||
-        output.MediaUrl ||
-        output.mediaUrl;
-      const maskUrl = output.MaskURL || output.MaskUrl || output.maskUrl;
-      const subtitleClips = output.SubtitleClips || output.subtitleClips;
+      const mediaId = this.pickFirstString(
+        jobResult.mediaId,
+        jobResult.MediaId,
+        aiResult.mediaId,
+        aiResult.MediaId,
+        output.mediaId,
+        output.MediaId,
+      );
+      const videoUrl = this.pickFirstString(
+        jobResult.mediaUrl,
+        jobResult.MediaUrl,
+        jobResult.mediaURL,
+        jobResult.MediaURL,
+        aiResult.videoUrl,
+        aiResult.VideoUrl,
+        aiResult.videoURL,
+        aiResult.VideoURL,
+        aiResult.mediaUrl,
+        aiResult.MediaUrl,
+        aiResult.mediaURL,
+        aiResult.MediaURL,
+        output.videoUrl,
+        output.VideoUrl,
+        output.videoURL,
+        output.VideoURL,
+        output.mediaUrl,
+        output.MediaUrl,
+        output.mediaURL,
+        output.MediaURL,
+        smartOutputConfig.mediaUrl,
+        smartOutputConfig.MediaUrl,
+        smartOutputConfig.mediaURL,
+        smartOutputConfig.MediaURL,
+      );
+      const maskUrl = this.pickFirstString(
+        aiResult.maskUrl,
+        aiResult.MaskUrl,
+        aiResult.maskURL,
+        aiResult.MaskURL,
+        output.maskUrl,
+        output.MaskUrl,
+        output.maskURL,
+        output.MaskURL,
+      );
+      const rawSubtitleClips = aiResult.subtitleClips ?? aiResult.SubtitleClips ?? output.subtitleClips ?? output.SubtitleClips;
+      const subtitleClips = Array.isArray(rawSubtitleClips)
+        ? rawSubtitleClips
+        : this.parseJsonLike<any[]>(rawSubtitleClips);
 
       return {
         status: body?.state || 'UNKNOWN',
@@ -1291,17 +1361,28 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     avatarId: string;
     voice?: string;
     customizedVoice?: string;
-    speechRate?: number;
+    uiSpeechRate?: number;
+    imsSpeechRate?: number;
     loopMotion?: boolean;
     pitchRate?: number;
     volume?: number;
     backgroundUrl?: string;
   }): any {
+    if (config.uiSpeechRate !== undefined && config.imsSpeechRate !== undefined) {
+      throw new Error('Ambiguous speech rate input: use either uiSpeechRate or imsSpeechRate');
+    }
+
+    const speechRate = config.imsSpeechRate !== undefined
+      ? Math.max(-500, Math.min(500, Math.round(config.imsSpeechRate)))
+      : config.uiSpeechRate !== undefined
+        ? this.normalizeSpeechRate(config.uiSpeechRate)
+        : undefined;
+
     return {
       AvatarId: config.avatarId,
       ...(config.voice && { Voice: config.voice }),
       ...(config.customizedVoice && { CustomizedVoice: config.customizedVoice }),
-      ...(config.speechRate !== undefined && { SpeechRate: this.normalizeSpeechRate(config.speechRate) }),
+      ...(speechRate !== undefined && { SpeechRate: speechRate }),
       ...(config.loopMotion !== undefined && { LoopMotion: config.loopMotion }),
       ...(config.pitchRate !== undefined && { PitchRate: config.pitchRate }),
       ...(config.volume !== undefined && { Volume: config.volume }),

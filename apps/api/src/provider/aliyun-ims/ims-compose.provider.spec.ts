@@ -239,6 +239,97 @@ describe('AliyunIMSProvider.getSmartHandleJob', () => {
       errorMessage: 'tts service timeout',
     });
   });
+
+  it('parses media and subtitle timing from jobResult.aiResult, including nested JSON strings', async () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+    const getSmartHandleJobWithOptions = vi.fn().mockResolvedValue({
+      body: {
+        state: 'Finished',
+        jobResult: {
+          mediaId: 'media-ai-1',
+          aiResult: JSON.stringify({
+            MediaURL: 'https://example.com/ai-result-video.mp4',
+            MaskURL: 'https://example.com/ai-result-mask.mp4',
+            SubtitleClips: JSON.stringify([
+              { Text: '第一句', Start: 0, End: 1.2 },
+              { Text: '第二句', Start: 1.2, End: 2.4 },
+            ]),
+          }),
+        },
+      },
+    });
+
+    (provider as any).client = {
+      getSmartHandleJobWithOptions,
+    };
+
+    const result = await (provider as any).getSmartHandleJob('avatar-job-ai-result');
+
+    expect(result).toEqual({
+      status: 'Finished',
+      mediaId: 'media-ai-1',
+      videoUrl: 'https://example.com/ai-result-video.mp4',
+      maskUrl: 'https://example.com/ai-result-mask.mp4',
+      subtitleClips: [
+        { Text: '第一句', Start: 0, End: 1.2 },
+        { Text: '第二句', Start: 1.2, End: 2.4 },
+      ],
+    });
+  });
+
+  it('falls back to smartJobInfo.outputConfig.mediaUrl when video url is absent elsewhere', async () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+    const getSmartHandleJobWithOptions = vi.fn().mockResolvedValue({
+      body: {
+        state: 'Finished',
+        jobResult: {
+          mediaId: 'media-fallback-1',
+        },
+        smartJobInfo: {
+          outputConfig: {
+            mediaUrl: 'https://example.com/fallback-output-config.mp4',
+          },
+        },
+      },
+    });
+
+    (provider as any).client = {
+      getSmartHandleJobWithOptions,
+    };
+
+    const result = await (provider as any).getSmartHandleJob('avatar-job-output-config');
+
+    expect(result).toEqual({
+      status: 'Finished',
+      mediaId: 'media-fallback-1',
+      videoUrl: 'https://example.com/fallback-output-config.mp4',
+    });
+  });
+
+  it('tolerates malformed JSON payload fragments and returns recoverable fields', async () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+    const getSmartHandleJobWithOptions = vi.fn().mockResolvedValue({
+      body: {
+        state: 'Executing',
+        jobResult: {
+          mediaId: 'media-malformed-1',
+          aiResult: '{"MediaURL":"https://example.com/broken.mp4","SubtitleClips":"not-closed"',
+        },
+        output: '{"MaskURL":"https://example.com/broken-mask.mp4"',
+      },
+    });
+
+    (provider as any).client = {
+      getSmartHandleJobWithOptions,
+    };
+
+    const result = await (provider as any).getSmartHandleJob('avatar-job-malformed');
+
+    expect(result).toEqual({
+      status: 'Executing',
+      mediaId: 'media-malformed-1',
+    });
+  });
 });
 
 describe('AliyunIMSProvider.normalizeSpeechRate', () => {
@@ -251,6 +342,50 @@ describe('AliyunIMSProvider.normalizeSpeechRate', () => {
     expect((provider as any).normalizeSpeechRate(2)).toBe(500);
     expect((provider as any).normalizeSpeechRate(0.5)).toBe(-500);
     expect((provider as any).normalizeSpeechRate(0)).toBe(0);
+  });
+});
+
+describe('AliyunIMSProvider.buildAvatarEditingConfig', () => {
+  it('uses explicit UI speech-rate multiplier input for conversion', () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+
+    const config = (provider as any).buildAvatarEditingConfig({
+      avatarId: 'sys-avatar-1',
+      voice: 'zhitian',
+      uiSpeechRate: 1.25,
+    });
+
+    expect(config).toEqual({
+      AvatarId: 'sys-avatar-1',
+      Voice: 'zhitian',
+      SpeechRate: 200,
+    });
+  });
+
+  it('accepts explicit IMS SpeechRate integers directly without double conversion', () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+
+    const config = (provider as any).buildAvatarEditingConfig({
+      avatarId: 'sys-avatar-2',
+      imsSpeechRate: 320,
+    });
+
+    expect(config).toEqual({
+      AvatarId: 'sys-avatar-2',
+      SpeechRate: 320,
+    });
+  });
+
+  it('rejects ambiguous speech-rate input when both units are provided', () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+
+    expect(() =>
+      (provider as any).buildAvatarEditingConfig({
+        avatarId: 'sys-avatar-3',
+        uiSpeechRate: 1.1,
+        imsSpeechRate: 120,
+      }),
+    ).toThrow(/speech rate/i);
   });
 });
 
