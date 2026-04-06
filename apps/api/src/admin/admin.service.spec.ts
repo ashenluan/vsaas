@@ -3,6 +3,10 @@ import { AdminService } from './admin.service';
 
 function createMockPrisma() {
   return {
+    systemConfig: {
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+    },
     user: {
       count: vi.fn(),
       aggregate: vi.fn(),
@@ -217,6 +221,42 @@ describe('AdminService', () => {
         isActive: false,
       }),
     );
+  });
+
+  it('returns system capabilities with mixcut global speech disabled by default', async () => {
+    prisma.systemConfig.findUnique.mockResolvedValue(null);
+
+    await expect(service.getSystemCapabilities()).resolves.toEqual({
+      mixcutGlobalSpeechEnabled: false,
+    });
+  });
+
+  it('upserts mixcut global speech capability changes into system config', async () => {
+    prisma.systemConfig.upsert.mockResolvedValue({
+      id: 'cfg-mixcut-global-speech',
+      key: 'mixcut.globalSpeechEnabled',
+      value: true,
+    });
+    prisma.systemConfig.findUnique.mockResolvedValue({
+      id: 'cfg-mixcut-global-speech',
+      key: 'mixcut.globalSpeechEnabled',
+      value: true,
+    });
+
+    await expect(
+      service.updateSystemCapabilities({ mixcutGlobalSpeechEnabled: true }),
+    ).resolves.toEqual({
+      mixcutGlobalSpeechEnabled: true,
+    });
+
+    expect(prisma.systemConfig.upsert).toHaveBeenCalledWith({
+      where: { key: 'mixcut.globalSpeechEnabled' },
+      update: { value: true },
+      create: {
+        key: 'mixcut.globalSpeechEnabled',
+        value: true,
+      },
+    });
   });
 
   describe('updateOrderStatus', () => {

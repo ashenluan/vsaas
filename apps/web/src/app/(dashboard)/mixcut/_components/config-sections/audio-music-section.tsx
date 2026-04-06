@@ -6,6 +6,7 @@ import { Type, Mic2, Volume2, Music } from 'lucide-react';
 import { VoiceSelectSection } from '../voice-select-section';
 import { ConfigSection } from './shared';
 import { getPrimaryMixcutPoolItem, parseMixcutPoolText, stringifyMixcutPool } from '../../_lib/mixcut-random-pools';
+import { canSwitchToGlobalSpeech } from '../../_lib/mixcut-capabilities';
 
 const PRESET_MUSIC = [
   { label: '轻快活力', url: 'https://ice-public-media.china.aliyuncs.com/music/happy_upbeat.mp3' },
@@ -21,7 +22,11 @@ const SPEECH_LANGUAGE_OPTIONS = [
   { value: 'en', label: '英文 (en)' },
 ] as const;
 
-export function SubtitleVoiceSection() {
+export function SubtitleVoiceSection({
+  mixcutGlobalSpeechEnabled = false,
+}: {
+  mixcutGlobalSpeechEnabled?: boolean;
+}) {
   const { project, globalConfig, updateGlobalConfig, openDrawer, setSpeechMode, setSpeechTexts } = useMixcutStore(
     useShallow((s) => ({
       project: s.project,
@@ -36,18 +41,33 @@ export function SubtitleVoiceSection() {
   const speechMode = project.speechMode;
   const speechTextValue = stringifyMixcutPool(project.speechTexts);
   const speechLanguage = globalConfig.speechLanguage || 'zh';
+  const allowGlobalSpeechSelection = canSwitchToGlobalSpeech(
+    { capabilities: { mixcutGlobalSpeechEnabled } },
+    speechMode,
+  );
 
   return (
     <>
       <ConfigSection icon={Type} label="全局字幕配音&标题" badge="AI">
         <div className="space-y-2">
+          {!mixcutGlobalSpeechEnabled ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] leading-4 text-amber-800">
+              当前环境已关闭 Mixcut 全局口播提交。新任务请优先使用分组口播；如需恢复，请在后台“系统设置”中重新开启。
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-1.5">
             <button
-              onClick={() => setSpeechMode('global')}
+              onClick={() => {
+                if (!allowGlobalSpeechSelection) return;
+                setSpeechMode('global');
+              }}
+              disabled={!allowGlobalSpeechSelection}
               className={`rounded-md border px-2 py-1.5 text-[11px] transition-colors ${
                 speechMode === 'global'
                   ? 'border-primary bg-primary/10 text-primary font-medium'
-                  : 'border-input hover:bg-accent'
+                  : !allowGlobalSpeechSelection
+                    ? 'cursor-not-allowed border-input bg-muted text-muted-foreground'
+                    : 'border-input hover:bg-accent'
               }`}
             >
               全局口播

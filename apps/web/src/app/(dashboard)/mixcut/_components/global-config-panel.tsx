@@ -11,6 +11,9 @@ import {
 } from './config-sections/visual-section';
 
 export function GlobalConfigPanel({ options }: { options: any }) {
+  const mixcutGlobalSpeechEnabled =
+    options?.capabilities?.mixcutGlobalSpeechEnabled ?? false;
+
   return (
     <div className="space-y-3">
       <div className="mb-2">
@@ -18,7 +21,7 @@ export function GlobalConfigPanel({ options }: { options: any }) {
         <p className="text-[10px] text-muted-foreground">为整体效果进行统一配置</p>
       </div>
 
-      <SubtitleVoiceSection />
+      <SubtitleVoiceSection mixcutGlobalSpeechEnabled={mixcutGlobalSpeechEnabled} />
       <AudioSettingsSection />
       <BgMusicSection />
       <TransitionSection options={options} />

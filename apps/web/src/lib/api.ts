@@ -365,6 +365,9 @@ export const mixcutApi = {
     bubbleStyles: string[];
     fonts: { id: string; label: string; chinese: boolean }[];
     imsVoices: Record<string, { id: string; label: string; desc: string }[]>;
+    capabilities: {
+      mixcutGlobalSpeechEnabled: boolean;
+    };
   }>('/mixcut/options'),
 };
 

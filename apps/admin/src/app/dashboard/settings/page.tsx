@@ -14,6 +14,10 @@ type ProviderRuntimeRow = {
   config?: Record<string, unknown>;
 };
 
+type SystemCapabilities = {
+  mixcutGlobalSpeechEnabled: boolean;
+};
+
 const runbookItems = [
   {
     title: '模型密钥',
@@ -39,16 +43,26 @@ const runbookItems = [
 
 export default function AdminSettingsPage() {
   const [providers, setProviders] = useState<ProviderRuntimeRow[]>([]);
+  const [systemCapabilities, setSystemCapabilities] = useState<SystemCapabilities>({
+    mixcutGlobalSpeechEnabled: false,
+  });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [capabilitySaving, setCapabilitySaving] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    adminApi.listProviders()
-      .then((data: any) => {
+    Promise.all([
+      adminApi.listProviders(),
+      adminApi.getSystemCapabilities(),
+    ])
+      .then(([providerData, capabilityData]: any) => {
         if (!active) return;
-        setProviders(Array.isArray(data) ? data : []);
+        setProviders(Array.isArray(providerData) ? providerData : []);
+        setSystemCapabilities({
+          mixcutGlobalSpeechEnabled: capabilityData?.mixcutGlobalSpeechEnabled ?? false,
+        });
       })
       .catch((error: Error) => {
         if (!active) return;
@@ -63,6 +77,25 @@ export default function AdminSettingsPage() {
       active = false;
     };
   }, []);
+
+  const handleToggleMixcutGlobalSpeech = async () => {
+    setCapabilitySaving(true);
+    setLoadError(null);
+
+    try {
+      const next = await adminApi.updateSystemCapabilities({
+        mixcutGlobalSpeechEnabled: !systemCapabilities.mixcutGlobalSpeechEnabled,
+      });
+
+      setSystemCapabilities({
+        mixcutGlobalSpeechEnabled: next?.mixcutGlobalSpeechEnabled ?? false,
+      });
+    } catch (error: any) {
+      setLoadError(error?.message || '更新系统能力开关失败');
+    } finally {
+      setCapabilitySaving(false);
+    }
+  };
 
   const providerSummary = useMemo(() => {
     const total = providers.length;
@@ -114,6 +147,47 @@ export default function AdminSettingsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-semibold text-amber-900">系统能力开关</h2>
+                  <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium text-amber-800">
+                    Mixcut 全局口播
+                  </span>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                      systemCapabilities.mixcutGlobalSpeechEnabled
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {systemCapabilities.mixcutGlobalSpeechEnabled ? '当前已开启' : '当前已关闭'}
+                  </span>
+                </div>
+                <p className="text-sm leading-6 text-amber-900/90">
+                  基于线上实测结果，阿里云脚本化自动成片当前的顶层 <code>SpeechTextArray</code> 会卡在 <code>Init</code>，
+                  因此该能力默认关闭。关闭后，用户端只能稳定使用分组口播。
+                </p>
+              </div>
+              <button
+                onClick={handleToggleMixcutGlobalSpeech}
+                disabled={loading || capabilitySaving}
+                className={`inline-flex h-10 items-center rounded-lg px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  systemCapabilities.mixcutGlobalSpeechEnabled
+                    ? 'bg-slate-900 text-white hover:bg-slate-700'
+                    : 'bg-amber-600 text-white hover:bg-amber-500'
+                }`}
+              >
+                {capabilitySaving
+                  ? '保存中...'
+                  : systemCapabilities.mixcutGlobalSpeechEnabled
+                    ? '关闭全局口播'
+                    : '开启全局口播'}
+              </button>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Provider 运行状态</h2>

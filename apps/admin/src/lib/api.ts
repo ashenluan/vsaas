@@ -104,4 +104,11 @@ export const adminApi = {
   listProviders: () => adminFetch('/admin/config/providers'),
   updateProvider: (id: string, data: { isEnabled?: boolean; config?: any }) =>
     adminFetch(`/admin/config/providers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getSystemCapabilities: () =>
+    adminFetch<{ mixcutGlobalSpeechEnabled: boolean }>('/admin/config/system'),
+  updateSystemCapabilities: (data: { mixcutGlobalSpeechEnabled?: boolean }) =>
+    adminFetch<{ mixcutGlobalSpeechEnabled: boolean }>('/admin/config/system', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 };

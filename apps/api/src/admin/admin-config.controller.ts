@@ -4,6 +4,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { AdminService } from './admin.service';
 import { UpdateProviderConfigDto } from './dto/update-provider-config.dto';
+import { UpdateSystemCapabilitiesDto } from './dto/update-system-capabilities.dto';
 import { AdminAuditInterceptor } from '../common/interceptors/admin-audit.interceptor';
 
 @Controller('admin/config')
@@ -18,11 +19,21 @@ export class AdminConfigController {
     return this.adminService.listProviderConfigs();
   }
 
+  @Get('system')
+  async getSystemCapabilities() {
+    return this.adminService.getSystemCapabilities();
+  }
+
   @Patch('providers/:id')
   async updateProvider(
     @Param('id') id: string,
     @Body() body: UpdateProviderConfigDto,
   ) {
     return this.adminService.updateProviderConfig(id, body);
+  }
+
+  @Patch('system')
+  async updateSystemCapabilities(@Body() body: UpdateSystemCapabilitiesDto) {
+    return this.adminService.updateSystemCapabilities(body);
   }
 }

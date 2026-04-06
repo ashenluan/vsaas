@@ -22,6 +22,12 @@ import {
   FONT_LIST,
   IMS_VOICE_LIST,
 } from '../provider/aliyun-ims/ims-compose.provider';
+import {
+  DEFAULT_SYSTEM_CAPABILITIES,
+  MIXCUT_GLOBAL_SPEECH_ENABLED_KEY,
+  readBooleanSystemConfigValue,
+  type SystemCapabilities,
+} from '../common/system-config';
 
 const MIXCUT_SUPPORTED_SPEECH_LANGUAGES = new Set(['zh', 'en']);
 const MIXCUT_SSML_ALLOWED_TAGS = new Set([
@@ -273,7 +279,9 @@ export class DigitalHumanService {
 
   // ==================== IMS Options (used by mixcut) ====================
 
-  getComposeOptions() {
+  async getComposeOptions() {
+    const capabilities = await this.getMixcutCapabilities();
+
     return {
       transitions: TRANSITION_LIST,
       advancedTransitions: ADVANCED_TRANSITION_LIST,
@@ -284,6 +292,7 @@ export class DigitalHumanService {
       bubbleStyles: BUBBLE_STYLE_LIST.map(s => s.id),
       fonts: FONT_LIST,
       imsVoices: IMS_VOICE_LIST,
+      capabilities,
     };
   }
 
@@ -432,6 +441,7 @@ export class DigitalHumanService {
         throw new BadRequestException(`镜头组 "${group.name}" 没有素材`);
       }
     }
+    await this.ensureMixcutGlobalSpeechAllowed(data);
     this.validateMixcutRequest(data, resolvedSpeechMode);
 
     // Validate voice if speechTexts provided
@@ -711,6 +721,39 @@ export class DigitalHumanService {
     if (hasGlobalSpeech) return 'global';
     if (hasGroupSpeech || hasGroupDuration) return 'group';
     return 'global';
+  }
+
+  private async getMixcutCapabilities(): Promise<SystemCapabilities> {
+    const config = await this.prisma.systemConfig.findUnique({
+      where: { key: MIXCUT_GLOBAL_SPEECH_ENABLED_KEY },
+    });
+
+    return {
+      mixcutGlobalSpeechEnabled: readBooleanSystemConfigValue(
+        config?.value,
+        DEFAULT_SYSTEM_CAPABILITIES.mixcutGlobalSpeechEnabled,
+      ),
+    };
+  }
+
+  private async ensureMixcutGlobalSpeechAllowed(data: {
+    speechMode?: 'global' | 'group';
+    speechTexts?: string[];
+  }) {
+    const isGlobalSpeechRequested =
+      data.speechMode === 'global' || !!data.speechTexts?.length;
+
+    if (!isGlobalSpeechRequested) {
+      return;
+    }
+
+    const capabilities = await this.getMixcutCapabilities();
+
+    if (!capabilities.mixcutGlobalSpeechEnabled) {
+      throw new BadRequestException(
+        '当前系统已关闭 Mixcut 全局口播，请改用分组口播或联系管理员开启',
+      );
+    }
   }
 
   private validateMixcutRequest(

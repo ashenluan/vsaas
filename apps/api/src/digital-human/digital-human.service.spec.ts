@@ -4,6 +4,9 @@ import { DigitalHumanService } from './digital-human.service';
 
 function createMockPrisma() {
   return {
+    systemConfig: {
+      findUnique: vi.fn(),
+    },
     voice: {
       findFirst: vi.fn(),
     },
@@ -82,6 +85,14 @@ function createGenerationRecord() {
   };
 }
 
+function enableMixcutGlobalSpeech(prisma: ReturnType<typeof createMockPrisma>) {
+  prisma.systemConfig.findUnique.mockResolvedValue({
+    id: 'cfg-mixcut-global-speech',
+    key: 'mixcut.globalSpeechEnabled',
+    value: true,
+  });
+}
+
 function createBasePayload() {
   return {
     name: '测试混剪',
@@ -111,6 +122,7 @@ describe('DigitalHumanService.createMixcutJob', () => {
     storage = createStorageMock();
     queue = createQueueMock();
 
+    prisma.systemConfig.findUnique.mockResolvedValue(null);
     prisma.generation.create.mockResolvedValue(createGenerationRecord());
     queue.add.mockResolvedValue(undefined);
 
@@ -180,6 +192,8 @@ describe('DigitalHumanService.createMixcutJob', () => {
   });
 
   it('rejects fixedDuration when global speech text is present', async () => {
+    enableMixcutGlobalSpeech(prisma);
+
     await expect(
       service.createMixcutJob('user-1', {
         ...createBasePayload(),
@@ -194,6 +208,8 @@ describe('DigitalHumanService.createMixcutJob', () => {
   });
 
   it('rejects explicit group mode when top-level global speech texts are also provided', async () => {
+    enableMixcutGlobalSpeech(prisma);
+
     await expect(
       service.createMixcutJob('user-1', {
         ...createBasePayload(),
@@ -251,6 +267,25 @@ describe('DigitalHumanService.createMixcutJob', () => {
     expect(queue.add).not.toHaveBeenCalled();
   });
 
+  it('rejects global speech submissions when the system capability is disabled', async () => {
+    prisma.systemConfig.findUnique.mockResolvedValue({
+      id: 'cfg-mixcut-global-speech',
+      key: 'mixcut.globalSpeechEnabled',
+      value: false,
+    });
+
+    await expect(
+      service.createMixcutJob('user-1', {
+        ...createBasePayload(),
+        speechMode: 'global',
+        speechTexts: ['完整口播文案'],
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(userService.deductCredits).not.toHaveBeenCalled();
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+
   it('passes trim metadata with the owning shot group name into IMS editing config', async () => {
     await service.createMixcutJob('user-1', {
       ...createBasePayload(),
@@ -284,6 +319,8 @@ describe('DigitalHumanService.createMixcutJob', () => {
   });
 
   it('passes speech language through to IMS editing config when selected', async () => {
+    enableMixcutGlobalSpeech(prisma);
+
     await service.createMixcutJob('user-1', {
       ...createBasePayload(),
       speechMode: 'global',
@@ -300,7 +337,37 @@ describe('DigitalHumanService.createMixcutJob', () => {
     );
   });
 
+  it('returns mixcut capabilities with global speech disabled by default in compose options', async () => {
+    prisma.systemConfig.findUnique.mockResolvedValue(null);
+
+    await expect(service.getComposeOptions()).resolves.toEqual(
+      expect.objectContaining({
+        capabilities: {
+          mixcutGlobalSpeechEnabled: false,
+        },
+      }),
+    );
+  });
+
+  it('returns mixcut capabilities with global speech enabled when the system switch is on', async () => {
+    prisma.systemConfig.findUnique.mockResolvedValue({
+      id: 'cfg-mixcut-global-speech',
+      key: 'mixcut.globalSpeechEnabled',
+      value: true,
+    });
+
+    await expect(service.getComposeOptions()).resolves.toEqual(
+      expect.objectContaining({
+        capabilities: {
+          mixcutGlobalSpeechEnabled: true,
+        },
+      }),
+    );
+  });
+
   it('rejects unsupported SSML tags before enqueueing the mixcut job', async () => {
+    enableMixcutGlobalSpeech(prisma);
+
     await expect(
       service.createMixcutJob('user-1', {
         ...createBasePayload(),
@@ -314,6 +381,8 @@ describe('DigitalHumanService.createMixcutJob', () => {
   });
 
   it('rejects advanced SSML tags for CosyVoice voices', async () => {
+    enableMixcutGlobalSpeech(prisma);
+
     await expect(
       service.createMixcutJob('user-1', {
         ...createBasePayload(),

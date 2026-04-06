@@ -3,6 +3,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProviderConfigService } from '../provider/provider-config.service';
 import { ProviderRegistry } from '../provider/provider.registry';
 import { PricingService } from '../pricing/pricing.service';
+import {
+  DEFAULT_SYSTEM_CAPABILITIES,
+  MIXCUT_GLOBAL_SPEECH_ENABLED_KEY,
+  readBooleanSystemConfigValue,
+  type SystemCapabilities,
+} from '../common/system-config';
 
 @Injectable()
 export class AdminService {
@@ -21,6 +27,17 @@ export class AdminService {
       return Number(amount.toString());
     }
     return Number.NaN;
+  }
+
+  private async getBooleanSystemConfig(
+    key: string,
+    fallback = false,
+  ): Promise<boolean> {
+    const config = await this.prisma.systemConfig.findUnique({
+      where: { key },
+    });
+
+    return readBooleanSystemConfigValue(config?.value, fallback);
   }
 
   private serializeOrder<T extends { amount: unknown }>(order: T): T & { amount: number } {
@@ -359,6 +376,40 @@ export class AdminService {
       count: r._count.id,
       totalCredits: r._sum.creditsUsed ?? 0,
     }));
+  }
+
+  async getSystemCapabilities(): Promise<SystemCapabilities> {
+    return {
+      mixcutGlobalSpeechEnabled: await this.getBooleanSystemConfig(
+        MIXCUT_GLOBAL_SPEECH_ENABLED_KEY,
+        DEFAULT_SYSTEM_CAPABILITIES.mixcutGlobalSpeechEnabled,
+      ),
+    };
+  }
+
+  async updateSystemCapabilities(data: {
+    mixcutGlobalSpeechEnabled?: boolean;
+  }): Promise<SystemCapabilities> {
+    const writes: Promise<unknown>[] = [];
+
+    if (data.mixcutGlobalSpeechEnabled !== undefined) {
+      writes.push(
+        this.prisma.systemConfig.upsert({
+          where: { key: MIXCUT_GLOBAL_SPEECH_ENABLED_KEY },
+          update: { value: data.mixcutGlobalSpeechEnabled },
+          create: {
+            key: MIXCUT_GLOBAL_SPEECH_ENABLED_KEY,
+            value: data.mixcutGlobalSpeechEnabled,
+          },
+        }),
+      );
+    }
+
+    if (writes.length > 0) {
+      await Promise.all(writes);
+    }
+
+    return this.getSystemCapabilities();
   }
 
   async getCreditConsumptionStats(days: number = 30) {
