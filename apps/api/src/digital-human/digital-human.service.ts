@@ -49,6 +49,9 @@ const MIXCUT_COSYVOICE_VOICE_IDS = new Set(
   [...(IMS_VOICE_LIST['CosyVoice v1'] || []), ...(IMS_VOICE_LIST['CosyVoice v2'] || [])]
     .map((voice) => voice.id),
 );
+const IMS_BUILTIN_VOICE_IDS = new Set(
+  Object.values(IMS_VOICE_LIST).flatMap((voices) => voices.map((voice) => voice.id)),
+);
 
 @Injectable()
 export class DigitalHumanService {
@@ -997,7 +1000,7 @@ export class DigitalHumanService {
   async createVideo(
     userId: string,
     data: {
-      engine: 'ims' | 'wan-photo' | 'wan-motion';
+      engine?: 'ims' | 'wan-photo' | 'wan-motion';
       avatarId?: string;
       avatarSource?: 'builtin' | 'custom';
       builtinAvatarId?: string;
@@ -1018,21 +1021,26 @@ export class DigitalHumanService {
       animateMode?: 'wan-std' | 'wan-pro';
     },
   ) {
+    const resolvedEngine = data.engine ?? this.inferLegacyCreateVideoEngine(data.driveMode);
     const supportedDriveModes: Record<'ims' | 'wan-photo' | 'wan-motion', Array<'text' | 'audio' | 'video'>> = {
       ims: ['text', 'audio'],
       'wan-photo': ['text', 'audio'],
       'wan-motion': ['video'],
     };
+    const resolvedVoiceType =
+      resolvedEngine === 'ims' && data.driveMode === 'text'
+        ? (data.voiceType ?? (this.isImsBuiltinVoiceId(data.voiceId) ? 'builtin' : 'cloned'))
+        : data.voiceType;
 
-    if (!supportedDriveModes[data.engine].includes(data.driveMode)) {
+    if (!supportedDriveModes[resolvedEngine].includes(data.driveMode)) {
       throw new BadRequestException('当前引擎不支持所选驱动模式');
     }
 
-    if (data.engine === 'ims' && !data.builtinAvatarId) {
+    if (resolvedEngine === 'ims' && !data.builtinAvatarId) {
       throw new BadRequestException('请选择内置数字人');
     }
 
-    if ((data.engine === 'wan-photo' || data.engine === 'wan-motion') && !data.avatarId) {
+    if ((resolvedEngine === 'wan-photo' || resolvedEngine === 'wan-motion') && !data.avatarId) {
       throw new BadRequestException('请选择数字人形象');
     }
 
@@ -1049,28 +1057,8 @@ export class DigitalHumanService {
       throw new BadRequestException('请上传参考视频');
     }
 
-    let avatar: any;
-    if (data.engine !== 'ims') {
-      avatar = await this.prisma.material.findFirst({
-        where: {
-          id: data.avatarId!,
-          OR: [{ userId }, { isPublic: true }],
-        },
-      });
-      if (!avatar) throw new BadRequestException('数字人形象不存在');
-
-      if (data.engine === 'wan-photo') {
-        const faceDetect = (avatar.metadata as any)?.faceDetect;
-        if (!faceDetect?.valid) {
-          throw new BadRequestException(
-            '该形象未通过人脸检测，请先进行人脸检测',
-          );
-        }
-      }
-    }
-
     if (data.driveMode === 'text') {
-      const skipVoiceOwnershipCheck = data.engine === 'ims' && data.voiceType === 'builtin';
+      const skipVoiceOwnershipCheck = resolvedEngine === 'ims' && resolvedVoiceType === 'builtin';
       if (!skipVoiceOwnershipCheck) {
         const voice = await this.prisma.voice.findFirst({
           where: {
@@ -1083,7 +1071,29 @@ export class DigitalHumanService {
       }
     }
 
-    const resolvedAvatarSource = data.avatarSource || (data.engine === 'ims' ? 'builtin' : 'custom');
+    if (resolvedEngine === 'ims') {
+      throw new BadRequestException('IMS 单视频能力正在接入，请先使用万相模式创建视频');
+    }
+
+    let avatar: any;
+    avatar = await this.prisma.material.findFirst({
+      where: {
+        id: data.avatarId!,
+        OR: [{ userId }, { isPublic: true }],
+      },
+    });
+    if (!avatar) throw new BadRequestException('数字人形象不存在');
+
+    if (resolvedEngine === 'wan-photo') {
+      const faceDetect = (avatar.metadata as any)?.faceDetect;
+      if (!faceDetect?.valid) {
+        throw new BadRequestException(
+          '该形象未通过人脸检测，请先进行人脸检测',
+        );
+      }
+    }
+
+    const resolvedAvatarSource = data.avatarSource || (resolvedEngine === 'ims' ? 'builtin' : 'custom');
 
     // Deduct credits
     const cost = CREDIT_COSTS.DH_VIDEO;
@@ -1101,23 +1111,23 @@ export class DigitalHumanService {
           userId,
           type: 'DIGITAL_HUMAN_VIDEO',
           status: 'PENDING',
-          provider: data.engine === 'ims' ? 'aliyun-ims' : 'aliyun-wan',
+          provider: resolvedEngine === 'ims' ? 'aliyun-ims' : 'aliyun-wan',
           creditsUsed: cost,
           input: {
             name: data.name,
-            engine: data.engine,
+            engine: resolvedEngine,
             avatarSource: resolvedAvatarSource,
-            ...(data.voiceType && { voiceType: data.voiceType }),
+            ...(resolvedVoiceType && { voiceType: resolvedVoiceType }),
             ...(data.outputFormat && { outputFormat: data.outputFormat }),
             ...(data.avatarId && { avatarId: data.avatarId }),
             ...(avatar?.url && { avatarUrl: avatar.url }),
             ...(data.builtinAvatarId && { builtinAvatarId: data.builtinAvatarId }),
             driveMode: data.driveMode,
             resolution: data.resolution,
-            ...(data.engine === 'ims' && data.loopMotion !== undefined && { loopMotion: data.loopMotion }),
-            ...(data.engine === 'ims' && data.pitchRate !== undefined && { pitchRate: data.pitchRate }),
-            ...(data.engine === 'ims' && data.volume !== undefined && { volume: data.volume }),
-            ...(data.engine === 'ims' && data.backgroundUrl && { backgroundUrl: data.backgroundUrl }),
+            ...(resolvedEngine === 'ims' && data.loopMotion !== undefined && { loopMotion: data.loopMotion }),
+            ...(resolvedEngine === 'ims' && data.pitchRate !== undefined && { pitchRate: data.pitchRate }),
+            ...(resolvedEngine === 'ims' && data.volume !== undefined && { volume: data.volume }),
+            ...(resolvedEngine === 'ims' && data.backgroundUrl && { backgroundUrl: data.backgroundUrl }),
             ...(data.driveMode === 'text'
               ? { voiceId: data.voiceId, text: data.text, speechRate: data.speechRate || 1.0 }
               : data.driveMode === 'video'
@@ -1151,6 +1161,16 @@ export class DigitalHumanService {
 
     this.logger.log(`Digital human video job ${job.id} queued for user ${userId}`);
     return job;
+  }
+
+  private inferLegacyCreateVideoEngine(
+    driveMode: 'text' | 'audio' | 'video',
+  ): 'wan-photo' | 'wan-motion' {
+    return driveMode === 'video' ? 'wan-motion' : 'wan-photo';
+  }
+
+  private isImsBuiltinVoiceId(voiceId?: string) {
+    return !!voiceId && IMS_BUILTIN_VOICE_IDS.has(voiceId);
   }
 
   async getVideo(userId: string, id: string) {

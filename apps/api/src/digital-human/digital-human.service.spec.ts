@@ -444,29 +444,21 @@ describe('DigitalHumanService.createVideo engine contract', () => {
   });
 
   it('allows ims text mode with builtin voice without Prisma voice lookup', async () => {
-    await service.createVideo('user-1', {
-      engine: 'ims',
-      driveMode: 'text',
-      resolution: '1080x1920',
-      builtinAvatarId: 'ims-avatar-1',
-      voiceId: 'ims-voice-1',
-      voiceType: 'builtin',
-      text: 'hello world',
-    } as any);
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'ims',
+        driveMode: 'text',
+        resolution: '1080x1920',
+        builtinAvatarId: 'ims-avatar-1',
+        voiceId: 'ims-voice-1',
+        voiceType: 'builtin',
+        text: 'hello world',
+      } as any),
+    ).rejects.toThrow(BadRequestException);
 
     expect(prisma.voice.findFirst).not.toHaveBeenCalled();
-    expect(prisma.generation.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          input: expect.objectContaining({
-            engine: 'ims',
-            builtinAvatarId: 'ims-avatar-1',
-            driveMode: 'text',
-            voiceType: 'builtin',
-          }),
-        }),
-      }),
-    );
+    expect(userService.deductCredits).not.toHaveBeenCalled();
+    expect(prisma.generation.create).not.toHaveBeenCalled();
   });
 
   it('allows ims text mode with cloned voice after ownership check', async () => {
@@ -478,18 +470,21 @@ describe('DigitalHumanService.createVideo engine contract', () => {
       isPublic: false,
     });
 
-    await service.createVideo('user-1', {
-      engine: 'ims',
-      driveMode: 'text',
-      resolution: '1080x1920',
-      builtinAvatarId: 'ims-avatar-1',
-      voiceId: 'voice-cloned',
-      voiceType: 'cloned',
-      text: 'hello world',
-    } as any);
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'ims',
+        driveMode: 'text',
+        resolution: '1080x1920',
+        builtinAvatarId: 'ims-avatar-1',
+        voiceId: 'voice-cloned',
+        voiceType: 'cloned',
+        text: 'hello world',
+      } as any),
+    ).rejects.toThrow(BadRequestException);
 
     expect(prisma.voice.findFirst).toHaveBeenCalledTimes(1);
-    expect(prisma.generation.create).toHaveBeenCalled();
+    expect(userService.deductCredits).not.toHaveBeenCalled();
+    expect(prisma.generation.create).not.toHaveBeenCalled();
   });
 
   it('requires avatarId for wan-photo text mode', async () => {
@@ -542,5 +537,118 @@ describe('DigitalHumanService.createVideo engine contract', () => {
 
     expect(prisma.material.findFirst).not.toHaveBeenCalled();
     expect(prisma.generation.create).not.toHaveBeenCalled();
+  });
+
+  it('defaults ims voiceType to builtin when omitted and voiceId is IMS builtin', async () => {
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'ims',
+        driveMode: 'text',
+        resolution: '1080x1920',
+        builtinAvatarId: 'ims-avatar-1',
+        voiceId: 'ava',
+        text: 'hello world',
+      } as any),
+    ).rejects.toThrow('IMS 单视频能力正在接入');
+
+    expect(prisma.voice.findFirst).not.toHaveBeenCalled();
+    expect(userService.deductCredits).not.toHaveBeenCalled();
+    expect(prisma.generation.create).not.toHaveBeenCalled();
+  });
+
+  it('defaults ims voiceType to cloned when omitted and voiceId is not IMS builtin', async () => {
+    prisma.voice.findFirst.mockResolvedValue({
+      id: 'voice-db-1',
+      voiceId: 'custom-cloned-voice',
+      status: 'READY',
+      userId: 'user-1',
+      isPublic: false,
+    });
+
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'ims',
+        driveMode: 'text',
+        resolution: '1080x1920',
+        builtinAvatarId: 'ims-avatar-1',
+        voiceId: 'custom-cloned-voice',
+        text: 'hello world',
+      } as any),
+    ).rejects.toThrow('IMS 单视频能力正在接入');
+
+    expect(prisma.voice.findFirst).toHaveBeenCalledTimes(1);
+    expect(userService.deductCredits).not.toHaveBeenCalled();
+    expect(prisma.generation.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps legacy text payloads without engine compatible by inferring wan-photo', async () => {
+    prisma.material.findFirst.mockResolvedValue({
+      id: 'avatar-1',
+      url: 'https://example.com/avatar.png',
+      metadata: { faceDetect: { valid: true } },
+      isPublic: false,
+      userId: 'user-1',
+    });
+    prisma.voice.findFirst.mockResolvedValue({
+      id: 'voice-db-1',
+      voiceId: 'voice-cloned',
+      status: 'READY',
+      userId: 'user-1',
+      isPublic: false,
+    });
+
+    await service.createVideo('user-1', {
+      avatarId: 'avatar-1',
+      driveMode: 'text',
+      resolution: '1080x1920',
+      voiceId: 'voice-cloned',
+      text: 'legacy payload',
+    } as any);
+
+    expect(prisma.generation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'aliyun-wan',
+          input: expect.objectContaining({
+            engine: 'wan-photo',
+            avatarSource: 'custom',
+            avatarId: 'avatar-1',
+            driveMode: 'text',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('keeps legacy video payloads without engine compatible by inferring wan-motion', async () => {
+    prisma.material.findFirst.mockResolvedValue({
+      id: 'avatar-1',
+      url: 'https://example.com/avatar.png',
+      metadata: { faceDetect: { valid: true } },
+      isPublic: false,
+      userId: 'user-1',
+    });
+
+    await service.createVideo('user-1', {
+      avatarId: 'avatar-1',
+      driveMode: 'video',
+      resolution: '1080x1920',
+      videoUrl: 'https://example.com/ref.mp4',
+    } as any);
+
+    expect(prisma.generation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'aliyun-wan',
+          input: expect.objectContaining({
+            engine: 'wan-motion',
+            avatarSource: 'custom',
+            avatarId: 'avatar-1',
+            driveMode: 'video',
+            videoUrl: 'https://example.com/ref.mp4',
+          }),
+        }),
+      }),
+    );
   });
 });

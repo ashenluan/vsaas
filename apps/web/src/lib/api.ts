@@ -258,7 +258,7 @@ export const scriptApi = {
 // Digital Human - Single Video Creation
 export const digitalHumanApi = {
   createVideo: (data: {
-    engine: 'ims' | 'wan-photo' | 'wan-motion';
+    engine?: 'ims' | 'wan-photo' | 'wan-motion';
     avatarId?: string;
     avatarSource?: 'builtin' | 'custom';
     builtinAvatarId?: string;

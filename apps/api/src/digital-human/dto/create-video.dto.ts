@@ -36,10 +36,11 @@ export enum OutputFormat {
 }
 
 export class CreateVideoDto {
+  @IsOptional()
   @IsEnum(DigitalHumanEngine)
-  engine!: DigitalHumanEngine;
+  engine?: DigitalHumanEngine;
 
-  @ValidateIf((o) => o.engine === DigitalHumanEngine.WAN_PHOTO || o.engine === DigitalHumanEngine.WAN_MOTION)
+  @ValidateIf((o) => o.engine !== DigitalHumanEngine.IMS)
   @IsString()
   @IsNotEmpty({ message: '请选择数字人形象' })
   avatarId?: string;
