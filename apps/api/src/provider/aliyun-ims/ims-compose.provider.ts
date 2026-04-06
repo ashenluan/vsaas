@@ -854,6 +854,7 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     // 媒体音量
     mediaVolume?: number;
     mediaMetaData?: {
+      groupName?: string;
       mediaUrl: string;
       trimIn?: number;
       trimOut?: number;
@@ -962,9 +963,10 @@ export class AliyunIMSProvider implements BatchComposeProvider {
     };
   }): any {
     const mediaMetaDataArray = (config.mediaMetaData || [])
-      .filter((item) => item.mediaUrl && item.trimIn !== undefined && item.trimOut !== undefined)
+      .filter((item) => item.groupName && item.mediaUrl && item.trimIn !== undefined && item.trimOut !== undefined)
       .map((item) => ({
-        MediaURL: item.mediaUrl,
+        GroupName: item.groupName,
+        Media: item.mediaUrl,
         TimeRangeList: [
           {
             In: item.trimIn,

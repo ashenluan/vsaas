@@ -251,6 +251,38 @@ describe('DigitalHumanService.createMixcutJob', () => {
     expect(queue.add).not.toHaveBeenCalled();
   });
 
+  it('passes trim metadata with the owning shot group name into IMS editing config', async () => {
+    await service.createMixcutJob('user-1', {
+      ...createBasePayload(),
+      shotGroups: [
+        {
+          name: '片段 1',
+          materialUrls: ['https://bucket.oss-cn-shanghai.aliyuncs.com/input.mp4'],
+          materials: [
+            {
+              url: 'https://bucket.oss-cn-shanghai.aliyuncs.com/input.mp4',
+              trimIn: 0.5,
+              trimOut: 3.5,
+            },
+          ],
+        },
+      ],
+    } as any);
+
+    expect(providers.batchComposeProvider.buildEditingConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mediaMetaData: [
+          expect.objectContaining({
+            groupName: '片段 1',
+            mediaUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/input.mp4',
+            trimIn: 0.5,
+            trimOut: 3.5,
+          }),
+        ],
+      }),
+    );
+  });
+
   it('passes speech language through to IMS editing config when selected', async () => {
     await service.createMixcutJob('user-1', {
       ...createBasePayload(),

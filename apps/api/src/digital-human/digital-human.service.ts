@@ -534,6 +534,7 @@ export class DigitalHumanService {
         this.resolveMixcutShotMaterials(group)
           .filter((material) => material.trimIn !== undefined || material.trimOut !== undefined)
           .map((material) => ({
+            groupName: group.name,
             mediaUrl: material.url,
             trimIn: material.trimIn,
             trimOut: material.trimOut,

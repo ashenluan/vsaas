@@ -24,12 +24,13 @@ describe('AliyunIMSProvider.buildInputConfig', () => {
 });
 
 describe('AliyunIMSProvider.buildEditingConfig', () => {
-  it('serializes precise trim ranges into MediaMetaDataArray TimeRangeList', () => {
+  it('serializes precise trim ranges into script-mode MediaMetaDataArray entries', () => {
     const provider = new AliyunIMSProvider(new ConfigService());
 
     const config = provider.buildEditingConfig({
       mediaMetaData: [
         {
+          groupName: '片段 1',
           mediaUrl: 'https://example.com/video.mp4',
           trimIn: 1.5,
           trimOut: 6.25,
@@ -41,7 +42,8 @@ describe('AliyunIMSProvider.buildEditingConfig', () => {
       expect.objectContaining({
         MediaMetaDataArray: [
           {
-            MediaURL: 'https://example.com/video.mp4',
+            GroupName: '片段 1',
+            Media: 'https://example.com/video.mp4',
             TimeRangeList: [
               {
                 In: 1.5,
