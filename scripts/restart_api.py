@@ -1,8 +1,10 @@
-import paramiko, sys, io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-ssh = paramiko.SSHClient()
-ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('47.103.96.48', username='root', password='Shibushia@521')
+try:
+    from scripts._prod_ssh import configure_utf8_stdout, create_ssh_client
+except ModuleNotFoundError:
+    from _prod_ssh import configure_utf8_stdout, create_ssh_client
+
+configure_utf8_stdout()
+ssh = create_ssh_client()
 
 def run(cmd):
     _, o, e = ssh.exec_command(cmd, timeout=120)

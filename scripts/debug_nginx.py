@@ -1,8 +1,9 @@
-import paramiko
+try:
+    from scripts._prod_ssh import create_ssh_client
+except ModuleNotFoundError:
+    from _prod_ssh import create_ssh_client
 
-ssh = paramiko.SSHClient()
-ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('47.103.96.48', username='root', password='Shibushia@521')
+ssh = create_ssh_client()
 
 # Check nginx error log
 print('=== Nginx error log (recent) ===')

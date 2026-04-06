@@ -1,8 +1,10 @@
-import paramiko, sys
+import sys
 
-HOST = '47.103.96.48'
-USER = 'root'
-PASS = 'Shibushia@521'
+try:
+    from scripts._prod_ssh import create_ssh_client
+except ModuleNotFoundError:
+    from _prod_ssh import create_ssh_client
+
 USER_ID = 'cmncbcsdo0001s23im6krudbx'
 
 def run(ssh, cmd, label=''):
@@ -19,9 +21,7 @@ def run(ssh, cmd, label=''):
     sys.stdout.flush()
     return stdout.channel.recv_exit_status()
 
-ssh = paramiko.SSHClient()
-ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect(HOST, username=USER, password=PASS)
+ssh = create_ssh_client()
 print('Connected')
 
 # Check current balance

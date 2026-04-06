@@ -20,23 +20,30 @@
 
 Use this path when GitHub Actions is blocked but production still needs to be updated.
 
-1. SSH to the production host with credentials provided out-of-band.
-2. Deploy from `/www/wwwroot/vsaas`.
-3. Pull latest `master`:
+1. Export the SSH credentials into the current shell only. Do not commit them.
+   - PowerShell:
+     - `$env:VSAAS_PROD_HOST = '47.103.96.48'`
+     - `$env:VSAAS_PROD_USER = 'root'`
+     - `$env:VSAAS_PROD_PASSWORD = Read-Host -Prompt 'Production SSH password'`
+   - Bash:
+     - `export VSAAS_PROD_HOST=47.103.96.48`
+     - `export VSAAS_PROD_USER=root`
+     - `export VSAAS_PROD_PASSWORD='...'`
+2. Run the scripted fallback from the repo root.
+   - Full rollout: `python scripts/deploy_prod.py`
+   - API-only fix: `python scripts/deploy_prod.py --services api`
+   - API + Web rollout: `python scripts/deploy_prod.py --services api,web`
+   - Preview the remote bash without executing: `python scripts/deploy_prod.py --print-only`
+3. The script will:
+   - deploy from `/www/wwwroot/vsaas`
    - `git pull origin master`
-4. Rebuild and restart services:
-   - Full rollout: `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api web admin`
-   - API-only fix: `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api`
-   - Keep `ADMIN_URL=http://localhost:3002` in `.env.production`. The admin container is intentionally bound to `127.0.0.1:3002`, so using the public `a.newcn.cc:3002` host breaks admin login/CORS.
-5. Run database migrations from inside the API container:
-   - `docker compose --env-file .env.production -f docker-compose.prod.yml exec -T api sh -lc 'cd /app/packages/database && ./node_modules/.bin/prisma migrate deploy --schema src/schema.prisma'`
-6. Clear Nginx cache and reload:
-   - `rm -rf /www/server/nginx/proxy_cache_dir/vsaas* 2>/dev/null || true`
-   - `/www/server/nginx/sbin/nginx -s reload 2>/dev/null || true`
-7. Run health checks:
-   - `curl -sf http://127.0.0.1:4000/api/health`
-   - `curl -I https://a.newcn.cc/`
-   - `curl https://a.newcn.cc/api/health`
+   - rebuild the selected services with `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build ...`
+   - run `prisma migrate deploy` inside the API container
+   - clear Nginx cache and reload
+   - run internal and public health checks
+   - print `docker compose ps`
+4. Keep `ADMIN_URL=http://localhost:3002` in `.env.production`. The admin container is intentionally bound to `127.0.0.1:3002`, so using the public `a.newcn.cc:3002` host breaks admin login/CORS.
+5. All Python ops scripts under `scripts/*.py` now read the same `VSAAS_PROD_*` environment variables instead of hard-coded credentials.
 
 ## Current Production Endpoints
 
@@ -49,6 +56,7 @@ Use this path when GitHub Actions is blocked but production still needs to be up
 ## Known Caveats
 
 - The current GitHub Actions account may be blocked by billing issues. If Actions jobs fail before any steps run, use the manual fallback.
+- Current GitHub Actions failure mode: `The job was not started because your account is locked due to a billing issue.`
 - The API runtime container exposes Prisma under `/app/packages/database/node_modules/.bin/prisma`, not `/app/node_modules/.bin/prisma`.
 - Do not commit production passwords or secret values into the repository. Keep credentials in environment variables or out-of-band notes only.
 - `CORS_ORIGIN` may include the public site origin, but `ADMIN_URL` must continue pointing at the internal admin origin (`http://localhost:3002`) so backend origin allowlists include both web and admin.

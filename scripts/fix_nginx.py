@@ -1,9 +1,11 @@
-import paramiko
 import sys
 
-ssh = paramiko.SSHClient()
-ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('47.103.96.48', username='root', password='Shibushia@521')
+try:
+    from scripts._prod_ssh import create_ssh_client
+except ModuleNotFoundError:
+    from _prod_ssh import create_ssh_client
+
+ssh = create_ssh_client()
 
 # Clear ALL nginx caches aggressively
 print('=== Clearing nginx caches ===')
