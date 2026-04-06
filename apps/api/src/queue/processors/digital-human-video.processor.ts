@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProviderRegistry } from '../../provider/provider.registry';
+import { StorageService } from '../../storage/storage.service';
 import { UserService } from '../../user/user.service';
 import { WsGateway } from '../../ws/ws.gateway';
 import { pollTaskStatus } from './poll-helper';
@@ -18,6 +19,7 @@ interface DHVideoJobData {
     driveMode: 'text' | 'audio' | 'video';
     resolution: string;
     voiceId?: string;
+    outputFormat?: 'mp4' | 'webm';
     text?: string;
     speechRate?: number;
     loopMotion?: boolean;
@@ -38,6 +40,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly providers: ProviderRegistry,
     private readonly userService: UserService,
+    private readonly storage: StorageService,
     private readonly ws: WsGateway,
   ) {
     super();
@@ -65,10 +68,10 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
         if (!input.builtinAvatarId) throw new Error('缺少内置数字人');
 
         const imsProvider = this.providers.imsProvider;
-        const { width, height } = this.parseResolutionWH(input.resolution);
         const avatarInputConfig = input.driveMode === 'text'
           ? { Text: input.text }
-          : { MediaURL: input.audioUrl };
+          : { InputFile: input.audioUrl };
+        const avatarOutputConfig = this.buildImsAvatarOutputConfig(jobId, input.outputFormat);
 
         const avatarEditingConfig = imsProvider.buildAvatarEditingConfig({
           avatarId: input.builtinAvatarId,
@@ -85,10 +88,6 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
           ...(input.volume !== undefined && { volume: input.volume }),
           ...(input.backgroundUrl && { backgroundUrl: input.backgroundUrl }),
         });
-        const avatarOutputConfig = {
-          Width: width,
-          Height: height,
-        };
 
         this.ws.sendToUser(userId, 'digital-human:progress', {
           jobId,
@@ -189,6 +188,11 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
           genResult.taskId,
           userId,
           jobId,
+          {
+            progressMessage: '动作迁移视频生成中...',
+            errorPrefix: '动作迁移视频生成失败',
+            timeoutMessage: '动作迁移视频生成超时（15分钟）',
+          },
         );
 
         await this.prisma.generation.update({
@@ -362,6 +366,11 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
     taskId: string,
     userId: string,
     jobId: string,
+    options?: {
+      progressMessage?: string;
+      errorPrefix?: string;
+      timeoutMessage?: string;
+    },
   ): Promise<{ videoUrl: string }> {
     return pollTaskStatus(taskId, {
       interval: 5000,
@@ -372,7 +381,8 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
         if (!s.videoUrl) throw new Error('视频生成完成但未返回视频地址');
         return { videoUrl: s.videoUrl };
       },
-      extractError: (s) => `S2V 视频生成失败: ${s.errorMessage || s.message || '未知错误'}`,
+      extractError: (s) =>
+        `${options?.errorPrefix || 'S2V 视频生成失败'}: ${s.errorMessage || s.message || '未知错误'}`,
       ws: this.ws,
       userId,
       jobId,
@@ -380,10 +390,10 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
       progressInterval: 6,
       buildProgressMessage: (i, max) => ({
         progress: Math.min(30 + Math.round((i / max) * 65), 95),
-        message: `数字人视频生成中... (${Math.round((i * 5) / 60)}分钟)`,
+        message: `${options?.progressMessage || '数字人视频生成中...'} (${Math.round((i * 5) / 60)}分钟)`,
       }),
       logger: this.logger,
-      timeoutMessage: '数字人视频生成超时（15分钟）',
+      timeoutMessage: options?.timeoutMessage || '数字人视频生成超时（15分钟）',
     });
   }
 
@@ -437,16 +447,14 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
     });
   }
 
-  private parseResolutionWH(resolution: string): { width: number; height: number } {
-    const parts = resolution.split('x').map(Number);
-    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      return { width: parts[0], height: parts[1] };
-    }
+  private buildImsAvatarOutputConfig(
+    generationId: string,
+    outputFormat: DHVideoJobData['input']['outputFormat'] = 'mp4',
+  ) {
+    const outputKey = this.storage.generateKey('digital-human/ims', `${generationId}.${outputFormat}`);
 
-    if (resolution.toUpperCase().includes('1080')) {
-      return { width: 1080, height: 1920 };
-    }
-
-    return { width: 720, height: 1280 };
+    return {
+      MediaURL: this.storage.getOssUrl(outputKey),
+    };
   }
 }

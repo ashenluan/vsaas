@@ -63,6 +63,14 @@ function createUserServiceMock() {
   };
 }
 
+function createStorageMock() {
+  return {
+    generateKey: vi.fn((prefix: string, filename: string) => `${prefix}/${filename}`),
+    getOssUrl: vi.fn((key: string) => `https://bucket.oss-cn-shanghai.aliyuncs.com/${key}`),
+    ensureSignedUrl: vi.fn((url: string) => url),
+  };
+}
+
 function createWsMock() {
   return {
     sendToUser: vi.fn(),
@@ -73,6 +81,7 @@ describe('DigitalHumanVideoProcessor', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
   let providers: ReturnType<typeof createProvidersMock>;
   let userService: ReturnType<typeof createUserServiceMock>;
+  let storage: ReturnType<typeof createStorageMock>;
   let ws: ReturnType<typeof createWsMock>;
   let processor: DigitalHumanVideoProcessor;
 
@@ -80,6 +89,7 @@ describe('DigitalHumanVideoProcessor', () => {
     prisma = createPrismaMock();
     providers = createProvidersMock();
     userService = createUserServiceMock();
+    storage = createStorageMock();
     ws = createWsMock();
 
     pollTaskStatusMock.mockReset();
@@ -102,6 +112,7 @@ describe('DigitalHumanVideoProcessor', () => {
       prisma as any,
       providers as any,
       userService as any,
+      storage as any,
       ws as any,
     );
   });
@@ -116,6 +127,7 @@ describe('DigitalHumanVideoProcessor', () => {
           builtinAvatarId: 'ims-avatar-1',
           driveMode: 'text',
           resolution: '1080x1920',
+          outputFormat: 'webm',
           voiceId: 'ava',
           voiceType: 'builtin',
           text: 'IMS 文本驱动',
@@ -133,7 +145,18 @@ describe('DigitalHumanVideoProcessor', () => {
         loopMotion: true,
       }),
     );
-    expect(providers.imsProvider.submitAvatarVideoJob).toHaveBeenCalledTimes(1);
+    expect(providers.imsProvider.submitAvatarVideoJob).toHaveBeenCalledWith(
+      { Text: 'IMS 文本驱动' },
+      expect.objectContaining({
+        avatarId: 'ims-avatar-1',
+        voice: 'ava',
+        uiSpeechRate: 1.25,
+        loopMotion: true,
+      }),
+      {
+        MediaURL: 'https://bucket.oss-cn-shanghai.aliyuncs.com/digital-human/ims/job-ims-text.webm',
+      },
+    );
     expect(providers.voiceProvider.synthesizeSpeech).not.toHaveBeenCalled();
     expect(ws.sendToUser).toHaveBeenCalledWith(
       'user-1',
@@ -158,6 +181,7 @@ describe('DigitalHumanVideoProcessor', () => {
           builtinAvatarId: 'ims-avatar-2',
           driveMode: 'audio',
           resolution: '1080x1920',
+          outputFormat: 'mp4',
           audioUrl: 'https://example.com/source.wav',
         },
       },
@@ -165,7 +189,15 @@ describe('DigitalHumanVideoProcessor', () => {
 
     expect(providers.voiceProvider.synthesizeSpeech).not.toHaveBeenCalled();
     expect(providers.digitalHumanProvider.generateVideo).not.toHaveBeenCalled();
-    expect(providers.imsProvider.submitAvatarVideoJob).toHaveBeenCalledTimes(1);
+    expect(providers.imsProvider.submitAvatarVideoJob).toHaveBeenCalledWith(
+      { InputFile: 'https://example.com/source.wav' },
+      expect.objectContaining({
+        avatarId: 'ims-avatar-2',
+      }),
+      {
+        MediaURL: 'https://bucket.oss-cn-shanghai.aliyuncs.com/digital-human/ims/job-ims-audio.mp4',
+      },
+    );
   });
 
   it('routes wan-photo text jobs through TTS before Wan S2V', async () => {
@@ -208,6 +240,29 @@ describe('DigitalHumanVideoProcessor', () => {
     );
   });
 
+  it('routes wan-photo audio jobs directly to Wan S2V without TTS', async () => {
+    await processor.process({
+      data: {
+        jobId: 'job-wan-photo-audio',
+        userId: 'user-1',
+        input: {
+          engine: 'wan-photo',
+          avatarUrl: 'https://example.com/avatar.png',
+          driveMode: 'audio',
+          resolution: '1080x1920',
+          audioUrl: 'https://example.com/input-audio.mp3',
+        },
+      },
+    } as any);
+
+    expect(providers.voiceProvider.synthesizeSpeech).not.toHaveBeenCalled();
+    expect(providers.digitalHumanProvider.generateVideo).toHaveBeenCalledWith(
+      'https://example.com/avatar.png',
+      'https://example.com/input-audio.mp3',
+      '1080P',
+    );
+  });
+
   it('routes wan-motion video jobs through animate-video generation', async () => {
     await processor.process({
       data: {
@@ -231,6 +286,25 @@ describe('DigitalHumanVideoProcessor', () => {
     );
     expect(providers.digitalHumanProvider.generateVideo).not.toHaveBeenCalled();
     expect(providers.voiceProvider.synthesizeSpeech).not.toHaveBeenCalled();
+
+    const [, pollOptions] = pollTaskStatusMock.mock.calls[0];
+    expect(pollOptions.buildProgressMessage(6, 180).message).toContain('动作迁移视频生成中');
+    expect(pollOptions.extractError({ errorMessage: 'boom' })).toContain('动作迁移视频生成失败');
+    expect(pollOptions.timeoutMessage).toBe('动作迁移视频生成超时（15分钟）');
+
+    expect(prisma.generation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-wan-motion-video' },
+        data: expect.objectContaining({
+          status: 'COMPLETED',
+          output: expect.objectContaining({
+            videoUrl: 'https://example.com/wan-video.mp4',
+            externalJobType: 'wan-animate',
+            taskId: 'wan-animate-task-1',
+          }),
+        }),
+      }),
+    );
   });
 
   it('persists IMS render output fields into generation.output', async () => {

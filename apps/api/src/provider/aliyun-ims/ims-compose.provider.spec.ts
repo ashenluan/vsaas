@@ -277,6 +277,41 @@ describe('AliyunIMSProvider.getSmartHandleJob', () => {
     });
   });
 
+  it('reads outputVideoUrl from the documented avatar aiResult payload', async () => {
+    const provider = new AliyunIMSProvider(new ConfigService());
+    const getSmartHandleJobWithOptions = vi.fn().mockResolvedValue({
+      body: {
+        state: 'Finished',
+        jobResult: {
+          MediaId: 'media-doc-1',
+          AiResult: JSON.stringify({
+            outputVideoUrl: 'https://example.com/documented-output.mp4',
+            subtitleClips: JSON.stringify([
+              { from: 0, to: 1.2, content: '第一句' },
+              { from: 1.2, to: 2.5, content: '第二句' },
+            ]),
+          }),
+        },
+      },
+    });
+
+    (provider as any).client = {
+      getSmartHandleJobWithOptions,
+    };
+
+    const result = await (provider as any).getSmartHandleJob('avatar-job-doc-shape');
+
+    expect(result).toEqual({
+      status: 'Finished',
+      mediaId: 'media-doc-1',
+      videoUrl: 'https://example.com/documented-output.mp4',
+      subtitleClips: [
+        { from: 0, to: 1.2, content: '第一句' },
+        { from: 1.2, to: 2.5, content: '第二句' },
+      ],
+    });
+  });
+
   it('falls back to smartJobInfo.outputConfig.mediaUrl when video url is absent elsewhere', async () => {
     const provider = new AliyunIMSProvider(new ConfigService());
     const getSmartHandleJobWithOptions = vi.fn().mockResolvedValue({
