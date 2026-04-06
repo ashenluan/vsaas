@@ -257,13 +257,14 @@ export const scriptApi = {
 
 // Digital Human - Single Video Creation
 export type DigitalHumanCreateVideoPayload = {
-  engine?: 'ims' | 'wan-photo' | 'wan-motion';
+  engine?: 'ims' | 'wan-photo' | 'wan-motion' | 'videoretalk';
   avatarId?: string;
   avatarSource?: 'builtin' | 'custom';
   builtinAvatarId?: string;
   driveMode: 'text' | 'audio' | 'video';
   resolution: string;
   name?: string;
+  preset?: 'speed' | 'balanced' | 'quality';
   voiceId?: string;
   voiceType?: 'builtin' | 'cloned';
   outputFormat?: 'mp4' | 'webm';
@@ -276,6 +277,9 @@ export type DigitalHumanCreateVideoPayload = {
   audioUrl?: string;
   videoUrl?: string;
   animateMode?: 'wan-std' | 'wan-pro';
+  refImageUrl?: string;
+  videoExtension?: boolean;
+  queryFaceThreshold?: number;
 };
 
 export const digitalHumanApi = {

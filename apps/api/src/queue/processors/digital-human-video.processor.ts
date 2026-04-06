@@ -6,15 +6,29 @@ import { ProviderRegistry } from '../../provider/provider.registry';
 import { StorageService } from '../../storage/storage.service';
 import { UserService } from '../../user/user.service';
 import { WsGateway } from '../../ws/ws.gateway';
+import { normalizeDigitalHumanVideoResult } from './digital-human-result-normalizer';
 import { pollTaskStatus } from './poll-helper';
 
 interface DHVideoJobData {
   jobId: string;
   userId: string;
   input: {
-    engine?: 'ims' | 'wan-photo' | 'wan-motion';
+    engine?: 'ims' | 'wan-photo' | 'wan-motion' | 'videoretalk';
     avatarUrl?: string;
     builtinAvatarId?: string;
+    preset?: 'speed' | 'balanced' | 'quality';
+    resolvedModel?: string;
+    resolvedConstraints?: {
+      requestedResolution: string;
+      outputResolution: string;
+      outputResolutionMode: 'requested' | 'source' | 'profile';
+      providerResolution?: string;
+      sourceVideoRequired?: boolean;
+    };
+    preflight?: {
+      status: 'passed' | 'warning';
+      warnings?: string[];
+    };
     voiceType?: 'builtin' | 'cloned';
     driveMode: 'text' | 'audio' | 'video';
     resolution: string;
@@ -28,11 +42,14 @@ interface DHVideoJobData {
     backgroundUrl?: string;
     audioUrl?: string;
     videoUrl?: string;
+    refImageUrl?: string;
+    videoExtension?: boolean;
+    queryFaceThreshold?: number;
     animateMode?: 'wan-std' | 'wan-pro';
   };
 }
 
-@Processor('digital-human-video', { concurrency: 3 })
+@Processor('digital-human-video', { concurrency: 1 })
 export class DigitalHumanVideoProcessor extends WorkerHost {
   private readonly logger = new Logger(DigitalHumanVideoProcessor.name);
 
@@ -163,6 +180,92 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
         };
       }
 
+      if (resolvedEngine === 'videoretalk') {
+        if (!input.videoUrl) throw new Error('缺少源视频');
+        if (!input.audioUrl) throw new Error('缺少音频文件');
+
+        const retalkProvider = this.providers.videoRetalkProvider;
+
+        this.ws.sendToUser(userId, 'digital-human:progress', {
+          jobId,
+          status: 'PROCESSING',
+          progress: 20,
+          message: '正在提交 VideoRetalk 重驱动任务...',
+        });
+
+        const submitResult = await retalkProvider.submitVideoRetalkJob({
+          videoUrl: input.videoUrl,
+          audioUrl: input.audioUrl,
+          refImageUrl: input.refImageUrl,
+          videoExtension: input.videoExtension,
+          queryFaceThreshold: input.queryFaceThreshold,
+        });
+
+        if (!submitResult.taskId) {
+          throw new Error('VideoRetalk 提交失败：未返回任务ID');
+        }
+
+        await this.prisma.generation.update({
+          where: { id: jobId },
+          data: { externalId: submitResult.taskId },
+        });
+
+        const videoResult = await this.pollVideoCompletion(
+          retalkProvider,
+          submitResult.taskId,
+          userId,
+          jobId,
+          {
+            progressMessage: 'VideoRetalk 重驱动中...',
+            errorPrefix: 'VideoRetalk 重驱动失败',
+            timeoutMessage: 'VideoRetalk 重驱动超时（25分钟）',
+            maxAttempts: 300,
+            extractResult: (status) => ({
+              videoUrl: status.videoUrl,
+              requestId: status.requestId,
+              usage: status.usage,
+            }),
+          },
+        );
+
+        const normalized = await normalizeDigitalHumanVideoResult(this.storage, {
+          engine: 'videoretalk',
+          providerTempUrl: videoResult.videoUrl,
+          providerTaskId: submitResult.taskId,
+          providerRequestId: videoResult.requestId || submitResult.requestId,
+          externalJobType: 'videoretalk',
+          resolvedModel: input.resolvedModel || 'videoretalk',
+          audioUrl: input.audioUrl,
+          usage: videoResult.usage,
+          warnings: input.preflight?.warnings,
+          fallbackSuggested: this.buildFallbackSuggestion(input),
+        });
+
+        await this.prisma.generation.update({
+          where: { id: jobId },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+            output: normalized.output,
+          },
+        });
+
+        this.ws.sendToUser(userId, 'digital-human:progress', {
+          jobId,
+          status: 'COMPLETED',
+          progress: 100,
+          message: 'VideoRetalk 重驱动完成',
+          output: { videoUrl: normalized.videoUrl },
+        });
+
+        this.logger.log(`VideoRetalk video completed: ${jobId}`);
+        return {
+          videoUrl: normalized.videoUrl,
+          requestId: videoResult.requestId || submitResult.requestId,
+          usage: videoResult.usage,
+        };
+      }
+
       // Video drive mode: use wan2.2-animate-move (image + reference video)
       if (resolvedEngine === 'wan-motion') {
         if (!input.videoUrl) throw new Error('缺少参考视频');
@@ -199,20 +302,27 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
           {
             progressMessage: '动作迁移视频生成中...',
             errorPrefix: '动作迁移视频生成失败',
-            timeoutMessage: '动作迁移视频生成超时（15分钟）',
+            timeoutMessage: '动作迁移视频生成超时（20分钟）',
+            maxAttempts: 240,
           },
         );
+
+        const normalized = await normalizeDigitalHumanVideoResult(this.storage, {
+          engine: 'wan-motion',
+          providerTempUrl: videoResult.videoUrl,
+          providerTaskId: genResult.taskId,
+          externalJobType: 'wan-animate',
+          resolvedModel: input.resolvedModel || 'wan2.2-animate-move',
+          warnings: input.preflight?.warnings,
+          fallbackSuggested: this.buildFallbackSuggestion(input),
+        });
 
         await this.prisma.generation.update({
           where: { id: jobId },
           data: {
             status: 'COMPLETED',
             completedAt: new Date(),
-            output: {
-              videoUrl: videoResult.videoUrl,
-              externalJobType: 'wan-animate',
-              taskId: genResult.taskId,
-            },
+            output: normalized.output,
           },
         });
 
@@ -221,11 +331,11 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
           status: 'COMPLETED',
           progress: 100,
           message: '动作迁移视频生成完成',
-          output: { videoUrl: videoResult.videoUrl },
+          output: { videoUrl: normalized.videoUrl },
         });
 
         this.logger.log(`Animate-move video completed: ${jobId}`);
-        return videoResult;
+        return { videoUrl: normalized.videoUrl };
       }
 
       let audioUrl = input.audioUrl;
@@ -266,16 +376,11 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
         jobId,
         status: 'PROCESSING',
         progress: 30,
-        message: '正在生成数字人视频...',
+        message: '照片口播合成中...',
       });
 
       const dhProvider = this.providers.digitalHumanProvider;
-      const resolutionMap: Record<string, string> = {
-        '1080x1920': '1080P',
-        '1920x1080': '1080P',
-        '1080x1080': '720P',
-      };
-      const s2vResolution = resolutionMap[input.resolution] || '720P';
+      const s2vResolution = this.resolveWanPhotoResolution(input);
 
       const genResult = await dhProvider.generateVideo(
         input.avatarUrl,
@@ -299,7 +404,24 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
         genResult.taskId,
         userId,
         jobId,
+        {
+          progressMessage: '照片口播合成中...',
+          errorPrefix: '照片口播合成失败',
+          timeoutMessage: '照片口播合成超时（20分钟）',
+          maxAttempts: 240,
+        },
       );
+
+      const normalized = await normalizeDigitalHumanVideoResult(this.storage, {
+        engine: 'wan-photo',
+        providerTempUrl: videoResult.videoUrl,
+        providerTaskId: genResult.taskId,
+        externalJobType: 'wan-s2v',
+        resolvedModel: input.resolvedModel || 'wan2.2-s2v',
+        audioUrl,
+        warnings: input.preflight?.warnings,
+        fallbackSuggested: this.buildFallbackSuggestion(input),
+      });
 
       // Step 4: Complete
       await this.prisma.generation.update({
@@ -307,12 +429,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
         data: {
           status: 'COMPLETED',
           completedAt: new Date(),
-          output: {
-            videoUrl: videoResult.videoUrl,
-            audioUrl,
-            externalJobType: 'wan-s2v',
-            taskId: genResult.taskId,
-          },
+          output: normalized.output,
         },
       });
 
@@ -320,12 +437,12 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
         jobId,
         status: 'COMPLETED',
         progress: 100,
-        message: '数字人视频生成完成',
-        output: { videoUrl: videoResult.videoUrl },
+        message: '照片口播合成完成',
+        output: { videoUrl: normalized.videoUrl },
       });
 
       this.logger.log(`Digital human video completed: ${jobId}`);
-      return videoResult;
+      return { videoUrl: normalized.videoUrl };
     } catch (error: any) {
       this.logger.error(`Digital human video ${jobId} failed: ${error.message}`);
 
@@ -365,7 +482,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
     }
   }
 
-  private resolveEngine(input: DHVideoJobData['input']): 'ims' | 'wan-photo' | 'wan-motion' {
+  private resolveEngine(input: DHVideoJobData['input']): 'ims' | 'wan-photo' | 'wan-motion' | 'videoretalk' {
     if (input.engine) {
       return input.engine;
     }
@@ -382,17 +499,19 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
       progressMessage?: string;
       errorPrefix?: string;
       timeoutMessage?: string;
+      maxAttempts?: number;
+      extractResult?: (status: any) => any;
     },
-  ): Promise<{ videoUrl: string }> {
+  ): Promise<any> {
     return pollTaskStatus(taskId, {
       interval: 5000,
-      maxAttempts: 180,
+      maxAttempts: options?.maxAttempts || 180,
       checkStatus: (tid) => provider.checkTaskStatus(tid),
       normalizeStatus: (s) => (s.status || '').toUpperCase(),
-      extractResult: (s) => {
+      extractResult: options?.extractResult || ((s) => {
         if (!s.videoUrl) throw new Error('视频生成完成但未返回视频地址');
         return { videoUrl: s.videoUrl };
-      },
+      }),
       extractError: (s) =>
         `${options?.errorPrefix || 'S2V 视频生成失败'}: ${s.errorMessage || s.message || '未知错误'}`,
       ws: this.ws,
@@ -407,6 +526,37 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
       logger: this.logger,
       timeoutMessage: options?.timeoutMessage || '数字人视频生成超时（15分钟）',
     });
+  }
+
+  private resolveWanPhotoResolution(input: DHVideoJobData['input']) {
+    const providerResolution = input.resolvedConstraints?.providerResolution;
+    if (providerResolution) {
+      return providerResolution;
+    }
+
+    const resolutionMap: Record<string, string> = {
+      '1080x1920': '1080P',
+      '1920x1080': '1080P',
+      '1080x1080': '720P',
+    };
+
+    const resolved = resolutionMap[input.resolution];
+    if (!resolved) {
+      throw new Error(`当前分辨率暂不支持万相照片口播: ${input.resolution}`);
+    }
+    return resolved;
+  }
+
+  private buildFallbackSuggestion(input: DHVideoJobData['input']) {
+    if (input.engine === 'videoretalk' && !input.refImageUrl) {
+      return '如果素材只是静态人像照片，建议改用“照片开口说话”获得更稳的结果';
+    }
+
+    if (input.engine === 'wan-photo') {
+      return '如果你需要复刻原视频中的动作或表情，建议改用“动作迁移”或“已有视频重驱动”';
+    }
+
+    return undefined;
   }
 
   private async pollImsCompletion(

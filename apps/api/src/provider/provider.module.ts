@@ -12,6 +12,7 @@ import { QwenVoiceProvider } from './qwen/qwen-voice.provider';
 import { WanS2VProvider } from './aliyun-wan/wan-s2v.provider';
 import { WanR2VProvider } from './aliyun-wan/wan-r2v.provider';
 import { AliyunIMSProvider } from './aliyun-ims/ims-compose.provider';
+import { VideoRetalkProvider } from './aliyun-bailian/video-retalk.provider';
 import { ProviderConfigService } from './provider-config.service';
 
 @Module({
@@ -34,6 +35,8 @@ import { ProviderConfigService } from './provider-config.service';
     WanS2VProvider,
     // 参考生视频
     WanR2VProvider,
+    // VideoRetalk
+    VideoRetalkProvider,
     // 批量混剪
     AliyunIMSProvider,
   ],

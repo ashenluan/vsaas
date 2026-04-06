@@ -54,6 +54,10 @@ function createProvidersMock() {
       buildOutputConfig: vi.fn(() => ({ Count: 1 })),
       listBuiltinAvatars: vi.fn(),
     },
+    videoRetalkProvider: {
+      submitVideoRetalkJob: vi.fn(),
+      checkTaskStatus: vi.fn(),
+    },
     voiceProvider: {
       synthesizeSpeech: vi.fn(),
     },
@@ -74,6 +78,16 @@ function createUserServiceMock() {
   return {
     deductCredits: vi.fn().mockResolvedValue(undefined),
     addCredits: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+function createMediaPreflightMock() {
+  return {
+    preflightCreateVideo: vi.fn().mockResolvedValue({
+      status: 'passed',
+      warnings: [],
+      assets: {},
+    }),
   };
 }
 
@@ -113,6 +127,7 @@ describe('DigitalHumanService.createMixcutJob', () => {
   let userService: ReturnType<typeof createUserServiceMock>;
   let storage: ReturnType<typeof createStorageMock>;
   let queue: ReturnType<typeof createQueueMock>;
+  let mediaPreflight: ReturnType<typeof createMediaPreflightMock>;
   let service: DigitalHumanService;
 
   beforeEach(() => {
@@ -121,6 +136,7 @@ describe('DigitalHumanService.createMixcutJob', () => {
     userService = createUserServiceMock();
     storage = createStorageMock();
     queue = createQueueMock();
+    mediaPreflight = createMediaPreflightMock();
 
     prisma.systemConfig.findUnique.mockResolvedValue(null);
     prisma.generation.create.mockResolvedValue(createGenerationRecord());
@@ -135,6 +151,7 @@ describe('DigitalHumanService.createMixcutJob', () => {
       queue as any,
       queue as any,
       queue as any,
+      mediaPreflight as any,
     );
   });
 
@@ -404,6 +421,7 @@ describe('DigitalHumanService.createVideo engine contract', () => {
   let userService: ReturnType<typeof createUserServiceMock>;
   let storage: ReturnType<typeof createStorageMock>;
   let queue: ReturnType<typeof createQueueMock>;
+  let mediaPreflight: ReturnType<typeof createMediaPreflightMock>;
   let service: DigitalHumanService;
 
   beforeEach(() => {
@@ -412,6 +430,7 @@ describe('DigitalHumanService.createVideo engine contract', () => {
     userService = createUserServiceMock();
     storage = createStorageMock();
     queue = createQueueMock();
+    mediaPreflight = createMediaPreflightMock();
 
     prisma.generation.create.mockResolvedValue(createGenerationRecord());
     queue.add.mockResolvedValue(undefined);
@@ -425,6 +444,7 @@ describe('DigitalHumanService.createVideo engine contract', () => {
       queue as any,
       queue as any,
       queue as any,
+      mediaPreflight as any,
     );
   });
 
@@ -542,6 +562,52 @@ describe('DigitalHumanService.createVideo engine contract', () => {
       } as any),
     ).rejects.toThrow(BadRequestException);
 
+    expect(prisma.generation.create).not.toHaveBeenCalled();
+  });
+
+  it('requires source video for videoretalk audio mode', async () => {
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'videoretalk',
+        driveMode: 'audio',
+        resolution: 'source',
+        audioUrl: 'https://example.com/voice.wav',
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.material.findFirst).not.toHaveBeenCalled();
+    expect(prisma.generation.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported 4k resolutions for wan-photo before credits are deducted', async () => {
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'wan-photo',
+        driveMode: 'audio',
+        resolution: '2160x3840',
+        avatarId: 'avatar-1',
+        audioUrl: 'https://example.com/audio.mp3',
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.material.findFirst).not.toHaveBeenCalled();
+    expect(userService.deductCredits).not.toHaveBeenCalled();
+    expect(prisma.generation.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects videoretalk-only parameters for other engines', async () => {
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'wan-photo',
+        driveMode: 'audio',
+        resolution: '1080x1920',
+        avatarId: 'avatar-1',
+        audioUrl: 'https://example.com/audio.mp3',
+        videoExtension: true,
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.material.findFirst).not.toHaveBeenCalled();
     expect(prisma.generation.create).not.toHaveBeenCalled();
   });
 
@@ -686,5 +752,69 @@ describe('DigitalHumanService.createVideo engine contract', () => {
         }),
       }),
     );
+  });
+
+  it('persists videoretalk jobs with provider-specific options and without avatar lookup', async () => {
+    await service.createVideo('user-1', {
+      engine: 'videoretalk',
+      driveMode: 'audio',
+      resolution: 'source',
+      name: 'retalk-demo',
+      videoUrl: 'https://example.com/source-video.mp4',
+      audioUrl: 'https://example.com/voice.wav',
+      refImageUrl: 'https://example.com/ref-face.png',
+      videoExtension: true,
+      queryFaceThreshold: 180,
+    } as any);
+
+    expect(prisma.voice.findFirst).not.toHaveBeenCalled();
+    expect(prisma.material.findFirst).not.toHaveBeenCalled();
+    expect(userService.deductCredits).toHaveBeenCalledTimes(1);
+    expect(prisma.generation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'aliyun-videoretalk',
+          input: expect.objectContaining({
+            engine: 'videoretalk',
+            driveMode: 'audio',
+            resolution: 'source',
+            resolvedModel: 'videoretalk',
+            videoUrl: 'https://example.com/source-video.mp4',
+            audioUrl: 'https://example.com/voice.wav',
+            refImageUrl: 'https://example.com/ref-face.png',
+            videoExtension: true,
+            queryFaceThreshold: 180,
+            preflight: expect.objectContaining({
+              status: 'passed',
+              warnings: [],
+            }),
+            resolvedConstraints: expect.objectContaining({
+              outputResolution: 'source',
+              sourceVideoRequired: true,
+            }),
+          }),
+        }),
+      }),
+    );
+    expect(queue.add).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects media preflight failures before credits are deducted', async () => {
+    mediaPreflight.preflightCreateVideo.mockRejectedValueOnce(
+      new BadRequestException('源视频无法访问'),
+    );
+
+    await expect(
+      service.createVideo('user-1', {
+        engine: 'videoretalk',
+        driveMode: 'audio',
+        resolution: 'source',
+        videoUrl: 'https://example.com/source-video.mp4',
+        audioUrl: 'https://example.com/voice.wav',
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(userService.deductCredits).not.toHaveBeenCalled();
+    expect(prisma.generation.create).not.toHaveBeenCalled();
   });
 });

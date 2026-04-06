@@ -13,6 +13,7 @@ import { ScriptController } from './script.controller';
 import { MixcutController } from './mixcut.controller';
 import { CallbackController } from './callback.controller';
 import { DhBatchV2Controller } from './dh-batch-v2.controller';
+import { MediaPreflightService } from './media-preflight.service';
 
 @Module({
   imports: [
@@ -37,7 +38,7 @@ import { DhBatchV2Controller } from './dh-batch-v2.controller';
     CallbackController,
     DhBatchV2Controller,
   ],
-  providers: [DigitalHumanService],
+  providers: [DigitalHumanService, MediaPreflightService],
   exports: [DigitalHumanService],
 })
 export class DigitalHumanModule {}
