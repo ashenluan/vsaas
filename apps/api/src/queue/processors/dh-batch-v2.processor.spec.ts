@@ -115,7 +115,8 @@ describe('DhBatchV2Processor speech-rate propagation', () => {
       { index: 0, type: 'DH', text: '通道B语速测试', scriptId: 'script-b', status: 'pending' },
     ]);
     vi.spyOn(processor as any, 'persistPipelineState').mockResolvedValue(undefined);
-    vi.spyOn(processor as any, 'runS2vPhase').mockImplementation(async (segments: any[]) => {
+    vi.spyOn(processor as any, 'runS2vPhase').mockImplementation(async (...args: any[]) => {
+      const segments = args[0] as any[];
       for (const segment of segments) {
         segment.status = 's2v_done';
         segment.s2vVideoUrl = 'https://example.com/s2v-b.mp4';
