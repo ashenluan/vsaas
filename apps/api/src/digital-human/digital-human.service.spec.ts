@@ -444,21 +444,32 @@ describe('DigitalHumanService.createVideo engine contract', () => {
   });
 
   it('allows ims text mode with builtin voice without Prisma voice lookup', async () => {
-    await expect(
-      service.createVideo('user-1', {
-        engine: 'ims',
-        driveMode: 'text',
-        resolution: '1080x1920',
-        builtinAvatarId: 'ims-avatar-1',
-        voiceId: 'ims-voice-1',
-        voiceType: 'builtin',
-        text: 'hello world',
-      } as any),
-    ).rejects.toThrow(BadRequestException);
+    await service.createVideo('user-1', {
+      engine: 'ims',
+      driveMode: 'text',
+      resolution: '1080x1920',
+      builtinAvatarId: 'ims-avatar-1',
+      voiceId: 'ims-voice-1',
+      voiceType: 'builtin',
+      text: 'hello world',
+    } as any);
 
     expect(prisma.voice.findFirst).not.toHaveBeenCalled();
-    expect(userService.deductCredits).not.toHaveBeenCalled();
-    expect(prisma.generation.create).not.toHaveBeenCalled();
+    expect(prisma.material.findFirst).not.toHaveBeenCalled();
+    expect(userService.deductCredits).toHaveBeenCalledTimes(1);
+    expect(prisma.generation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'aliyun-ims',
+          input: expect.objectContaining({
+            engine: 'ims',
+            builtinAvatarId: 'ims-avatar-1',
+            voiceType: 'builtin',
+          }),
+        }),
+      }),
+    );
+    expect(queue.add).toHaveBeenCalledTimes(1);
   });
 
   it('allows ims text mode with cloned voice after ownership check', async () => {
@@ -470,21 +481,32 @@ describe('DigitalHumanService.createVideo engine contract', () => {
       isPublic: false,
     });
 
-    await expect(
-      service.createVideo('user-1', {
-        engine: 'ims',
-        driveMode: 'text',
-        resolution: '1080x1920',
-        builtinAvatarId: 'ims-avatar-1',
-        voiceId: 'voice-cloned',
-        voiceType: 'cloned',
-        text: 'hello world',
-      } as any),
-    ).rejects.toThrow(BadRequestException);
+    await service.createVideo('user-1', {
+      engine: 'ims',
+      driveMode: 'text',
+      resolution: '1080x1920',
+      builtinAvatarId: 'ims-avatar-1',
+      voiceId: 'voice-cloned',
+      voiceType: 'cloned',
+      text: 'hello world',
+    } as any);
 
     expect(prisma.voice.findFirst).toHaveBeenCalledTimes(1);
-    expect(userService.deductCredits).not.toHaveBeenCalled();
-    expect(prisma.generation.create).not.toHaveBeenCalled();
+    expect(prisma.material.findFirst).not.toHaveBeenCalled();
+    expect(userService.deductCredits).toHaveBeenCalledTimes(1);
+    expect(prisma.generation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'aliyun-ims',
+          input: expect.objectContaining({
+            engine: 'ims',
+            builtinAvatarId: 'ims-avatar-1',
+            voiceType: 'cloned',
+          }),
+        }),
+      }),
+    );
+    expect(queue.add).toHaveBeenCalledTimes(1);
   });
 
   it('requires avatarId for wan-photo text mode', async () => {
@@ -540,20 +562,27 @@ describe('DigitalHumanService.createVideo engine contract', () => {
   });
 
   it('defaults ims voiceType to builtin when omitted and voiceId is IMS builtin', async () => {
-    await expect(
-      service.createVideo('user-1', {
-        engine: 'ims',
-        driveMode: 'text',
-        resolution: '1080x1920',
-        builtinAvatarId: 'ims-avatar-1',
-        voiceId: 'ava',
-        text: 'hello world',
-      } as any),
-    ).rejects.toThrow('IMS 单视频能力正在接入');
+    await service.createVideo('user-1', {
+      engine: 'ims',
+      driveMode: 'text',
+      resolution: '1080x1920',
+      builtinAvatarId: 'ims-avatar-1',
+      voiceId: 'ava',
+      text: 'hello world',
+    } as any);
 
     expect(prisma.voice.findFirst).not.toHaveBeenCalled();
-    expect(userService.deductCredits).not.toHaveBeenCalled();
-    expect(prisma.generation.create).not.toHaveBeenCalled();
+    expect(prisma.generation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'aliyun-ims',
+          input: expect.objectContaining({
+            engine: 'ims',
+            voiceType: 'builtin',
+          }),
+        }),
+      }),
+    );
   });
 
   it('defaults ims voiceType to cloned when omitted and voiceId is not IMS builtin', async () => {
@@ -565,20 +594,27 @@ describe('DigitalHumanService.createVideo engine contract', () => {
       isPublic: false,
     });
 
-    await expect(
-      service.createVideo('user-1', {
-        engine: 'ims',
-        driveMode: 'text',
-        resolution: '1080x1920',
-        builtinAvatarId: 'ims-avatar-1',
-        voiceId: 'custom-cloned-voice',
-        text: 'hello world',
-      } as any),
-    ).rejects.toThrow('IMS 单视频能力正在接入');
+    await service.createVideo('user-1', {
+      engine: 'ims',
+      driveMode: 'text',
+      resolution: '1080x1920',
+      builtinAvatarId: 'ims-avatar-1',
+      voiceId: 'custom-cloned-voice',
+      text: 'hello world',
+    } as any);
 
     expect(prisma.voice.findFirst).toHaveBeenCalledTimes(1);
-    expect(userService.deductCredits).not.toHaveBeenCalled();
-    expect(prisma.generation.create).not.toHaveBeenCalled();
+    expect(prisma.generation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'aliyun-ims',
+          input: expect.objectContaining({
+            engine: 'ims',
+            voiceType: 'cloned',
+          }),
+        }),
+      }),
+    );
   });
 
   it('keeps legacy text payloads without engine compatible by inferring wan-photo', async () => {

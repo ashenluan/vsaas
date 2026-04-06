@@ -11,11 +11,19 @@ interface DHVideoJobData {
   jobId: string;
   userId: string;
   input: {
-    avatarUrl: string;
+    engine?: 'ims' | 'wan-photo' | 'wan-motion';
+    avatarUrl?: string;
+    builtinAvatarId?: string;
+    voiceType?: 'builtin' | 'cloned';
     driveMode: 'text' | 'audio' | 'video';
     resolution: string;
     voiceId?: string;
     text?: string;
+    speechRate?: number;
+    loopMotion?: boolean;
+    pitchRate?: number;
+    volume?: number;
+    backgroundUrl?: string;
     audioUrl?: string;
     videoUrl?: string;
     animateMode?: 'wan-std' | 'wan-pro';
@@ -37,6 +45,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
 
   async process(job: Job<DHVideoJobData>): Promise<any> {
     const { jobId, userId, input } = job.data;
+    const resolvedEngine = this.resolveEngine(input);
     this.logger.log(`Processing digital human video ${jobId}`);
 
     await this.prisma.generation.update({
@@ -52,9 +61,105 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
     });
 
     try {
+      if (resolvedEngine === 'ims') {
+        if (!input.builtinAvatarId) throw new Error('缺少内置数字人');
+
+        const imsProvider = this.providers.imsProvider;
+        const { width, height } = this.parseResolutionWH(input.resolution);
+        const avatarInputConfig = input.driveMode === 'text'
+          ? { Text: input.text }
+          : { MediaURL: input.audioUrl };
+
+        const avatarEditingConfig = imsProvider.buildAvatarEditingConfig({
+          avatarId: input.builtinAvatarId,
+          ...(input.voiceId && input.driveMode === 'text'
+            ? input.voiceType === 'cloned'
+              ? { customizedVoice: input.voiceId }
+              : { voice: input.voiceId }
+            : {}),
+          ...(input.speechRate !== undefined && input.driveMode === 'text'
+            ? { uiSpeechRate: input.speechRate }
+            : {}),
+          ...(input.loopMotion !== undefined && { loopMotion: input.loopMotion }),
+          ...(input.pitchRate !== undefined && { pitchRate: input.pitchRate }),
+          ...(input.volume !== undefined && { volume: input.volume }),
+          ...(input.backgroundUrl && { backgroundUrl: input.backgroundUrl }),
+        });
+        const avatarOutputConfig = {
+          Width: width,
+          Height: height,
+        };
+
+        this.ws.sendToUser(userId, 'digital-human:progress', {
+          jobId,
+          status: 'PROCESSING',
+          progress: 15,
+          message: '正在提交 IMS 数字人渲染任务...',
+        });
+
+        const submitResult = await imsProvider.submitAvatarVideoJob(
+          avatarInputConfig,
+          avatarEditingConfig,
+          avatarOutputConfig,
+        );
+
+        if (!submitResult.jobId) {
+          throw new Error('IMS 数字人渲染提交失败：未返回任务ID');
+        }
+
+        await this.prisma.generation.update({
+          where: { id: jobId },
+          data: { externalId: submitResult.jobId },
+        });
+
+        this.ws.sendToUser(userId, 'digital-human:progress', {
+          jobId,
+          status: 'PROCESSING',
+          progress: 30,
+          message: '正在等待 IMS 数字人合成完成...',
+        });
+
+        const videoResult = await this.pollImsCompletion(
+          imsProvider,
+          submitResult.jobId,
+          userId,
+          jobId,
+        );
+
+        await this.prisma.generation.update({
+          where: { id: jobId },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+            output: {
+              videoUrl: videoResult.videoUrl,
+              ...(videoResult.mediaId || submitResult.mediaId
+                ? { mediaId: videoResult.mediaId || submitResult.mediaId }
+                : {}),
+              ...(videoResult.maskUrl ? { maskUrl: videoResult.maskUrl } : {}),
+              ...(videoResult.subtitleClips ? { subtitleClips: videoResult.subtitleClips } : {}),
+              externalJobType: 'ims-avatar',
+              jobId: submitResult.jobId,
+            },
+          },
+        });
+
+        this.ws.sendToUser(userId, 'digital-human:progress', {
+          jobId,
+          status: 'COMPLETED',
+          progress: 100,
+          message: 'IMS 数字人视频生成完成',
+          output: { videoUrl: videoResult.videoUrl },
+        });
+
+        this.logger.log(`IMS avatar video completed: ${jobId}`);
+        return videoResult;
+      }
+
       // Video drive mode: use wan2.2-animate-move (image + reference video)
-      if (input.driveMode === 'video') {
+      if (resolvedEngine === 'wan-motion') {
         if (!input.videoUrl) throw new Error('缺少参考视频');
+        if (!input.avatarUrl) throw new Error('缺少数字人形象');
 
         this.ws.sendToUser(userId, 'digital-human:progress', {
           jobId,
@@ -93,6 +198,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
             completedAt: new Date(),
             output: {
               videoUrl: videoResult.videoUrl,
+              externalJobType: 'wan-animate',
               taskId: genResult.taskId,
             },
           },
@@ -113,7 +219,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
       let audioUrl = input.audioUrl;
 
       // Step 1: TTS if text drive mode
-      if (input.driveMode === 'text' && input.voiceId && input.text) {
+      if (resolvedEngine === 'wan-photo' && input.driveMode === 'text' && input.voiceId && input.text) {
         this.ws.sendToUser(userId, 'digital-human:progress', {
           jobId,
           status: 'PROCESSING',
@@ -134,6 +240,9 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
 
       if (!audioUrl) {
         throw new Error('缺少音频文件');
+      }
+      if (!input.avatarUrl) {
+        throw new Error('缺少数字人形象');
       }
 
       // Step 2: Generate S2V video
@@ -185,6 +294,7 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
           output: {
             videoUrl: videoResult.videoUrl,
             audioUrl,
+            externalJobType: 'wan-s2v',
             taskId: genResult.taskId,
           },
         },
@@ -239,6 +349,14 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
     }
   }
 
+  private resolveEngine(input: DHVideoJobData['input']): 'ims' | 'wan-photo' | 'wan-motion' {
+    if (input.engine) {
+      return input.engine;
+    }
+
+    return input.driveMode === 'video' ? 'wan-motion' : 'wan-photo';
+  }
+
   private async pollVideoCompletion(
     provider: any,
     taskId: string,
@@ -267,5 +385,68 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
       logger: this.logger,
       timeoutMessage: '数字人视频生成超时（15分钟）',
     });
+  }
+
+  private async pollImsCompletion(
+    provider: any,
+    jobId: string,
+    userId: string,
+    generationId: string,
+  ): Promise<{
+    videoUrl: string;
+    mediaId?: string;
+    maskUrl?: string;
+    subtitleClips?: any[];
+  }> {
+    return pollTaskStatus(jobId, {
+      interval: 5000,
+      maxAttempts: 180,
+      checkStatus: (imsJobId) => provider.getSmartHandleJob(imsJobId),
+      normalizeStatus: (status) => {
+        const normalized = (status.status || '').toUpperCase();
+        if (normalized === 'FINISHED' || normalized === 'SUCCESS') {
+          return 'COMPLETED';
+        }
+        if (normalized === 'FAIL') {
+          return 'FAILED';
+        }
+        return normalized;
+      },
+      extractResult: (status) => {
+        if (!status.videoUrl) throw new Error('IMS 数字人合成完成但未返回视频地址');
+        return {
+          videoUrl: status.videoUrl,
+          ...(status.mediaId ? { mediaId: status.mediaId } : {}),
+          ...(status.maskUrl ? { maskUrl: status.maskUrl } : {}),
+          ...(status.subtitleClips ? { subtitleClips: status.subtitleClips } : {}),
+        };
+      },
+      extractError: (status) =>
+        `IMS 数字人渲染失败: ${status.errorMessage || status.errorCode || status.message || '未知错误'}`,
+      ws: this.ws,
+      userId,
+      jobId: generationId,
+      wsEvent: 'digital-human:progress',
+      progressInterval: 6,
+      buildProgressMessage: (attempt, maxAttempts) => ({
+        progress: Math.min(30 + Math.round((attempt / maxAttempts) * 65), 95),
+        message: `正在等待 IMS 数字人合成完成... (${Math.round((attempt * 5) / 60)}分钟)`,
+      }),
+      logger: this.logger,
+      timeoutMessage: 'IMS 数字人合成超时（15分钟）',
+    });
+  }
+
+  private parseResolutionWH(resolution: string): { width: number; height: number } {
+    const parts = resolution.split('x').map(Number);
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return { width: parts[0], height: parts[1] };
+    }
+
+    if (resolution.toUpperCase().includes('1080')) {
+      return { width: 1080, height: 1920 };
+    }
+
+    return { width: 720, height: 1280 };
   }
 }

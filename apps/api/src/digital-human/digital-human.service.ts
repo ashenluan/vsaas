@@ -1071,25 +1071,23 @@ export class DigitalHumanService {
       }
     }
 
-    if (resolvedEngine === 'ims') {
-      throw new BadRequestException('IMS 单视频能力正在接入，请先使用万相模式创建视频');
-    }
-
     let avatar: any;
-    avatar = await this.prisma.material.findFirst({
-      where: {
-        id: data.avatarId!,
-        OR: [{ userId }, { isPublic: true }],
-      },
-    });
-    if (!avatar) throw new BadRequestException('数字人形象不存在');
+    if (resolvedEngine !== 'ims') {
+      avatar = await this.prisma.material.findFirst({
+        where: {
+          id: data.avatarId!,
+          OR: [{ userId }, { isPublic: true }],
+        },
+      });
+      if (!avatar) throw new BadRequestException('数字人形象不存在');
 
-    if (resolvedEngine === 'wan-photo') {
-      const faceDetect = (avatar.metadata as any)?.faceDetect;
-      if (!faceDetect?.valid) {
-        throw new BadRequestException(
-          '该形象未通过人脸检测，请先进行人脸检测',
-        );
+      if (resolvedEngine === 'wan-photo') {
+        const faceDetect = (avatar.metadata as any)?.faceDetect;
+        if (!faceDetect?.valid) {
+          throw new BadRequestException(
+            '该形象未通过人脸检测，请先进行人脸检测',
+          );
+        }
       }
     }
 
