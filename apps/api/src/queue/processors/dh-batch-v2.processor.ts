@@ -98,21 +98,41 @@ export class DhBatchV2Processor extends WorkerHost {
       const flatSegments = allSegments.flat();
       const dhSegments = flatSegments.filter((s) => s.type === 'DH');
       const matSegments = flatSegments.filter((s) => s.type === 'MAT');
+      const ttsTargets = channel === 'A' ? matSegments : flatSegments;
       this.logger.log(`Total: ${flatSegments.length} segments (${dhSegments.length} DH, ${matSegments.length} MAT)`);
 
       // ===== Phase 2: TTS for ALL segments =====
-      this.sendProgress(userId, jobId, 'PROCESSING', 5, `开始语音合成 (${flatSegments.length} 个片段)`);
-      await this.runTtsPhase(
-        flatSegments,
-        input.voiceId,
-        userId,
-        jobId,
-        input.speechRate !== undefined ? { speechRate: input.speechRate } : undefined,
-      );
+      if (ttsTargets.length > 0) {
+        this.sendProgress(userId, jobId, 'PROCESSING', 5, `开始语音合成 (${ttsTargets.length} 个片段)`);
+        await this.runTtsPhase(
+          ttsTargets,
+          input.voiceId,
+          userId,
+          jobId,
+          input.speechRate !== undefined ? { speechRate: input.speechRate } : undefined,
+        );
+      } else if (channel === 'A') {
+        this.sendProgress(userId, jobId, 'PROCESSING', 5, '通道 A 数字人片段采用 IMS 原生口播');
+      }
 
-      const ttsSuccessful = flatSegments.filter((s) => s.status === 'tts_done');
-      if (ttsSuccessful.length === 0) {
-        throw new Error('所有片段的语音合成都失败了');
+      if (channel === 'A') {
+        for (const seg of dhSegments) {
+          if (seg.text.trim()) {
+            seg.ttsDuration = this.estimateTtsDuration(seg.text);
+            seg.status = 'ready';
+          }
+        }
+
+        const readyDhSegments = dhSegments.filter((s) => s.status === 'ready');
+        const readyMatSegments = matSegments.filter((s) => s.status === 'tts_done');
+        if (readyDhSegments.length + readyMatSegments.length === 0) {
+          throw new Error('通道 A 没有可渲染的片段');
+        }
+      } else {
+        const ttsSuccessful = flatSegments.filter((s) => s.status === 'tts_done');
+        if (ttsSuccessful.length === 0) {
+          throw new Error('所有片段的语音合成都失败了');
+        }
       }
 
       await this.persistPipelineState(jobId, allSegments, 'tts_done');
@@ -519,25 +539,41 @@ export class DhBatchV2Processor extends WorkerHost {
         const segDuration = seg.s2vDuration || seg.ttsDuration || this.estimateTtsDuration(seg.text);
 
         if (seg.type === 'DH') {
-          if (channel === 'B' && seg.s2vVideoUrl) {
-            // Channel B: use S2V video (has baked-in audio)
-            videoClips.push({
-              MediaURL: seg.s2vVideoUrl,
-              TimelineIn: timeOffset,
-              TimelineOut: timeOffset + segDuration,
-            });
-          } else if (channel === 'A' && input.builtinAvatarId) {
-            // Channel A: use IMS AI_Avatar with audio-driven mode
-            videoClips.push({
-              Type: 'AI_Avatar',
-              AvatarId: input.builtinAvatarId,
-              MediaURL: seg.ttsAudioUrl, // TTS 音频驱动数字人口型
-              TimelineIn: timeOffset,
-              TimelineOut: timeOffset + segDuration,
-              Width: width,
-              Height: height,
-            });
+        if (channel === 'B' && seg.s2vVideoUrl) {
+          // Channel B: use S2V video (has baked-in audio)
+          videoClips.push({
+            MediaURL: seg.s2vVideoUrl,
+            TimelineIn: timeOffset,
+            TimelineOut: timeOffset + segDuration,
+          });
+        } else if (channel === 'A' && input.builtinAvatarId) {
+          // Channel A: prefer native text-driven AI_Avatar and only fall back to audio when needed
+          const dhClip: any = {
+            Type: 'AI_Avatar',
+            AvatarId: input.builtinAvatarId,
+            TimelineIn: timeOffset,
+            TimelineOut: timeOffset + segDuration,
+            Width: width,
+            Height: height,
+          };
+
+          if (seg.text.trim()) {
+            dhClip.Content = seg.text;
+            dhClip.CustomizedVoice = input.voiceId;
+            if (input.speechRate !== undefined) {
+              dhClip.SpeechRate = input.speechRate;
+            }
+            if (input.subtitleConfig?.open !== false) {
+              dhClip.Effects = [{ Type: 'AI_ASR' }];
+            }
+          } else if (seg.ttsAudioUrl) {
+            dhClip.MediaURL = seg.ttsAudioUrl;
+          } else {
+            continue;
           }
+
+          videoClips.push(dhClip);
+        }
         } else {
           // MAT segment: material video + TTS voiceover
           if (materials.length > 0) {
@@ -564,7 +600,8 @@ export class DhBatchV2Processor extends WorkerHost {
         }
 
         // Subtitle for every segment
-        if (input.subtitleConfig?.open !== false && seg.text) {
+        const usesNativeChannelASubtitle = channel === 'A' && seg.type === 'DH' && seg.text.trim();
+        if (!usesNativeChannelASubtitle && input.subtitleConfig?.open !== false && seg.text) {
           subtitleClips.push({
             Type: 'Text',
             Content: seg.text,

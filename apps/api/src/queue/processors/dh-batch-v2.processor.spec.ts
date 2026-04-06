@@ -73,12 +73,11 @@ describe('DhBatchV2Processor speech-rate propagation', () => {
     );
   });
 
-  it('passes speech rate into TTS for channel A jobs', async () => {
+  it('passes speech rate into native IMS avatar clips for channel A jobs', async () => {
     vi.spyOn(processor as any, 'planSegments').mockReturnValue([
       { index: 0, type: 'DH', text: '通道A语速测试', scriptId: 'script-a', status: 'pending' },
     ]);
     vi.spyOn(processor as any, 'persistPipelineState').mockResolvedValue(undefined);
-    vi.spyOn(processor as any, 'buildTimeline').mockReturnValue({});
     vi.spyOn(processor as any, 'pollTimelineJobs').mockResolvedValue([
       { videoIndex: 0, mediaUrl: 'https://example.com/output-a.mp4' },
     ]);
@@ -100,13 +99,15 @@ describe('DhBatchV2Processor speech-rate propagation', () => {
       },
     } as any);
 
-    expect(providers.voiceProvider.synthesizeSpeech).toHaveBeenCalledWith(
-      '通道A语速测试',
-      'voice-1',
-      expect.objectContaining({
-        speechRate: 1.4,
-      }),
-    );
+    expect(providers.voiceProvider.synthesizeSpeech).not.toHaveBeenCalled();
+
+    const submittedTimeline = providers.batchComposeProvider.submitTimelineJob.mock.calls[0][0];
+    expect(submittedTimeline.VideoTracks[0].VideoTrackClips[0]).toEqual(expect.objectContaining({
+      Type: 'AI_Avatar',
+      Content: '通道A语速测试',
+      CustomizedVoice: 'voice-1',
+      SpeechRate: 1.4,
+    }));
   });
 
   it('passes speech rate into TTS for channel B jobs', async () => {
@@ -150,5 +151,101 @@ describe('DhBatchV2Processor speech-rate propagation', () => {
         speechRate: 0.8,
       }),
     );
+  });
+
+  it('uses native IMS text driving for channel A DH segments and keeps TTS only for MAT narration', async () => {
+    vi.spyOn(processor as any, 'planSegments').mockReturnValue([
+      { index: 0, type: 'DH', text: '数字人口播台词', scriptId: 'script-a', status: 'pending' },
+      { index: 1, type: 'MAT', text: '素材旁白文案', scriptId: 'script-a', status: 'pending' },
+    ]);
+    vi.spyOn(processor as any, 'persistPipelineState').mockResolvedValue(undefined);
+    vi.spyOn(processor as any, 'pollTimelineJobs').mockResolvedValue([
+      { videoIndex: 0, mediaUrl: 'https://example.com/output-a.mp4' },
+    ]);
+
+    await processor.process({
+      data: {
+        jobId: 'job-a-native',
+        userId: 'user-1',
+        channel: 'A',
+        input: {
+          builtinAvatarId: 'ims-avatar-1',
+          voiceId: 'voice-cloned-1',
+          scripts: [{ id: 'script-a', title: '脚本 A', content: '数字人口播台词。素材旁白文案。' }],
+          materials: [{ id: 'mat-1', name: '素材 1', type: 'VIDEO', url: 'https://example.com/mat-a.mp4' }],
+          videoCount: 1,
+          resolution: '1080x1920',
+          subtitleConfig: {
+            open: true,
+          },
+        },
+      },
+    } as any);
+
+    expect(providers.voiceProvider.synthesizeSpeech).toHaveBeenCalledTimes(1);
+    expect(providers.voiceProvider.synthesizeSpeech).toHaveBeenCalledWith(
+      '素材旁白文案',
+      'voice-cloned-1',
+      undefined,
+    );
+
+    const submittedTimeline = providers.batchComposeProvider.submitTimelineJob.mock.calls[0][0];
+    const dhClip = submittedTimeline.VideoTracks[0].VideoTrackClips[0];
+
+    expect(dhClip).toEqual(expect.objectContaining({
+      Type: 'AI_Avatar',
+      AvatarId: 'ims-avatar-1',
+      Content: '数字人口播台词',
+      CustomizedVoice: 'voice-cloned-1',
+    }));
+    expect(dhClip).not.toHaveProperty('MediaURL');
+    expect(dhClip.Effects).toEqual([{ Type: 'AI_ASR' }]);
+    expect(submittedTimeline.SubtitleTracks[0].SubtitleTrackClips).toEqual([
+      expect.objectContaining({
+        Content: '素材旁白文案',
+      }),
+    ]);
+  });
+
+  it('falls back to audio-driven MediaURL for channel A DH clips when native text content is unavailable', () => {
+    const timeline = (processor as any).buildTimeline(
+      [[
+        {
+          index: 0,
+          type: 'DH',
+          text: '',
+          scriptId: 'script-a',
+          ttsAudioUrl: 'https://example.com/fallback-audio.mp3',
+          ttsDuration: 4,
+          status: 'tts_done',
+        },
+      ]],
+      [],
+      0,
+      'A',
+      {
+        builtinAvatarId: 'ims-avatar-1',
+        voiceId: 'voice-cloned-1',
+        scripts: [],
+        materials: [],
+        videoCount: 1,
+        resolution: '1080x1920',
+        subtitleConfig: {
+          open: true,
+        },
+      },
+      1080,
+      1920,
+    );
+
+    const dhClip = timeline.VideoTracks[0].VideoTrackClips[0];
+
+    expect(dhClip).toEqual(expect.objectContaining({
+      Type: 'AI_Avatar',
+      AvatarId: 'ims-avatar-1',
+      MediaURL: 'https://example.com/fallback-audio.mp3',
+    }));
+    expect(dhClip).not.toHaveProperty('Content');
+    expect(timeline.SubtitleTracks).toBeUndefined();
   });
 });
