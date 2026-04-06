@@ -124,6 +124,10 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
           userId,
           jobId,
         );
+        const signedVideoUrl = this.storage.ensureSignedUrl(videoResult.videoUrl);
+        const signedMaskUrl = videoResult.maskUrl
+          ? this.storage.ensureSignedUrl(videoResult.maskUrl)
+          : undefined;
 
         await this.prisma.generation.update({
           where: { id: jobId },
@@ -131,11 +135,11 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
             status: 'COMPLETED',
             completedAt: new Date(),
             output: {
-              videoUrl: videoResult.videoUrl,
+              videoUrl: signedVideoUrl,
               ...(videoResult.mediaId || submitResult.mediaId
                 ? { mediaId: videoResult.mediaId || submitResult.mediaId }
                 : {}),
-              ...(videoResult.maskUrl ? { maskUrl: videoResult.maskUrl } : {}),
+              ...(signedMaskUrl ? { maskUrl: signedMaskUrl } : {}),
               ...(videoResult.subtitleClips ? { subtitleClips: videoResult.subtitleClips } : {}),
               externalJobType: 'ims-avatar',
               jobId: submitResult.jobId,
@@ -148,11 +152,15 @@ export class DigitalHumanVideoProcessor extends WorkerHost {
           status: 'COMPLETED',
           progress: 100,
           message: 'IMS 数字人视频生成完成',
-          output: { videoUrl: videoResult.videoUrl },
+          output: { videoUrl: signedVideoUrl },
         });
 
         this.logger.log(`IMS avatar video completed: ${jobId}`);
-        return videoResult;
+        return {
+          ...videoResult,
+          videoUrl: signedVideoUrl,
+          ...(signedMaskUrl ? { maskUrl: signedMaskUrl } : {}),
+        };
       }
 
       // Video drive mode: use wan2.2-animate-move (image + reference video)

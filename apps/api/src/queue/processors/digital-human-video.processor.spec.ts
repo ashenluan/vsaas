@@ -67,7 +67,7 @@ function createStorageMock() {
   return {
     generateKey: vi.fn((prefix: string, filename: string) => `${prefix}/${filename}`),
     getOssUrl: vi.fn((key: string) => `https://bucket.oss-cn-shanghai.aliyuncs.com/${key}`),
-    ensureSignedUrl: vi.fn((url: string) => url),
+    ensureSignedUrl: vi.fn((url: string) => `${url}?signed=1`),
   };
 }
 
@@ -308,6 +308,14 @@ describe('DigitalHumanVideoProcessor', () => {
   });
 
   it('persists IMS render output fields into generation.output', async () => {
+    providers.imsProvider.getSmartHandleJob.mockResolvedValue({
+      status: 'Finished',
+      videoUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/results/ims-video.mp4',
+      mediaId: 'ims-media-1',
+      maskUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/results/ims-mask.mp4',
+      subtitleClips: [{ Text: '你好', Start: 0, End: 1.2 }],
+    });
+
     await processor.process({
       data: {
         jobId: 'job-ims-output',
@@ -334,15 +342,22 @@ describe('DigitalHumanVideoProcessor', () => {
         data: expect.objectContaining({
           status: 'COMPLETED',
           output: expect.objectContaining({
-            videoUrl: 'https://example.com/ims-video.mp4',
+            videoUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/results/ims-video.mp4?signed=1',
             mediaId: 'ims-media-1',
-            maskUrl: 'https://example.com/ims-mask.mp4',
+            maskUrl: 'https://bucket.oss-cn-shanghai.aliyuncs.com/results/ims-mask.mp4?signed=1',
             subtitleClips: [{ Text: '你好', Start: 0, End: 1.2 }],
             externalJobType: 'ims-avatar',
             jobId: 'ims-job-1',
           }),
         }),
       }),
+    );
+
+    expect(storage.ensureSignedUrl).toHaveBeenCalledWith(
+      'https://bucket.oss-cn-shanghai.aliyuncs.com/results/ims-video.mp4',
+    );
+    expect(storage.ensureSignedUrl).toHaveBeenCalledWith(
+      'https://bucket.oss-cn-shanghai.aliyuncs.com/results/ims-mask.mp4',
     );
   });
 });
